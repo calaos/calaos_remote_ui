@@ -1,4 +1,5 @@
 build
+build_linux
 managed_components
 webgui/node_modules
 sdkconfig

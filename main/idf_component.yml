@@ -1,5 +1,5 @@
 ## IDF Component Manager Manifest File
 dependencies:
-  lvgl/lvgl:
-    version: "9.2.0"
-    public: true
+  espressif/esp_wifi_remote: '*'
+  espressif/esp_hosted: '*'
+  espressif/ethernet_init: ^0.6.1

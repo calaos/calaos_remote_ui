@@ -9,5 +9,10 @@
     "ESP_ROM_ELF_DIR": "C:\\Espressif\\tools\\esp-rom-elfs\\20230320/",
     "IDF_TARGET": "esp32p4"
   },
-  "idf.flashType": "UART"
+  "idf.flashType": "UART",
+  "files.associations": {
+    "*.tmpl": "go-template",
+    "cstdlib": "c",
+    "cstdint": "c"
+  }
 }

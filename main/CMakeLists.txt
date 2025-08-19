@@ -1,9 +1,17 @@
 set(SRCS_FILES
     main.cpp
+    app_main.cpp
+    ../hal/hal.cpp
+    ../hal/esp32/esp32_hal.cpp
+    ../hal/esp32/esp32_hal_display.cpp
+    ../hal/esp32/esp32_hal_input.cpp
+    ../hal/esp32/esp32_hal_network.cpp
+    ../hal/esp32/esp32_hal_system.cpp
 )
 
 set(COMPONENT_ADD_INCLUDEDIRS
     "."
+    "../hal"
 )
 
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
