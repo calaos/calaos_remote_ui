@@ -138,6 +138,11 @@ if(NOT DEFINED ENV{IDF_PATH})
     set (LV_CONF_BUILD_DISABLE_DEMOS ON)
     set (LV_CONF_BUILD_DISABLE_THORVG_INTERNAL ON)
     add_subdirectory(components/lvgl)
+    
+    # Add smooth_ui_toolkit
+    set(SMOOTH_UI_TOOLKIT_BUILD_EXAMPLE OFF)
+    set(SMOOTH_UI_TOOLKIT_BUILD_TEST OFF)
+    add_subdirectory(smooth_ui_toolkit)
 
     # Add LVGL include directories for lv_conf.h/lv_conf_platform.h
     target_include_directories(lvgl PUBLIC
@@ -199,7 +204,7 @@ if(NOT DEFINED ENV{IDF_PATH})
     )
 
     # Link libraries
-    target_link_libraries(${PROJECT_NAME} lvgl pthread ${LINUX_DISPLAY_LIBS})
+    target_link_libraries(${PROJECT_NAME} lvgl smooth_ui_toolkit pthread ${LINUX_DISPLAY_LIBS})
 endif()
 
 message(STATUS "--------------Compile Info------------")

@@ -9,7 +9,7 @@ foreach(source ${ALL_SOURCES})
         string(REPLACE "main/" "" adjusted_source ${source})
         list(APPEND SRCS_FILES ${adjusted_source})
     else()
-        # Add ../ prefix for sources outside main directory  
+        # Add ../ prefix for sources outside main directory
         list(APPEND SRCS_FILES ../${source})
     endif()
 endforeach()
