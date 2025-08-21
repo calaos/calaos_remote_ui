@@ -127,8 +127,8 @@ if(NOT DEFINED ENV{IDF_PATH})
 
     # Generate platform configuration
     configure_file(
-        ${CMAKE_SOURCE_DIR}/common/lv_conf_platform.h.in
-        ${CMAKE_BINARY_DIR}/common/lv_conf_platform.h
+        ${CMAKE_SOURCE_DIR}/hal/linux/lv_conf_platform.h.in
+        ${CMAKE_BINARY_DIR}/hal/linux/lv_conf_platform.h
         @ONLY
     )
 
@@ -141,29 +141,17 @@ if(NOT DEFINED ENV{IDF_PATH})
 
     # Add LVGL include directories for lv_conf.h/lv_conf_platform.h
     target_include_directories(lvgl PUBLIC
-        ${CMAKE_BINARY_DIR}/common
+        ${CMAKE_BINARY_DIR}/hal/linux
         ${CMAKE_SOURCE_DIR}/main
     )
 
     # Create main executable
     add_executable(${PROJECT_NAME})
 
-    # Add HAL sources
-    file(GLOB_RECURSE HAL_SOURCES
-        "hal/hal.cpp"
-        "hal/linux/*.cpp"
-    )
-
-    # Add main sources
-    set(MAIN_SOURCES
-        main/main.cpp
-        main/app_main.cpp
-    )
-
-    # Add common sources for Linux
-    set(COMMON_SOURCES
-        common/display_backend_selector.cpp
-    )
+    # Include shared source definitions
+    include(${CMAKE_SOURCE_DIR}/cmake/sources.cmake)
+    
+    # For Linux, we can use the source lists directly since paths are relative to project root
 
     # PNG to C image conversion for Linux build
     set(IMAGE_DIR "${CMAKE_SOURCE_DIR}/main/images")
@@ -198,14 +186,12 @@ if(NOT DEFINED ENV{IDF_PATH})
         list(APPEND CONVERTED_IMAGE_FILES ${c_file})
     endforeach()
 
-    target_sources(${PROJECT_NAME} PRIVATE ${HAL_SOURCES} ${MAIN_SOURCES} ${COMMON_SOURCES} ${CONVERTED_IMAGE_FILES})
+    target_sources(${PROJECT_NAME} PRIVATE ${ALL_SOURCES} ${CONVERTED_IMAGE_FILES})
 
     # Include directories
     target_include_directories(${PROJECT_NAME} PRIVATE
-        main
-        hal
-        common
-        ${CMAKE_BINARY_DIR}/common
+        ${COMMON_INCLUDE_DIRS}
+        ${CMAKE_BINARY_DIR}/hal/linux
         ${CMAKE_BINARY_DIR}/images_build
         components/lvgl
         components/lvgl/src

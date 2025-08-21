@@ -1,6 +1,6 @@
 #include "app_main.h"
 #ifndef ESP_PLATFORM
-#include "display_backend_selector.h"
+#include "linux/display_backend_selector.h"
 #include <iostream>
 #include <cstring>
 #include <cstdlib>

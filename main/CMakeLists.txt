@@ -1,19 +1,28 @@
-set(SRCS_FILES
-    main.cpp
-    app_main.cpp
-    ../hal/hal.cpp
-    ../hal/esp32/esp32_hal_display.cpp
-    ../hal/esp32/esp32_hal_input.cpp
-    ../hal/esp32/esp32_hal_network.cpp
-    ../hal/esp32/esp32_hal_system.cpp
-    ../hal/esp32/esp32_hal.cpp
-)
+# Include shared source definitions
+include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/sources.cmake)
 
-set(COMPONENT_ADD_INCLUDEDIRS
-    "."
-    "../hal"
-    "../common"
-)
+# For ESP-IDF, we need to adjust paths since we're in the main/ subdirectory
+set(SRCS_FILES "")
+foreach(source ${ALL_SOURCES})
+    if(${source} MATCHES "^main/")
+        # Remove main/ prefix for sources in main directory
+        string(REPLACE "main/" "" adjusted_source ${source})
+        list(APPEND SRCS_FILES ${adjusted_source})
+    else()
+        # Add ../ prefix for sources outside main directory  
+        list(APPEND SRCS_FILES ../${source})
+    endif()
+endforeach()
+
+# Convert common include dirs to ESP-IDF component format
+set(COMPONENT_ADD_INCLUDEDIRS "")
+foreach(include_dir ${COMMON_INCLUDE_DIRS})
+    if(${include_dir} STREQUAL "main")
+        list(APPEND COMPONENT_ADD_INCLUDEDIRS ".")
+    else()
+        list(APPEND COMPONENT_ADD_INCLUDEDIRS "../${include_dir}")
+    endif()
+endforeach()
 
 # Image conversion for ESP-IDF
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
