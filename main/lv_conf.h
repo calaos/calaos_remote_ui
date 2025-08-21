@@ -22,8 +22,21 @@
 #include "my_include.h"
 #endif
 
+#ifndef ESP_PLATFORM
 /* Include platform-specific configuration */
 #include "lv_conf_platform.h"
+#else
+    /* ESP32 Platform - Disable all Linux-specific backends */
+    #define LV_USE_FBDEV            0
+    #define LV_USE_DRM              0
+    #define LV_USE_EVDEV            0
+    #define LV_USE_LIBINPUT         0
+    #define LV_USE_SDL              0
+    #define LV_USE_X11              0
+    #define LV_USE_OPENGLES         0
+
+    #define LV_USE_OS               LV_OS_FREERTOS
+#endif
 
 /*====================
    COLOR SETTINGS

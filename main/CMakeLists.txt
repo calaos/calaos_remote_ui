@@ -2,7 +2,11 @@ set(SRCS_FILES
     main.cpp
     app_main.cpp
     ../hal/hal.cpp
-    ../hal/esp32/*.cpp
+    ../hal/esp32/esp32_hal_display.cpp
+    ../hal/esp32/esp32_hal_input.cpp
+    ../hal/esp32/esp32_hal_network.cpp
+    ../hal/esp32/esp32_hal_system.cpp
+    ../hal/esp32/esp32_hal.cpp
 )
 
 set(COMPONENT_ADD_INCLUDEDIRS

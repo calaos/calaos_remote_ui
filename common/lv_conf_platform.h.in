@@ -5,68 +5,52 @@
 
 #pragma once
 
-/* Platform detection */
-#ifdef ESP_PLATFORM
-    /* ESP32 Platform - Disable all Linux-specific backends */
-    #define LV_USE_FBDEV            0
-    #define LV_USE_DRM              0
-    #define LV_USE_EVDEV            0
-    #define LV_USE_LIBINPUT         0
-    #define LV_USE_SDL              0
-    #define LV_USE_X11              0
-    #define LV_USE_OPENGLES         0
+/* Linux Platform - Enable available backends detected by CMake */
 
-    #define LV_USE_OS               LV_OS_FREERTOS
+#define LV_USE_OS               LV_OS_NONE
 
-#else
-    /* Linux Platform - Enable available backends detected by CMake */
+/* Display backends */
+#define LV_USE_FBDEV            @LV_USE_FBDEV@
+#define LV_USE_DRM              @LV_USE_DRM@
+#define LV_USE_SDL              @LV_USE_SDL@
+#define LV_USE_X11              @LV_USE_X11@
+#define LV_USE_OPENGLES         @LV_USE_OPENGLES@
 
-    #define LV_USE_OS               LV_OS_NONE
+/* Input backends */
+#define LV_USE_EVDEV            @LV_USE_EVDEV@
+#define LV_USE_LIBINPUT         @LV_USE_LIBINPUT@
 
-    /* Display backends */
-    #define LV_USE_FBDEV            @LV_USE_FBDEV@
-    #define LV_USE_DRM              @LV_USE_DRM@
-    #define LV_USE_SDL              @LV_USE_SDL@
-    #define LV_USE_X11              @LV_USE_X11@
-    #define LV_USE_OPENGLES         @LV_USE_OPENGLES@
+/* Backend-specific configuration */
+#if LV_USE_SDL
+#define LV_SDL_INCLUDE_PATH     <SDL2/SDL.h>
+#define LV_SDL_BUF_COUNT        2
+#define LV_SDL_ZOOM             1
+#define LV_SDL_ANTIALIASING     0
+#define LV_SDL_MOUSE_CURSOR     1
+#define LV_SDL_MOUSEWHEEL_MODE  LV_SDL_MOUSEWHEEL_MODE_ENCODER
+#define LV_SDL_RENDER_MODE      LV_DISPLAY_RENDER_MODE_DIRECT
+#endif
 
-    /* Input backends */
-    #define LV_USE_EVDEV            @LV_USE_EVDEV@
-    #define LV_USE_LIBINPUT         @LV_USE_LIBINPUT@
+#if LV_USE_X11
+#define LV_X11_DIRECT_EXIT      1
+#define LV_X11_DOUBLE_BUFFER    1
+#define LV_X11_RENDER_MODE      LV_DISPLAY_RENDER_MODE_PARTIAL
+#endif
 
-    /* Backend-specific configuration */
-    #if LV_USE_SDL
-    #define LV_SDL_INCLUDE_PATH     <SDL2/SDL.h>
-    #define LV_SDL_BUF_COUNT        2
-    #define LV_SDL_ZOOM             1
-    #define LV_SDL_ANTIALIASING     0
-    #define LV_SDL_MOUSE_CURSOR     1
-    #define LV_SDL_MOUSEWHEEL_MODE  LV_SDL_MOUSEWHEEL_MODE_ENCODER
-    #define LV_SDL_RENDER_MODE      LV_DISPLAY_RENDER_MODE_DIRECT
-    #endif
+#if LV_USE_FBDEV
+#define LV_FBDEV_DEVICE   "/dev/fb0"
+#define LV_FBDEV_RENDER_MODE LV_DISPLAY_RENDER_MODE_PARTIAL
+#endif
 
-    #if LV_USE_X11
-    #define LV_X11_DIRECT_EXIT      1
-    #define LV_X11_DOUBLE_BUFFER    1
-    #define LV_X11_RENDER_MODE      LV_DISPLAY_RENDER_MODE_PARTIAL
-    #endif
+#if LV_USE_DRM
+#define LV_DRM_CARD       "/dev/dri/card0"
+#define LV_DRM_CONNECTOR_ID -1
+#define LV_DRM_RENDER_MODE LV_DISPLAY_RENDER_MODE_PARTIAL
+#endif
 
-    #if LV_USE_FBDEV
-    #define LV_FBDEV_DEVICE   "/dev/fb0"
-    #define LV_FBDEV_RENDER_MODE LV_DISPLAY_RENDER_MODE_PARTIAL
-    #endif
-
-    #if LV_USE_DRM
-    #define LV_DRM_CARD       "/dev/dri/card0"
-    #define LV_DRM_CONNECTOR_ID -1
-    #define LV_DRM_RENDER_MODE LV_DISPLAY_RENDER_MODE_PARTIAL
-    #endif
-
-    #if LV_USE_EVDEV
-    #define LV_EVDEV_POINTER_DEVICE   "/dev/input/event0"
-    #define LV_EVDEV_MOUSE_DEVICE     "/dev/input/event1"
-    #define LV_EVDEV_MOUSEWHEEL_DEVICE "/dev/input/event2"
-    #define LV_EVDEV_KEYBOARD_DEVICE   "/dev/input/event3"
-    #endif
-
-#endif /* ESP_PLATFORM */
+#if LV_USE_EVDEV
+#define LV_EVDEV_POINTER_DEVICE   "/dev/input/event0"
+#define LV_EVDEV_MOUSE_DEVICE     "/dev/input/event1"
+#define LV_EVDEV_MOUSEWHEEL_DEVICE "/dev/input/event2"
+#define LV_EVDEV_KEYBOARD_DEVICE   "/dev/input/event3"
+#endif
