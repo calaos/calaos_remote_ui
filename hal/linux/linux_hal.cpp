@@ -1,5 +1,6 @@
 #include "linux_hal.h"
 #include "logging.h"
+#include "lvgl.h"
 
 static const char* TAG = "hal";
 
@@ -11,50 +12,45 @@ LinuxHAL& LinuxHAL::getInstance()
 
 HalResult LinuxHAL::init()
 {
-    try
+    ESP_LOGI(TAG, "Initializing Linux HAL");
+
+    // Initialize LVGL first
+    ESP_LOGI(TAG, "Initializing LVGL");
+    lv_init();
+
+    // Initialize system first
+    system_ = std::make_unique<LinuxHalSystem>();
+    if (system_->init() != HalResult::OK)
     {
-        ESP_LOGI(TAG, "Initializing Linux HAL");
-
-        // Initialize system first
-        system_ = std::make_unique<LinuxHalSystem>();
-        if (system_->init() != HalResult::OK)
-        {
-            ESP_LOGE(TAG, "Failed to init system HAL");
-            return HalResult::ERROR;
-        }
-
-        // Initialize display
-        display_ = std::make_unique<LinuxHalDisplay>();
-        if (display_->init() != HalResult::OK)
-        {
-            ESP_LOGE(TAG, "Failed to init display HAL");
-            return HalResult::ERROR;
-        }
-
-        // Initialize input
-        input_ = std::make_unique<LinuxHalInput>();
-        if (input_->init() != HalResult::OK)
-        {
-            ESP_LOGE(TAG, "Failed to init input HAL");
-            return HalResult::ERROR;
-        }
-
-        // Initialize network
-        network_ = std::make_unique<LinuxHalNetwork>();
-        if (network_->init() != HalResult::OK)
-        {
-            ESP_LOGE(TAG, "Failed to init network HAL");
-            return HalResult::ERROR;
-        }
-
-        ESP_LOGI(TAG, "Linux HAL initialized successfully");
-        return HalResult::OK;
-    }
-    catch (...)
-    {
-        ESP_LOGE(TAG, "Exception during Linux HAL init");
+        ESP_LOGE(TAG, "Failed to init system HAL");
         return HalResult::ERROR;
     }
+
+    // Initialize display
+    display_ = std::make_unique<LinuxHalDisplay>();
+    if (display_->init() != HalResult::OK)
+    {
+        ESP_LOGE(TAG, "Failed to init display HAL");
+        return HalResult::ERROR;
+    }
+
+    // Initialize input (optional - some systems may not have separate input devices)
+    input_ = std::make_unique<LinuxHalInput>();
+    if (input_->init() != HalResult::OK)
+    {
+        ESP_LOGW(TAG, "No input device found, continuing without separate input HAL");
+    }
+
+    // Initialize network
+    network_ = std::make_unique<LinuxHalNetwork>();
+    if (network_->init() != HalResult::OK)
+    {
+        ESP_LOGE(TAG, "Failed to init network HAL");
+        return HalResult::ERROR;
+    }
+
+    ESP_LOGI(TAG, "Linux HAL initialized successfully");
+    return HalResult::OK;
 }
 
 HalResult LinuxHAL::deinit()
@@ -68,6 +64,9 @@ HalResult LinuxHAL::deinit()
     input_.reset();
     display_.reset();
     system_.reset();
+
+    // Deinitialize LVGL last
+    lv_deinit();
 
     ESP_LOGI(TAG, "Linux HAL deinitialized");
     return HalResult::OK;

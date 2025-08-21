@@ -6,6 +6,7 @@
 
 class LinuxHalNetwork : public HalNetwork {
 public:
+    ~LinuxHalNetwork();
     HalResult init() override;
     HalResult deinit() override;
     HalResult scanWifi(std::vector<WifiConfig>& networks) override;
@@ -13,7 +14,7 @@ public:
     HalResult disconnectWifi() override;
     WifiStatus getWifiStatus() const override;
     HalResult registerWifiCallback(WifiEventCallback callback) override;
-    std::string getLocalIP() const override;
+    std::string getLocalIp() const override;
     std::string getMacAddress() const override;
 
 private:
@@ -23,5 +24,5 @@ private:
     WifiStatus wifi_status_ = WifiStatus::DISCONNECTED;
     WifiEventCallback wifi_callback_;
     std::thread status_thread_;
-    std::atomic<bool> thread_running_;
+    std::atomic<bool> thread_running_{false};
 };

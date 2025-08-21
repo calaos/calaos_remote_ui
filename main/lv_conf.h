@@ -22,6 +22,9 @@
 #include "my_include.h"
 #endif
 
+/* Include platform-specific configuration */
+#include "lv_conf_platform.h"
+
 /*====================
    COLOR SETTINGS
  *====================*/
@@ -90,7 +93,6 @@
  * - LV_OS_WINDOWS
  * - LV_OS_MQX
  * - LV_OS_CUSTOM */
-#define LV_USE_OS   LV_OS_FREERTOS
 
 #if LV_USE_OS == LV_OS_CUSTOM
     #define LV_OS_CUSTOM_INCLUDE <stdint.h>
@@ -148,7 +150,7 @@
 	/* Set the number of draw unit.
      * > 1 requires an operating system enabled in `LV_USE_OS`
      * > 1 means multiple threads will render the screen in parallel */
-    #define LV_DRAW_SW_DRAW_UNIT_CNT    2
+    #define LV_DRAW_SW_DRAW_UNIT_CNT    1
 
     /* Use Arm-2D to accelerate the sw render */
     #define LV_USE_DRAW_ARM2D_SYNC      0
@@ -946,43 +948,11 @@
  * DEVICES
  *==================*/
 
-/*Use SDL to open window on PC and handle mouse and keyboard*/
-#define LV_USE_SDL              0
-#if LV_USE_SDL
-    #define LV_SDL_INCLUDE_PATH     <SDL2/SDL.h>
-    #define LV_SDL_RENDER_MODE      LV_DISPLAY_RENDER_MODE_DIRECT   /*LV_DISPLAY_RENDER_MODE_DIRECT is recommended for best performance*/
-    #define LV_SDL_BUF_COUNT        1    /*1 or 2*/
-    #define LV_SDL_ACCELERATED      1    /*1: Use hardware acceleration*/
-    #define LV_SDL_FULLSCREEN       0    /*1: Make the window full screen by default*/
-    #define LV_SDL_DIRECT_EXIT      1    /*1: Exit the application when all SDL windows are closed*/
-    #define LV_SDL_MOUSEWHEEL_MODE  LV_SDL_MOUSEWHEEL_MODE_ENCODER  /*LV_SDL_MOUSEWHEEL_MODE_ENCODER/CROWN*/
-#endif
-
-/*Use X11 to open window on Linux desktop and handle mouse and keyboard*/
-#define LV_USE_X11              0
-#if LV_USE_X11
-    #define LV_X11_DIRECT_EXIT         1  /*Exit the application when all X11 windows have been closed*/
-    #define LV_X11_DOUBLE_BUFFER       1  /*Use double buffers for rendering*/
-    /*select only 1 of the following render modes (LV_X11_RENDER_MODE_PARTIAL preferred!)*/
-    #define LV_X11_RENDER_MODE_PARTIAL 1  /*Partial render mode (preferred)*/
-    #define LV_X11_RENDER_MODE_DIRECT  0  /*direct render mode*/
-    #define LV_X11_RENDER_MODE_FULL    0  /*Full render mode*/
-#endif
-
 /*Use Wayland to open a window and handle input on Linux or BSD desktops */
 #define LV_USE_WAYLAND          0
 #if LV_USE_WAYLAND
     #define LV_WAYLAND_WINDOW_DECORATIONS   0    /*Draw client side window decorations only necessary on Mutter/GNOME*/
     #define LV_WAYLAND_WL_SHELL             0    /*Use the legacy wl_shell protocol instead of the default XDG shell*/
-#endif
-
-/*Driver for /dev/fb*/
-#define LV_USE_LINUX_FBDEV      0
-#if LV_USE_LINUX_FBDEV
-    #define LV_LINUX_FBDEV_BSD           0
-    #define LV_LINUX_FBDEV_RENDER_MODE   LV_DISPLAY_RENDER_MODE_PARTIAL
-    #define LV_LINUX_FBDEV_BUFFER_COUNT  0
-    #define LV_LINUX_FBDEV_BUFFER_SIZE   60
 #endif
 
 /*Use Nuttx to open window and handle touchscreen*/
@@ -1007,17 +977,15 @@
 #endif
 
 /*Driver for /dev/dri/card*/
-#define LV_USE_LINUX_DRM        0
+/* LV_USE_LINUX_DRM is defined in lv_conf_platform.h */
 
 /*Interface for TFT_eSPI*/
 #define LV_USE_TFT_ESPI         0
 
 /*Driver for evdev input devices*/
-#define LV_USE_EVDEV    0
+/* LV_USE_EVDEV is defined in lv_conf_platform.h */
 
 /*Driver for libinput input devices*/
-#define LV_USE_LIBINPUT    0
-
 #if LV_USE_LIBINPUT
     #define LV_LIBINPUT_BSD    0
 
@@ -1044,7 +1012,6 @@
 #define LV_USE_WINDOWS    0
 
 /* Use OpenGL to open window on PC and handle mouse and keyboard */
-#define LV_USE_OPENGLES   0
 #if LV_USE_OPENGLES
     #define LV_USE_OPENGLES_DEBUG        1    /* Enable or disable debug for opengles */
 #endif

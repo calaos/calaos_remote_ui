@@ -13,6 +13,8 @@
   "files.associations": {
     "*.tmpl": "go-template",
     "cstdlib": "c",
-    "cstdint": "c"
+    "cstdint": "c",
+    "*.in": "cpp",
+    "iostream": "cpp"
   }
 }

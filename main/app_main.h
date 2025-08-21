@@ -12,6 +12,7 @@ public:
     bool init();
     void run();
     void deinit();
+    void stop();
 
 private:
     void createBasicUi();
@@ -20,4 +21,5 @@ private:
     
     HAL* hal;
     bool initialized;
+    bool running;
 };

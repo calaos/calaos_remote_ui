@@ -1,11 +1,25 @@
 #include "linux_hal_display.h"
 #include "logging.h"
+#include "lv_conf_platform.h"
 #include <iostream>
+
+// Include headers based on enabled backends
+#if LV_USE_LINUX_FBDEV
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <linux/fb.h>
+#endif
+
+#if LV_USE_SDL
+#include <SDL2/SDL.h>
+#endif
+
+#if LV_USE_X11
+#include <X11/Xlib.h>
+#endif
+
 #include <chrono>
 #include <cstdlib>
 
@@ -20,100 +34,86 @@ static void linuxFbFlush(lv_display_t* disp, const lv_area_t* area, lv_color_t* 
 
 HalResult LinuxHalDisplay::init()
 {
-    ESP_LOGI(TAG, "Initializing Linux framebuffer display");
+    ESP_LOGI(TAG, "Initializing Linux display");
 
-    fbFd = open("/dev/fb0", O_RDWR);
-    if (fbFd == -1)
+    // Detect the best backend
+    DisplayBackendSelector& selector = DisplayBackendSelector::getInstance();
+
+    currentBackend = selector.detectBestBackend();
+
+    if (currentBackend == CALAOS_DISPLAY_BACKEND_NONE)
     {
-        ESP_LOGE(TAG, "Failed to open framebuffer device");
+        ESP_LOGE(TAG, "No suitable display backend found");
         return HalResult::ERROR;
     }
 
-    struct fb_var_screeninfo vinfo;
-    struct fb_fix_screeninfo finfo;
+    ESP_LOGI(TAG, "Using display backend: %s", selector.getBackendName(currentBackend).c_str());
 
-    if (ioctl(fbFd, FBIOGET_FSCREENINFO, &finfo) == -1)
+    // Initialize the selected backend
+    HalResult result = HalResult::ERROR;
+    switch (currentBackend)
     {
-        ESP_LOGE(TAG, "Failed to get fixed screen info");
-        close(fbFd);
-        return HalResult::ERROR;
+        case CALAOS_DISPLAY_BACKEND_FBDEV:
+            result = initFbdevBackend();
+            break;
+        case CALAOS_DISPLAY_BACKEND_DRM:
+            result = initDrmBackend();
+            break;
+        case CALAOS_DISPLAY_BACKEND_SDL:
+            result = initSdlBackend();
+            break;
+        case CALAOS_DISPLAY_BACKEND_X11:
+            result = initX11Backend();
+            break;
+        case CALAOS_DISPLAY_BACKEND_GLES:
+            result = initGlfw3Backend();
+            break;
+        default:
+            ESP_LOGE(TAG, "Unsupported backend: %s", selector.getBackendName(currentBackend).c_str());
+            break;
     }
 
-    if (ioctl(fbFd, FBIOGET_VSCREENINFO, &vinfo) == -1)
+    if (result == HalResult::OK)
     {
-        ESP_LOGE(TAG, "Failed to get variable screen info");
-        close(fbFd);
-        return HalResult::ERROR;
+        ESP_LOGI(TAG, "Linux display initialized successfully with %s backend",
+                 selector.getBackendName(currentBackend).c_str());
     }
 
-    displayInfo.width = 720;
-    displayInfo.height = 720;
-    displayInfo.colorDepth = 16;
-
-    fbSize = displayInfo.width * displayInfo.height * (displayInfo.colorDepth / 8);
-
-    fbBuffer = static_cast<uint8_t*>(mmap(0, fbSize, PROT_READ | PROT_WRITE, MAP_SHARED, fbFd, 0));
-    if (fbBuffer == MAP_FAILED)
-    {
-        ESP_LOGE(TAG, "Failed to map framebuffer");
-        close(fbFd);
-        return HalResult::ERROR;
-    }
-
-    display = lv_display_create(displayInfo.width, displayInfo.height);
-    if (!display)
-    {
-        ESP_LOGE(TAG, "Failed to create LVGL display");
-        munmap(fbBuffer, fbSize);
-        close(fbFd);
-        return HalResult::ERROR;
-    }
-
-    size_t bufSize = displayInfo.width * 50;
-    void* buf1 = malloc(bufSize * sizeof(lv_color_t));
-    void* buf2 = malloc(bufSize * sizeof(lv_color_t));
-
-    if (!buf1 || !buf2)
-    {
-        ESP_LOGE(TAG, "Failed to allocate display buffers");
-        free(buf1);
-        free(buf2);
-        lv_display_delete(display);
-        munmap(fbBuffer, fbSize);
-        close(fbFd);
-        return HalResult::ERROR;
-    }
-
-    lv_display_set_buffers(display, buf1, buf2, bufSize, LV_DISPLAY_RENDER_MODE_PARTIAL);
-    lv_display_set_flush_cb(display, linuxFbFlush);
-    lv_display_set_user_data(display, this);
-
-    ESP_LOGI(TAG, "Linux display initialized: %dx%d, %d-bit",
-             displayInfo.width, displayInfo.height, displayInfo.colorDepth);
-
-    return HalResult::OK;
+    return result;
 }
 
 HalResult LinuxHalDisplay::deinit()
 {
+    // Backend-specific cleanup
+    switch (currentBackend)
+    {
+        case CALAOS_DISPLAY_BACKEND_FBDEV:
+            deinitFbdevBackend();
+            break;
+        case CALAOS_DISPLAY_BACKEND_DRM:
+            deinitDrmBackend();
+            break;
+        case CALAOS_DISPLAY_BACKEND_SDL:
+            deinitSdlBackend();
+            break;
+        case CALAOS_DISPLAY_BACKEND_X11:
+            deinitX11Backend();
+            break;
+        case CALAOS_DISPLAY_BACKEND_GLES:
+            deinitGlfw3Backend();
+            break;
+        default:
+            break;
+    }
+
+    // Common cleanup
     if (display)
     {
         lv_display_delete(display);
         display = nullptr;
     }
 
-    if (fbBuffer != MAP_FAILED)
-    {
-        munmap(fbBuffer, fbSize);
-        fbBuffer = nullptr;
-    }
-
-    if (fbFd != -1)
-    {
-        close(fbFd);
-        fbFd = -1;
-    }
-
+    currentBackend = CALAOS_DISPLAY_BACKEND_NONE;
     return HalResult::OK;
 }
 
@@ -144,7 +144,10 @@ void LinuxHalDisplay::lock(uint32_t timeoutMs)
     else
     {
         auto timeout = std::chrono::milliseconds(timeoutMs);
-        displayMutex.try_lock_for(timeout);
+        if (!displayMutex.try_lock_for(timeout))
+        {
+            ESP_LOGW(TAG, "Failed to acquire display lock within timeout");
+        }
     }
 }
 
@@ -156,4 +159,213 @@ void LinuxHalDisplay::unlock()
 lv_display_t* LinuxHalDisplay::getLvglDisplay()
 {
     return display;
+}
+
+void LinuxHalDisplay::setBackendOverride(const std::string& backend)
+{
+    DisplayBackendSelector::getInstance().setBackendOverride(backend);
+}
+
+std::string LinuxHalDisplay::getCurrentBackend() const
+{
+    return DisplayBackendSelector::getInstance().getBackendName(currentBackend);
+}
+
+HalResult LinuxHalDisplay::initFbdevBackend()
+{
+#if LV_USE_LINUX_FBDEV
+    ESP_LOGI(TAG, "Initializing framebuffer backend");
+
+    const char* fbDevice = getenv("LV_LINUX_FBDEV_DEVICE");
+    if (!fbDevice) fbDevice = "/dev/fb0";
+
+    fbFd = open(fbDevice, O_RDWR);
+    if (fbFd == -1)
+    {
+        ESP_LOGE(TAG, "Failed to open framebuffer device: %s", fbDevice);
+        return HalResult::ERROR;
+    }
+
+    struct fb_var_screeninfo vinfo;
+    if (ioctl(fbFd, FBIOGET_VSCREENINFO, &vinfo) == -1)
+    {
+        ESP_LOGE(TAG, "Failed to get variable screen info");
+        close(fbFd);
+        return HalResult::ERROR;
+    }
+
+    displayInfo.width = 720;  // Fixed size for now
+    displayInfo.height = 720;
+    displayInfo.colorDepth = 16;
+
+    display = lv_linux_fbdev_create();
+    if (!display)
+    {
+        ESP_LOGE(TAG, "Failed to create fbdev display");
+        close(fbFd);
+        return HalResult::ERROR;
+    }
+
+    lv_linux_fbdev_set_file(display, fbDevice);
+
+    return HalResult::OK;
+#else
+    ESP_LOGE(TAG, "Framebuffer backend not compiled in");
+    return HalResult::ERROR;
+#endif
+}
+
+HalResult LinuxHalDisplay::initDrmBackend()
+{
+#if LV_USE_LINUX_DRM
+    ESP_LOGI(TAG, "Initializing DRM backend");
+
+    const char* drmCard = getenv("LV_LINUX_DRM_CARD");
+    if (!drmCard) drmCard = "/dev/dri/card0";
+
+    display = lv_linux_drm_create();
+    if (!display)
+    {
+        ESP_LOGE(TAG, "Failed to create DRM display");
+        return HalResult::ERROR;
+    }
+
+    lv_linux_drm_set_file(display, drmCard, -1);
+
+    displayInfo.width = 720;  // Will be updated by DRM driver
+    displayInfo.height = 720;
+    displayInfo.colorDepth = 16;
+
+    return HalResult::OK;
+#else
+    ESP_LOGE(TAG, "DRM backend not compiled in");
+    return HalResult::ERROR;
+#endif
+}
+
+HalResult LinuxHalDisplay::initSdlBackend()
+{
+#if LV_USE_SDL
+    ESP_LOGI(TAG, "Initializing SDL backend");
+
+    display = lv_sdl_window_create(720, 720);
+    if (!display)
+    {
+        ESP_LOGE(TAG, "Failed to create SDL window");
+        return HalResult::ERROR;
+    }
+
+    displayInfo.width = 720;
+    displayInfo.height = 720;
+    displayInfo.colorDepth = 32;  // SDL usually uses 32-bit
+
+    lv_indev_t *mouse = lv_sdl_mouse_create();
+    lv_indev_set_display(mouse, display);
+    lv_display_set_default(display);
+
+    lv_indev_t *mousewheel = lv_sdl_mousewheel_create();
+    lv_indev_set_display(mousewheel, display);
+
+    lv_indev_t *kb = lv_sdl_keyboard_create();
+    lv_indev_set_display(kb, display);
+
+    return HalResult::OK;
+#else
+    ESP_LOGE(TAG, "SDL backend not compiled in");
+    return HalResult::ERROR;
+#endif
+}
+
+HalResult LinuxHalDisplay::initX11Backend()
+{
+#if LV_USE_X11
+    ESP_LOGI(TAG, "Initializing X11 backend");
+
+    display = lv_x11_window_create("Calaos Remote UI", 720, 720);
+    if (!display)
+    {
+        ESP_LOGE(TAG, "Failed to create X11 window");
+        return HalResult::ERROR;
+    }
+
+    displayInfo.width = 720;
+    displayInfo.height = 720;
+    displayInfo.colorDepth = 32;  // X11 usually uses 32-bit
+
+    // add default x11 input device
+    lv_x11_inputs_create(display, nullptr);
+
+    return HalResult::OK;
+#else
+    ESP_LOGE(TAG, "X11 backend not compiled in");
+    return HalResult::ERROR;
+#endif
+}
+
+HalResult LinuxHalDisplay::initGlfw3Backend()
+{
+#if LV_USE_OPENGLES
+    ESP_LOGI(TAG, "Initializing GLES backend");
+
+    lv_glfw_texture_t *window_texture;
+    lv_indev_t *mouse;
+    lv_display_t *disp_texture;
+    uint32_t disp_texture_id;
+
+    displayInfo.width = 720;
+    displayInfo.height = 720;
+    displayInfo.colorDepth = 32;
+
+    lv_glfw_window_t *window = lv_glfw_window_create(
+            displayInfo.width, displayInfo.height, true);
+
+    /* create a display that flushes to a texture */
+    disp_texture = lv_opengles_texture_create(
+            displayInfo.width, displayInfo.height);
+    lv_display_set_default(disp_texture);
+
+    /* add the texture to the window */
+    disp_texture_id = lv_opengles_texture_get_texture_id(disp_texture);
+    window_texture = lv_glfw_window_add_texture(window, disp_texture_id,
+            displayInfo.width, displayInfo.height);
+
+    /* get the mouse indev of the window texture */
+    mouse = lv_glfw_texture_get_mouse_indev(window_texture);
+
+    return HalResult::OK;
+#else
+    ESP_LOGE(TAG, "GLES backend not compiled in");
+    return HalResult::ERROR;
+#endif
+}
+
+void LinuxHalDisplay::deinitFbdevBackend()
+{
+#if LV_USE_LINUX_FBDEV
+    if (fbFd != -1)
+    {
+        close(fbFd);
+        fbFd = -1;
+    }
+#endif
+}
+
+void LinuxHalDisplay::deinitDrmBackend()
+{
+    // DRM cleanup is handled by LVGL
+}
+
+void LinuxHalDisplay::deinitSdlBackend()
+{
+    // SDL cleanup is handled by LVGL
+}
+
+void LinuxHalDisplay::deinitX11Backend()
+{
+    // X11 cleanup is handled by LVGL
+}
+
+void LinuxHalDisplay::deinitGlfw3Backend()
+{
+    // GLFW3 cleanup would be handled here
 }

@@ -16,34 +16,34 @@
 
 static const char* TAG = "hal.network";
 
+LinuxHalNetwork::~LinuxHalNetwork()
+{
+    deinit();
+}
+
 HalResult LinuxHalNetwork::init()
 {
-    try
-    {
-        ESP_LOGI(TAG, "Initializing Linux network");
+    ESP_LOGI(TAG, "Initializing Linux network");
 
-        // Start status monitoring thread
-        thread_running_ = true;
-        status_thread_ = std::thread(&LinuxHalNetwork::statusMonitorThread, this);
+    // Start status monitoring thread
+    thread_running_ = true;
+    status_thread_ = std::thread(&LinuxHalNetwork::statusMonitorThread, this);
 
-        wifi_status_ = checkWifiStatus();
+    wifi_status_ = checkWifiStatus();
 
-        ESP_LOGI(TAG, "Linux network initialized");
-        return HalResult::OK;
-    }
-    catch (...)
-    {
-        ESP_LOGE(TAG, "Exception during Linux network init");
-        return HalResult::ERROR;
-    }
+    ESP_LOGI(TAG, "Linux network initialized");
+    return HalResult::OK;
 }
 
 HalResult LinuxHalNetwork::deinit()
 {
-    thread_running_ = false;
+    if (thread_running_.load())
+    {
+        thread_running_ = false;
 
-    if (status_thread_.joinable())
-        status_thread_.join();
+        if (status_thread_.joinable())
+            status_thread_.join();
+    }
 
     return HalResult::OK;
 }
@@ -133,7 +133,7 @@ HalResult LinuxHalNetwork::registerWifiCallback(WifiEventCallback callback)
     return HalResult::OK;
 }
 
-std::string LinuxHalNetwork::getLocalIP() const
+std::string LinuxHalNetwork::getLocalIp() const
 {
     struct ifaddrs *ifaddrs_ptr, *ifa;
     char ip_str[INET_ADDRSTRLEN];
@@ -190,35 +190,45 @@ std::string LinuxHalNetwork::getMacAddress() const
 
 WifiStatus LinuxHalNetwork::checkWifiStatus()
 {
-    // Check network connectivity
-    FILE* pipe = popen("nmcli -t -f WIFI g", "r");
-    if (!pipe) return WifiStatus::ERROR;
+    FILE* pipe = popen("wpa_cli status", "r");
+    if (!pipe)
+        return WifiStatus::ERROR;
 
-    char buffer[64];
-    if (fgets(buffer, sizeof(buffer), pipe) != nullptr)
+    char buffer[256];
+    bool has_ssid = false;
+    bool is_scanning = false;
+
+    while (fgets(buffer, sizeof(buffer), pipe) != nullptr)
     {
-        std::string status(buffer);
-        if (status.find("enabled") != std::string::npos)
+        std::string line(buffer);
+
+        if (line.find("wpa_state=SCANNING") != std::string::npos)
         {
-            pclose(pipe);
-
-            // Check if connected
-            pipe = popen("nmcli -t -f STATE g", "r");
-            if (pipe && fgets(buffer, sizeof(buffer), pipe) != nullptr)
+            is_scanning = true;
+            break;
+        }
+        else if (line.find("ssid=") != std::string::npos)
+        {
+            // Extract SSID to check if we have a connection
+            size_t pos = line.find("ssid=");
+            if (pos != std::string::npos)
             {
-                std::string state(buffer);
-                pclose(pipe);
-
-                if (state.find("connected") != std::string::npos)
-                    return WifiStatus::CONNECTED;
-
-                return WifiStatus::DISCONNECTED;
+                std::string ssid = line.substr(pos + 5);
+                // Remove newline and whitespace
+                ssid.erase(ssid.find_last_not_of(" \n\r\t") + 1);
+                if (!ssid.empty())
+                    has_ssid = true;
             }
         }
     }
 
-    if (pipe)
-        pclose(pipe);
+    pclose(pipe);
+
+    if (is_scanning)
+        return WifiStatus::DISCONNECTED;
+
+    if (has_ssid)
+        return WifiStatus::CONNECTED;
 
     return WifiStatus::DISCONNECTED;
 }

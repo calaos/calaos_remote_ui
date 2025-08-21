@@ -12,21 +12,13 @@ static const char* TAG = "hal.system";
 
 HalResult LinuxHalSystem::init()
 {
-    try
-    {
-        ESP_LOGI(TAG, "Initializing Linux system");
+    ESP_LOGI(TAG, "Initializing Linux system");
 
-        config_file_path_ = getConfigFilePath();
-        loadConfigFile();
+    config_file_path_ = getConfigFilePath();
+    loadConfigFile();
 
-        ESP_LOGI(TAG, "Linux system initialized");
-        return HalResult::OK;
-    }
-    catch (...)
-    {
-        ESP_LOGE(TAG, "Exception during Linux system init");
-        return HalResult::ERROR;
-    }
+    ESP_LOGI(TAG, "Linux system initialized");
+    return HalResult::OK;
 }
 
 HalResult LinuxHalSystem::deinit()

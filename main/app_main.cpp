@@ -10,7 +10,7 @@
 
 static const char* TAG = "main";
 
-AppMain::AppMain() : hal(nullptr), initialized(false)
+AppMain::AppMain() : hal(nullptr), initialized(false), running(false)
 {
 }
 
@@ -35,6 +35,7 @@ bool AppMain::init()
     createBasicUi();
 
     initialized = true;
+    running = true;
     ESP_LOGI(TAG, "Application initialized successfully");
 
     return true;
@@ -45,18 +46,35 @@ void AppMain::run()
     if (!initialized)
         return;
 
-    while (1)
+    while (running)
     {
+        uint32_t timeMs = 10;
+
         #ifndef ESP_PLATFORM
-        lv_timer_handler();
+        timeMs = lv_timer_handler();
+        
+        // Check if display is still valid (window not closed)
+        lv_display_t* disp = hal->getDisplay().getLvglDisplay();
+        if (!disp || !lv_display_get_driver_data(disp))
+        {
+            ESP_LOGI(TAG, "Display no longer valid, shutting down");
+            running = false;
+            break;
+        }
         #endif
 
-        hal->getSystem().delay(10);
+        hal->getSystem().delay(timeMs);
     }
+}
+
+void AppMain::stop()
+{
+    running = false;
 }
 
 void AppMain::deinit()
 {
+    running = false;
     if (hal && initialized)
     {
         hal->deinit();

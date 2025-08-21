@@ -1,183 +1,209 @@
 #include "linux_hal_input.h"
 #include "logging.h"
-#include <iostream>
-#include <fcntl.h>
-#include <unistd.h>
-#include <linux/input.h>
-#include <thread>
-#include <chrono>
+#include <cstdlib>
 
 static const char* TAG = "hal.input";
 
-void LinuxHalInput::lvgl_input_read(lv_indev_t* indev, lv_indev_data_t* data)
-{
-    LinuxHalInput* input = static_cast<LinuxHalInput*>(lv_indev_get_user_data(indev));
-    if (!input) return;
-
-    TouchData touch_data;
-    if (input->readTouch(touch_data) == HalResult::OK)
-    {
-        data->point.x = touch_data.x;
-        data->point.y = touch_data.y;
-        data->state = touch_data.pressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
-    }
-    else
-    {
-        data->state = LV_INDEV_STATE_RELEASED;
-    }
-}
-
 HalResult LinuxHalInput::init()
 {
-    try
+    ESP_LOGI(TAG, "Initializing Linux input");
+    
+    // Detect the best input backend
+    currentInputBackend = detectBestInputBackend();
+    
+    if (currentInputBackend == CALAOS_INPUT_BACKEND_NONE)
     {
-        ESP_LOGI(TAG, "Initializing Linux touch input");
-
-        // Try to open touch device (common paths)
-        const char* touch_devices[] = {
-            "/dev/input/event0",
-            "/dev/input/event1",
-            "/dev/input/event2",
-            "/dev/input/touchscreen",
-            nullptr
-        };
-
-        for (int i = 0; touch_devices[i] != nullptr; i++)
-        {
-            touch_fd_ = open(touch_devices[i], O_RDONLY | O_NONBLOCK);
-            if (touch_fd_ != -1)
-            {
-                ESP_LOGI(TAG, "Opened touch device: %s", touch_devices[i].c_str());
-                break;
-            }
-        }
-
-        if (touch_fd_ == -1)
-        {
-            ESP_LOGI(TAG, "No touch device found, using mouse simulation");
-            // Continue anyway, we can simulate with mouse or keyboard
-        }
-
-        // Create LVGL input device
-        input_device_ = lv_indev_create();
-        if (!input_device_)
-        {
-            ESP_LOGE(TAG, "Failed to create LVGL input device");
-            if (touch_fd_ != -1) close(touch_fd_);
-            return HalResult::ERROR;
-        }
-
-        lv_indev_set_type(input_device_, LV_INDEV_TYPE_POINTER);
-        lv_indev_set_read_cb(input_device_, lvgl_input_read);
-        lv_indev_set_user_data(input_device_, this);
-
-        // Start touch reading thread
-        thread_running_ = true;
-        touch_thread_ = std::thread(&LinuxHalInput::touchThreadFunction, this);
-
-        ESP_LOGI(TAG, "Linux input initialized");
+        ESP_LOGI(TAG, "No separate input backend found - assuming display backend handles input automatically");
+        inputDevice = nullptr;
         return HalResult::OK;
     }
-    catch (...)
+    
+    ESP_LOGI(TAG, "Using input backend: %s", getInputBackendName(currentInputBackend).c_str());
+    
+    // Initialize the selected backend
+    HalResult result = HalResult::ERROR;
+    switch (currentInputBackend)
     {
-        ESP_LOGE(TAG, "Exception during Linux input init");
-        return HalResult::ERROR;
+        case CALAOS_INPUT_BACKEND_EVDEV:
+            result = initEvdevBackend();
+            break;
+        case CALAOS_INPUT_BACKEND_LIBINPUT:
+            result = initLibinputBackend();
+            break;
+        default:
+            ESP_LOGE(TAG, "Unsupported input backend: %s", getInputBackendName(currentInputBackend).c_str());
+            break;
     }
+    
+    if (result == HalResult::OK)
+    {
+        ESP_LOGI(TAG, "Linux input initialized successfully with %s backend", 
+                 getInputBackendName(currentInputBackend).c_str());
+    }
+    
+    return result;
 }
 
 HalResult LinuxHalInput::deinit()
 {
-    thread_running_ = false;
-
-    if (touch_thread_.joinable())
-        touch_thread_.join();
-
-    if (input_device_)
+    // LVGL handles cleanup automatically
+    if (inputDevice)
     {
-        lv_indev_delete(input_device_);
-        input_device_ = nullptr;
+        lv_indev_delete(inputDevice);
+        inputDevice = nullptr;
     }
 
-    if (touch_fd_ != -1)
-    {
-        close(touch_fd_);
-        touch_fd_ = -1;
-    }
-
-    return HalResult::OK;
-}
-
-HalResult LinuxHalInput::registerTouchCallback(TouchEventCallback callback)
-{
-    touch_callback_ = callback;
-    return HalResult::OK;
-}
-
-HalResult LinuxHalInput::readTouch(TouchData& touch_data)
-{
-    touch_data = last_touch_data_;
+    currentInputBackend = CALAOS_INPUT_BACKEND_NONE;
     return HalResult::OK;
 }
 
 lv_indev_t* LinuxHalInput::getLvglInputDevice()
 {
-    return input_device_;
+    return inputDevice;
 }
 
-void LinuxHalInput::touchThreadFunction()
+
+void LinuxHalInput::setInputBackendOverride(const std::string& backend)
 {
-    struct input_event ev;
-    TouchData current_touch = {};
+    if (backend == "evdev") backendOverride = CALAOS_INPUT_BACKEND_EVDEV;
+    else if (backend == "libinput") backendOverride = CALAOS_INPUT_BACKEND_LIBINPUT;
+    else backendOverride = CALAOS_INPUT_BACKEND_NONE;
+}
 
-    while (thread_running_)
+std::string LinuxHalInput::getCurrentInputBackend() const
+{
+    return getInputBackendName(currentInputBackend);
+}
+
+calaos_input_backend_t LinuxHalInput::detectBestInputBackend()
+{
+    // Check for environment variable override first
+    calaos_input_backend_t envBackend = getInputBackendFromEnv();
+    if (envBackend != CALAOS_INPUT_BACKEND_NONE)
     {
-        if (touch_fd_ == -1)
+        if (isInputBackendAvailable(envBackend))
         {
-            // No touch device, sleep and continue
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            continue;
-        }
-
-        ssize_t bytes = read(touch_fd_, &ev, sizeof(struct input_event));
-        if (bytes == sizeof(struct input_event))
-        {
-            switch (ev.type)
-            {
-                case EV_ABS:
-                    switch (ev.code)
-                    {
-                        case ABS_X:
-                            current_touch.x = ev.value;
-                            break;
-                        case ABS_Y:
-                            current_touch.y = ev.value;
-                            break;
-                    }
-                    break;
-
-                case EV_KEY:
-                    if (ev.code == BTN_TOUCH || ev.code == BTN_LEFT)
-                    {
-                        current_touch.pressed = (ev.value == 1);
-                    }
-                    break;
-
-                case EV_SYN:
-                    if (ev.code == SYN_REPORT)
-                    {
-                        last_touch_data_ = current_touch;
-                        if (touch_callback_ && current_touch.pressed)
-                        {
-                            touch_callback_(current_touch);
-                        }
-                    }
-                    break;
-            }
+            ESP_LOGI(TAG, "Using input backend from environment: %s", getInputBackendName(envBackend).c_str());
+            return envBackend;
         }
         else
         {
-            // No data available, sleep briefly
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            ESP_LOGW(TAG, "Requested input backend %s not available, falling back to auto-detection", 
+                     getInputBackendName(envBackend).c_str());
         }
     }
+    
+    // Check for override
+    if (backendOverride != CALAOS_INPUT_BACKEND_NONE && isInputBackendAvailable(backendOverride))
+    {
+        ESP_LOGI(TAG, "Using override input backend: %s", getInputBackendName(backendOverride).c_str());
+        return backendOverride;
+    }
+    
+    // Priority order for Linux input: evdev > libinput
+    std::vector<calaos_input_backend_t> priorities = {
+        CALAOS_INPUT_BACKEND_EVDEV,
+        CALAOS_INPUT_BACKEND_LIBINPUT
+    };
+    
+    // Find first available backend
+    for (auto backend : priorities)
+    {
+        if (isInputBackendAvailable(backend))
+        {
+            ESP_LOGI(TAG, "Selected input backend: %s", getInputBackendName(backend).c_str());
+            return backend;
+        }
+    }
+    
+    ESP_LOGD(TAG, "No separate input backend available - display backend may handle input");
+    return CALAOS_INPUT_BACKEND_NONE;
+}
+
+bool LinuxHalInput::isInputBackendAvailable(calaos_input_backend_t backend)
+{
+    switch (backend)
+    {
+        case CALAOS_INPUT_BACKEND_EVDEV:
+#if LV_USE_LINUX_EVDEV
+            return access("/dev/input", F_OK) == 0;
+#else
+            return false;
+#endif
+        case CALAOS_INPUT_BACKEND_LIBINPUT:
+#if LV_USE_LINUX_LIBINPUT
+            return access("/dev/input", F_OK) == 0;  // Simplified check
+#else
+            return false;
+#endif
+        default:
+            return false;
+    }
+}
+
+std::string LinuxHalInput::getInputBackendName(calaos_input_backend_t backend) const
+{
+    switch (backend)
+    {
+        case CALAOS_INPUT_BACKEND_EVDEV: return "evdev";
+        case CALAOS_INPUT_BACKEND_LIBINPUT: return "libinput";
+        default: return "none";
+    }
+}
+
+calaos_input_backend_t LinuxHalInput::getInputBackendFromEnv()
+{
+    const char* envVar = std::getenv("CALAOS_INPUT_BACKEND");
+    if (!envVar) return CALAOS_INPUT_BACKEND_NONE;
+    
+    std::string backend(envVar);
+    
+    if (backend == "evdev") return CALAOS_INPUT_BACKEND_EVDEV;
+    if (backend == "libinput") return CALAOS_INPUT_BACKEND_LIBINPUT;
+    
+    return CALAOS_INPUT_BACKEND_NONE;
+}
+
+HalResult LinuxHalInput::initEvdevBackend()
+{
+#if LV_USE_LINUX_EVDEV
+    ESP_LOGI(TAG, "Initializing evdev input backend");
+    
+    // Use environment variable override if set
+    const char* evdevDevice = getenv("LV_LINUX_EVDEV_POINTER_DEVICE");
+    if (!evdevDevice) evdevDevice = "/dev/input/event*";  // Let LVGL find the device
+    
+    inputDevice = lv_linux_evdev_create(LV_INDEV_TYPE_POINTER, evdevDevice);
+    if (!inputDevice)
+    {
+        ESP_LOGE(TAG, "Failed to create evdev input device");
+        return HalResult::ERROR;
+    }
+    
+    ESP_LOGI(TAG, "evdev input device created successfully");
+    return HalResult::OK;
+#else
+    ESP_LOGE(TAG, "evdev backend not compiled in");
+    return HalResult::ERROR;
+#endif
+}
+
+HalResult LinuxHalInput::initLibinputBackend()
+{
+#if LV_USE_LINUX_LIBINPUT
+    ESP_LOGI(TAG, "Initializing libinput backend");
+    
+    inputDevice = lv_linux_libinput_create(LV_INDEV_TYPE_POINTER, "/dev/input/event*");
+    if (!inputDevice)
+    {
+        ESP_LOGE(TAG, "Failed to create libinput input device");
+        return HalResult::ERROR;
+    }
+    
+    ESP_LOGI(TAG, "libinput input device created successfully");
+    return HalResult::OK;
+#else
+    ESP_LOGE(TAG, "libinput backend not compiled in");
+    return HalResult::ERROR;
+#endif
 }

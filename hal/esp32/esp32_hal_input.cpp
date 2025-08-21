@@ -1,6 +1,5 @@
 #include "esp32_hal_input.h"
 #include "logging.h"
-#include <src/lvgl_private.h>
 
 static const char* TAG = "ESP32_HAL_INPUT";
 
@@ -20,32 +19,6 @@ HalResult Esp32HalInput::init()
 HalResult Esp32HalInput::deinit()
 {
     inputDevice = nullptr;
-    touchCallback = nullptr;
-    return HalResult::OK;
-}
-
-HalResult Esp32HalInput::registerTouchCallback(TouchEventCallback callback)
-{
-    touchCallback = callback;
-    return HalResult::OK;
-}
-
-HalResult Esp32HalInput::readTouch(TouchData& touchData)
-{
-    if (!inputDevice)
-        return HalResult::ERROR;
-
-    lv_point_t data;
-    lv_indev_read(inputDevice);
-    lv_indev_get_point(inputDevice, &data);
-
-    touchData.x = data.x;
-    touchData.y = data.y;
-    touchData.pressed = (inputDevice->state == LV_INDEV_STATE_PRESSED);
-
-    if (touchCallback && touchData.pressed)
-        touchCallback(touchData);
-
     return HalResult::OK;
 }
 

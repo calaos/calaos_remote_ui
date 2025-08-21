@@ -22,13 +22,6 @@ struct DisplayInfo
     uint8_t colorDepth;
 };
 
-struct TouchData
-{
-    uint16_t x;
-    uint16_t y;
-    bool pressed;
-};
-
 struct WifiConfig
 {
     std::string ssid;
@@ -46,4 +39,3 @@ enum class WifiStatus
 };
 
 using WifiEventCallback = std::function<void(WifiStatus status)>;
-using TouchEventCallback = std::function<void(const TouchData& touchData)>;
