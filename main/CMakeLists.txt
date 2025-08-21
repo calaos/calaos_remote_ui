@@ -12,6 +12,7 @@ set(SRCS_FILES
 set(COMPONENT_ADD_INCLUDEDIRS
     "."
     "../hal"
+    "../common"
 )
 
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)

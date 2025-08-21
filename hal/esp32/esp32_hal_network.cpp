@@ -1,5 +1,5 @@
 #include "esp32_hal_network.h"
-#include "esp_log.h"
+#include "logging.h"
 #include "esp_netif.h"
 #include "esp_wifi_default.h"
 #include "freertos/FreeRTOS.h"
@@ -46,32 +46,38 @@ HalResult Esp32HalNetwork::init()
     ESP_ERROR_CHECK(ethernet_init_all(&eth_handles, &eth_port_cnt));
 
     // Create instance(s) of esp-netif for Ethernet(s)
-    if (eth_port_cnt == 1) {
+    if (eth_port_cnt == 1)
+    {
         // Use ESP_NETIF_DEFAULT_ETH when just one Ethernet interface is used and you don't need to modify
         // default esp-netif configuration parameters.
         esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();
         esp_netif_t *eth_netif = esp_netif_new(&cfg);
         // Attach Ethernet driver to TCP/IP stack
         ESP_ERROR_CHECK(esp_netif_attach(eth_netif, esp_eth_new_netif_glue(eth_handles[0])));
-    } else {
-        ESP_LOGW(TAG, "not implemented");
+    }
+    else
+    {
+        ESP_LOGW(TAG, "multiple eth port. not implemented");
     }
 
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &got_ip_event_handler, NULL));
 
     // Start Ethernet driver state machine
-    for (int i = 0; i < eth_port_cnt; i++) {
+    for (int i = 0; i < eth_port_cnt; i++)
         ESP_ERROR_CHECK(esp_eth_start(eth_handles[i]));
-    }
 
     // Print each device info
-    for (int i = 0; i < eth_port_cnt; i++) {
+    for (int i = 0; i < eth_port_cnt; i++)
+    {
         eth_dev_info_t info = ethernet_init_get_dev_info(&eth_handles[i]);
-        if (info.type == ETH_DEV_TYPE_INTERNAL_ETH) {
+        if (info.type == ETH_DEV_TYPE_INTERNAL_ETH)
+        {
             ESP_LOGI(TAG, "Device Name: %s", info.name);
             ESP_LOGI(TAG, "Device type: ETH_DEV_TYPE_INTERNAL_ETH(%d)", info.type);
             ESP_LOGI(TAG, "Pins: mdc: %d, mdio: %d", info.pin.eth_internal_mdc, info.pin.eth_internal_mdio);
-        } else if (info.type == ETH_DEV_TYPE_SPI) {
+        }
+        else if (info.type == ETH_DEV_TYPE_SPI)
+        {
             ESP_LOGI(TAG, "Device Name: %s", info.name);
             ESP_LOGI(TAG, "Device type: ETH_DEV_TYPE_SPI(%d)", info.type);
             ESP_LOGI(TAG, "Pins: cs: %d, intr: %d", info.pin.eth_spi_cs, info.pin.eth_spi_int);

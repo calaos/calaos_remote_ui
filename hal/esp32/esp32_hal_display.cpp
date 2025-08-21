@@ -1,5 +1,5 @@
 #include "esp32_hal_display.h"
-#include "esp_log.h"
+#include "logging.h"
 #include "bsp_board_extra.h"
 
 static const char* TAG = "ESP32_HAL_DISPLAY";

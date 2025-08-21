@@ -59,6 +59,7 @@ if(NOT DEFINED ENV{IDF_PATH})
     target_include_directories(${PROJECT_NAME} PRIVATE 
         main
         hal
+        common
         components/lvgl
         components/lvgl/src
     )

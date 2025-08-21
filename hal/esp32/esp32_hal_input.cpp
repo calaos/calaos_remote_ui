@@ -1,5 +1,5 @@
 #include "esp32_hal_input.h"
-#include "esp_log.h"
+#include "logging.h"
 #include <src/lvgl_private.h>
 
 static const char* TAG = "ESP32_HAL_INPUT";

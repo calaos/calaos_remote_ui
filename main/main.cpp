@@ -1,18 +1,16 @@
 #include "app_main.h"
 
-#ifdef ESP_PLATFORM
 extern "C" void app_main(void)
 {
     AppMain app;
     if (app.init())
         app.run();
 }
-#else
+
+#ifndef ESP_PLATFORM
 int main()
 {
-    AppMain app;
-    if (app.init())
-        app.run();
+    app_main();
     return 0;
 }
 #endif

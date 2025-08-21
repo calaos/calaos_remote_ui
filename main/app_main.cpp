@@ -1,14 +1,14 @@
 #include "app_main.h"
+#include "logging.h"
 
 #ifdef ESP_PLATFORM
-#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #else
 #include <iostream>
 #endif
 
-static const char* TAG = "APP_MAIN";
+static const char* TAG = "main";
 
 AppMain::AppMain() : hal(nullptr), initialized(false)
 {
@@ -24,27 +24,19 @@ bool AppMain::init()
     hal = &HAL::getInstance();
     if (hal->init() != HalResult::OK)
     {
-#ifdef ESP_PLATFORM
         ESP_LOGE(TAG, "Failed to initialize HAL");
-#else
-        std::cerr << "Failed to initialize HAL" << std::endl;
-#endif
         return false;
     }
-    
+
     hal->getDisplay().backlightOn();
     hal->getDisplay().setBacklight(50);
-    
+
     logSystemInfo();
     createBasicUi();
-    
+
     initialized = true;
-#ifdef ESP_PLATFORM
     ESP_LOGI(TAG, "Application initialized successfully");
-#else
-    std::cout << "Application initialized successfully" << std::endl;
-#endif
-    
+
     return true;
 }
 
@@ -52,17 +44,15 @@ void AppMain::run()
 {
     if (!initialized)
         return;
-        
-#ifdef ESP_PLATFORM
-    while (1)
-        vTaskDelay(pdMS_TO_TICKS(10));
-#else
+
     while (1)
     {
+        #ifndef ESP_PLATFORM
         lv_timer_handler();
-        hal->getSystem().delay(5);
+        #endif
+
+        hal->getSystem().delay(10);
     }
-#endif
 }
 
 void AppMain::deinit()
@@ -78,21 +68,15 @@ void AppMain::logSystemInfo()
 {
     DisplayInfo displayInfo = hal->getDisplay().getDisplayInfo();
     std::string deviceInfo = hal->getSystem().getDeviceInfo();
-    
-#ifdef ESP_PLATFORM
+
     ESP_LOGI(TAG, "Display: %dx%d, %d-bit", displayInfo.width, displayInfo.height, displayInfo.colorDepth);
     ESP_LOGI(TAG, "Device: %s", deviceInfo.c_str());
-#else
-    std::cout << "Display: " << displayInfo.width << "x" << displayInfo.height 
-              << ", " << displayInfo.colorDepth << "-bit" << std::endl;
-    std::cout << "Device: " << deviceInfo << std::endl;
-#endif
 }
 
 void AppMain::createBasicUi()
 {
     hal->getDisplay().lock(0);
-    
+
     lv_obj_t* btn = lv_button_create(lv_screen_active());
     lv_obj_set_pos(btn, 10, 10);
     lv_obj_set_size(btn, 120, 50);
@@ -101,7 +85,7 @@ void AppMain::createBasicUi()
     lv_obj_t* label = lv_label_create(btn);
     lv_label_set_text(label, "Button");
     lv_obj_center(label);
-    
+
     hal->getDisplay().unlock();
 }
 

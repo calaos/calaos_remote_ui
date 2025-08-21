@@ -1,5 +1,5 @@
 #include "esp32_hal.h"
-#include "esp_log.h"
+#include "logging.h"
 
 static const char* TAG = "ESP32_HAL";
 
