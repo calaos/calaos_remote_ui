@@ -165,7 +165,40 @@ if(NOT DEFINED ENV{IDF_PATH})
         common/display_backend_selector.cpp
     )
 
-    target_sources(${PROJECT_NAME} PRIVATE ${HAL_SOURCES} ${MAIN_SOURCES} ${COMMON_SOURCES})
+    # PNG to C image conversion for Linux build
+    set(IMAGE_DIR "${CMAKE_SOURCE_DIR}/main/images")
+    set(CONVERTED_DIR "${CMAKE_BINARY_DIR}/images_build")
+    file(MAKE_DIRECTORY ${CONVERTED_DIR})
+    set(IMG_HEADER_FILE "${CONVERTED_DIR}/images_generated.h")
+    file(WRITE ${IMG_HEADER_FILE} "#pragma once\n\n#include \"lvgl.h\"\n\n")
+    set(LVGL_IMAGE_CONVERTER_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/LVGLImage.py")
+
+    file(GLOB IMAGE_FILES "${IMAGE_DIR}/*.png")
+    set(CONVERTED_IMAGE_FILES "")
+
+    foreach(png_file ${IMAGE_FILES})
+        get_filename_component(file_name ${png_file} NAME_WE)
+        set(c_file "${CONVERTED_DIR}/${file_name}.c")
+
+        add_custom_command(
+            OUTPUT ${c_file}
+            COMMAND ${Python3_EXECUTABLE} ${LVGL_IMAGE_CONVERTER_SCRIPT}
+                --ofmt C
+                --cf RGB565A8
+                --output ${CONVERTED_DIR}
+                ${png_file}
+            DEPENDS ${png_file} ${LVGL_IMAGE_CONVERTER_SCRIPT}
+            COMMENT "Converting ${png_file} to ${c_file}"
+            VERBATIM
+        )
+
+        string(REPLACE "-" "_" var_name ${file_name})
+        file(APPEND ${IMG_HEADER_FILE} "extern const lv_image_dsc_t ${var_name};\n")
+
+        list(APPEND CONVERTED_IMAGE_FILES ${c_file})
+    endforeach()
+
+    target_sources(${PROJECT_NAME} PRIVATE ${HAL_SOURCES} ${MAIN_SOURCES} ${COMMON_SOURCES} ${CONVERTED_IMAGE_FILES})
 
     # Include directories
     target_include_directories(${PROJECT_NAME} PRIVATE
@@ -173,6 +206,7 @@ if(NOT DEFINED ENV{IDF_PATH})
         hal
         common
         ${CMAKE_BINARY_DIR}/common
+        ${CMAKE_BINARY_DIR}/images_build
         components/lvgl
         components/lvgl/src
         ${LINUX_DISPLAY_INCLUDES}
