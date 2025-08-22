@@ -9,7 +9,7 @@ using namespace smooth_ui_toolkit;
 extern AppMain* g_appMain;
 
 StartupPage::StartupPage(lv_obj_t *parent):
-    PageBase(parent)
+    PageBase(parent), lastNetworkState(false)
 {
     setBgColor(theme_color_black);
     setBgOpa(LV_OPA_COVER);
@@ -17,8 +17,31 @@ StartupPage::StartupPage(lv_obj_t *parent):
     logo = std::make_unique<lvgl_cpp::Image>(*this);
     logo->setSrc(&logo_full);
 
+    // Network status label
+    networkStatusLabel = std::make_unique<lvgl_cpp::Label>(*this);
+    networkStatusLabel->setText("Initializing network...");
+    networkStatusLabel->align(LV_ALIGN_BOTTOM_MID, 0, -120);
+    lv_obj_set_style_text_color(networkStatusLabel->get(), lv_color_white(), LV_PART_MAIN);
+
+    // Network status animation (pulsing effect)
+    networkStatusAnimation.start = 128;
+    networkStatusAnimation.end = 255;
+    networkStatusAnimation.repeat = -1;  // Infinite repeat
+    networkStatusAnimation.repeatType = smooth_ui_toolkit::animate_repeat_type::reverse;
+    networkStatusAnimation.easingOptions().duration = 1.0f;
+    networkStatusAnimation.easingOptions().easingFunction = smooth_ui_toolkit::ease::ease_in_out_quad;
+
+    networkStatusAnimation.onUpdate([this](const float& value) {
+        if (networkStatusLabel && !lastNetworkState) {
+            lv_obj_set_style_opa(networkStatusLabel->get(), static_cast<lv_opa_t>(value), LV_PART_MAIN);
+        }
+    });
+
+    networkStatusAnimation.init();
+    networkStatusAnimation.play();
+
     testButton = std::make_unique<lvgl_cpp::Button>(*this);
-    testButton->setSize(150, 50);
+    testButton->setSize(LV_SIZE_CONTENT, 50);
     testButton->align(LV_ALIGN_BOTTOM_MID, 0, -50);
     lv_obj_add_event_cb(testButton->get(), testButtonCb, LV_EVENT_CLICKED, nullptr);
     testButton->label().setText("Test animations");
@@ -46,8 +69,38 @@ void StartupPage::initLogoAnimation()
 
 void StartupPage::render()
 {
-    // Now using lightweight easing - safe to run on both platforms
+    // Update logo animation
     logoDropAnimation.update();
+
+    // Update network status
+    updateNetworkStatus();
+
+    // Update network status animation if still connecting
+    if (!lastNetworkState) {
+        networkStatusAnimation.update();
+    }
+}
+
+void StartupPage::updateNetworkStatus()
+{
+    if (!g_appMain) return;
+
+    bool networkReady = g_appMain->isNetworkReady();
+
+    // Check for state change
+    if (networkReady != lastNetworkState) {
+        lastNetworkState = networkReady;
+
+        if (networkReady) {
+            // Network is now ready
+            networkStatusLabel->setText("Network ready!");
+            lv_obj_set_style_text_color(networkStatusLabel->get(), lv_color_hex(0x00FF00), LV_PART_MAIN);
+            lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);  // Full opacity
+
+            // Stop the pulsing animation
+            networkStatusAnimation.cancel();
+        }
+    }
 }
 
 void StartupPage::testButtonCb(lv_event_t* e)

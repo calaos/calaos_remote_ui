@@ -1,6 +1,7 @@
 #include "linux_hal.h"
 #include "logging.h"
 #include "lvgl.h"
+#include <thread>
 
 static const char* TAG = "hal";
 
@@ -12,7 +13,28 @@ LinuxHAL& LinuxHAL::getInstance()
 
 HalResult LinuxHAL::init()
 {
-    ESP_LOGI(TAG, "Initializing Linux HAL");
+    ESP_LOGI(TAG, "Initializing Linux HAL (legacy mode)");
+    
+    // Legacy init - initialize everything sequentially
+    if (initEssentials() != HalResult::OK)
+        return HalResult::ERROR;
+        
+    // Initialize network synchronously in legacy mode
+    network_ = std::make_unique<LinuxHalNetwork>();
+    if (network_->init() != HalResult::OK)
+    {
+        ESP_LOGE(TAG, "Failed to init network HAL");
+        return HalResult::ERROR;
+    }
+    networkReady_ = true;
+
+    ESP_LOGI(TAG, "Linux HAL initialized successfully");
+    return HalResult::OK;
+}
+
+HalResult LinuxHAL::initEssentials()
+{
+    ESP_LOGI(TAG, "Initializing Linux HAL essentials (fast init)");
 
     // Initialize LVGL first
     ESP_LOGI(TAG, "Initializing LVGL");
@@ -41,16 +63,41 @@ HalResult LinuxHAL::init()
         ESP_LOGW(TAG, "No input device found, continuing without separate input HAL");
     }
 
-    // Initialize network
-    network_ = std::make_unique<LinuxHalNetwork>();
-    if (network_->init() != HalResult::OK)
-    {
-        ESP_LOGE(TAG, "Failed to init network HAL");
-        return HalResult::ERROR;
-    }
-
-    ESP_LOGI(TAG, "Linux HAL initialized successfully");
+    ESP_LOGI(TAG, "Linux HAL essentials initialized successfully");
     return HalResult::OK;
+}
+
+HalResult LinuxHAL::initNetworkAsync()
+{
+    ESP_LOGI(TAG, "Starting network initialization thread");
+    
+    // Create std::thread for network initialization on Linux
+    std::thread networkThread([this]() {
+        ESP_LOGI(TAG, "Network init thread started");
+        
+        // Initialize network in background
+        network_ = std::make_unique<LinuxHalNetwork>();
+        if (network_->init() != HalResult::OK)
+        {
+            ESP_LOGE(TAG, "Failed to init network HAL in async thread");
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Network HAL initialized successfully in async thread");
+            networkReady_ = true;
+        }
+    });
+    
+    // Detach thread to let it run independently
+    networkThread.detach();
+    
+    ESP_LOGI(TAG, "Network initialization thread started");
+    return HalResult::OK;
+}
+
+bool LinuxHAL::isNetworkReady() const
+{
+    return networkReady_;
 }
 
 HalResult LinuxHAL::deinit()

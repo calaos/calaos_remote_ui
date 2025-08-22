@@ -84,7 +84,8 @@ HalResult Esp32HalNetwork::init()
         }
     }
 
-    //Init wifi
+    //Init wifi (optional - ethernet is sufficient for network connectivity)
+    ESP_LOGI(TAG, "Initializing WiFi (optional)");
     esp_netif_create_default_wifi_sta();
 
     // Use simplified WiFi configuration
@@ -102,8 +103,9 @@ HalResult Esp32HalNetwork::init()
     ret = esp_wifi_init(&cfg);
     if (ret != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to init wifi: %s", esp_err_to_name(ret));
-        return HalResult::ERROR;
+        ESP_LOGW(TAG, "Failed to init wifi: %s (continuing with ethernet only)", esp_err_to_name(ret));
+        ESP_LOGI(TAG, "Network initialized successfully (ethernet only)");
+        return HalResult::OK;  // Ethernet is sufficient
     }
 
     ret = esp_event_handler_instance_register(WIFI_EVENT,
@@ -113,8 +115,9 @@ HalResult Esp32HalNetwork::init()
                                              &wifiHandlerInstance);
     if (ret != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to register wifi handler: %s", esp_err_to_name(ret));
-        return HalResult::ERROR;
+        ESP_LOGW(TAG, "Failed to register wifi handler: %s (continuing with ethernet only)", esp_err_to_name(ret));
+        ESP_LOGI(TAG, "Network initialized successfully (ethernet only)");
+        return HalResult::OK;
     }
 
     ret = esp_event_handler_instance_register(IP_EVENT,
@@ -124,25 +127,29 @@ HalResult Esp32HalNetwork::init()
                                              &ipHandlerInstance);
     if (ret != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to register IP handler: %s", esp_err_to_name(ret));
-        return HalResult::ERROR;
+        ESP_LOGW(TAG, "Failed to register IP handler: %s (continuing with ethernet only)", esp_err_to_name(ret));
+        ESP_LOGI(TAG, "Network initialized successfully (ethernet only)");
+        return HalResult::OK;
     }
 
     ret = esp_wifi_set_mode(WIFI_MODE_STA);
     if (ret != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to set wifi mode: %s", esp_err_to_name(ret));
-        return HalResult::ERROR;
+        ESP_LOGW(TAG, "Failed to set wifi mode: %s (continuing with ethernet only)", esp_err_to_name(ret));
+        ESP_LOGI(TAG, "Network initialized successfully (ethernet only)");
+        return HalResult::OK;
     }
 
     ret = esp_wifi_start();
     if (ret != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to start wifi: %s", esp_err_to_name(ret));
-        return HalResult::ERROR;
+        ESP_LOGW(TAG, "Failed to start wifi: %s (continuing with ethernet only)", esp_err_to_name(ret));
+        ESP_LOGI(TAG, "Network initialized successfully (ethernet only)");
+        return HalResult::OK;
     }
 
-    ESP_LOGI(TAG, "Network initialized");
+    ESP_LOGI(TAG, "WiFi initialized successfully");
+    ESP_LOGI(TAG, "Network initialized successfully (ethernet + wifi)");
     return HalResult::OK;
 }
 

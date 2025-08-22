@@ -29,6 +29,7 @@ AppMain::~AppMain()
 
 bool AppMain::init()
 {
+    ESP_LOGI(TAG, "Using legacy full initialization");
     hal = &HAL::getInstance();
     if (hal->init() != HalResult::OK)
     {
@@ -60,6 +61,55 @@ bool AppMain::init()
     ESP_LOGI(TAG, "Application initialized successfully");
 
     return true;
+}
+
+bool AppMain::initFast()
+{
+    ESP_LOGI(TAG, "Using fast initialization with async network");
+    hal = &HAL::getInstance();
+    
+    // Fast init - only essentials (system, display, input)
+    if (hal->initEssentials() != HalResult::OK)
+    {
+        ESP_LOGE(TAG, "Failed to initialize HAL essentials");
+        return false;
+    }
+
+    hal->getDisplay().backlightOn();
+    hal->getDisplay().setBacklight(50);
+
+#ifdef ESP_PLATFORM
+    // Configure smooth_ui_toolkit HAL for ESP32
+    smooth_ui_toolkit::ui_hal::on_get_tick([]() -> uint32_t {
+        return static_cast<uint32_t>(esp_timer_get_time() / 1000);
+    });
+
+    smooth_ui_toolkit::ui_hal::on_delay([](uint32_t ms) {
+        vTaskDelay(pdMS_TO_TICKS(ms));
+    });
+
+    ESP_LOGI(TAG, "Configured smooth_ui_toolkit HAL for ESP32");
+#endif
+
+    logSystemInfo();
+    createBasicUi();  // UI is now visible!
+
+    // Start network initialization in background
+    if (hal->initNetworkAsync() != HalResult::OK)
+    {
+        ESP_LOGW(TAG, "Failed to start network initialization task");
+    }
+
+    initialized = true;
+    running = true;
+    ESP_LOGI(TAG, "Application initialized successfully (network initializing in background)");
+
+    return true;
+}
+
+bool AppMain::isNetworkReady() const
+{
+    return hal ? hal->isNetworkReady() : false;
 }
 
 void AppMain::run()

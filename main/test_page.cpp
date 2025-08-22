@@ -25,13 +25,13 @@ TestPage::TestPage(lv_obj_t *parent, const char* title):
     titleLabel->setPos(0, 50);
 
     backButton = std::make_unique<lvgl_cpp::Button>(*this);
-    backButton->setSize(120, 50);
+    backButton->setSize(LV_SIZE_CONTENT, 50);
     backButton->align(LV_ALIGN_BOTTOM_LEFT, 20, -20);
     backButton->label().setText("Back");
     lv_obj_add_event_cb(backButton->get(), backButtonCb, LV_EVENT_CLICKED, this);
 
     nextButton = std::make_unique<lvgl_cpp::Button>(*this);
-    nextButton->setSize(120, 50);
+    nextButton->setSize(LV_SIZE_CONTENT, 50);
     nextButton->align(LV_ALIGN_BOTTOM_RIGHT, -20, -20);
     nextButton->label().setText("Next");
     lv_obj_add_event_cb(nextButton->get(), nextButtonCb, LV_EVENT_CLICKED, this);

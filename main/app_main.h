@@ -12,11 +12,13 @@ public:
     ~AppMain();
 
     bool init();
+    bool initFast();
     void run();
     void deinit();
     void stop();
 
     StackView* getStackView() { return stackView.get(); }
+    bool isNetworkReady() const;
 
 private:
     void createBasicUi();

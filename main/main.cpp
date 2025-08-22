@@ -13,7 +13,7 @@ static AppMain* app = nullptr;
 extern "C" void app_main(void)
 {
     app = new AppMain();
-    if (app->init())
+    if (app->initFast())  // Use fast initialization for better UX
         app->run();
 
     delete app;
