@@ -1,8 +1,38 @@
 # ESP-IDF requires specific order of initialization
 cmake_minimum_required(VERSION 3.16)
 
-# Detect if we're in ESP-IDF environment and include project.cmake BEFORE project()
-if(DEFINED ENV{IDF_PATH})
+# Set policies to avoid warnings
+cmake_policy(SET CMP0054 NEW)
+
+# Platform selection options
+option(BUILD_LINUX "Force build for Linux platform" OFF)
+option(BUILD_ESP "Force build for ESP32 platform" OFF)
+
+# Platform detection and configuration
+if(BUILD_LINUX AND BUILD_ESP)
+    message(FATAL_ERROR "Cannot specify both BUILD_LINUX and BUILD_ESP")
+elseif(BUILD_LINUX)
+    set(DETECTED_PLATFORM "LINUX")
+    message(STATUS "BUILD_LINUX enabled - targeting Linux platform")
+elseif(BUILD_ESP)
+    set(DETECTED_PLATFORM "ESP32")
+    message(STATUS "BUILD_ESP enabled - targeting ESP32 platform")
+else()
+    # Auto-detect based on environment
+    if(DEFINED ENV{IDF_PATH})
+        set(DETECTED_PLATFORM "ESP32")
+        message(STATUS "Auto-detected ESP-IDF environment - targeting ESP32")
+    else()
+        set(DETECTED_PLATFORM "LINUX")
+        message(STATUS "Auto-detected Linux environment - targeting Linux")
+    endif()
+endif()
+
+# ESP-IDF setup (only if targeting ESP32)
+if(DETECTED_PLATFORM STREQUAL "ESP32")
+    if(NOT DEFINED ENV{IDF_PATH})
+        message(FATAL_ERROR "ESP32 target selected but IDF_PATH environment variable not found")
+    endif()
     # ESP-IDF build - must include project.cmake before project()
     include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
@@ -20,8 +50,7 @@ endif()
 project(calaos-remote-ui)
 
 # Linux-specific configuration
-if(NOT DEFINED ENV{IDF_PATH})
-    message(STATUS "Building for Linux platform")
+if(DETECTED_PLATFORM STREQUAL "LINUX")
 
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
@@ -29,6 +58,9 @@ if(NOT DEFINED ENV{IDF_PATH})
     set(CMAKE_C_STANDARD 99)
     set(CMAKE_CXX_STANDARD 17)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+    set(CMAKE_BUILD_TYPE Debug)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 
     # Find required packages for Linux
     find_package(PkgConfig REQUIRED)
@@ -138,7 +170,7 @@ if(NOT DEFINED ENV{IDF_PATH})
     set (LV_CONF_BUILD_DISABLE_DEMOS ON)
     set (LV_CONF_BUILD_DISABLE_THORVG_INTERNAL ON)
     add_subdirectory(components/lvgl)
-    
+
     # Add smooth_ui_toolkit
     set(SMOOTH_UI_TOOLKIT_BUILD_EXAMPLE OFF)
     set(SMOOTH_UI_TOOLKIT_BUILD_TEST OFF)
@@ -155,7 +187,7 @@ if(NOT DEFINED ENV{IDF_PATH})
 
     # Include shared source definitions
     include(${CMAKE_SOURCE_DIR}/cmake/sources.cmake)
-    
+
     # For Linux, we can use the source lists directly since paths are relative to project root
 
     # PNG to C image conversion for Linux build
@@ -206,17 +238,3 @@ if(NOT DEFINED ENV{IDF_PATH})
     # Link libraries
     target_link_libraries(${PROJECT_NAME} lvgl smooth_ui_toolkit pthread ${LINUX_DISPLAY_LIBS})
 endif()
-
-message(STATUS "--------------Compile Info------------")
-message(STATUS "IDF_PATH = ${IDF_PATH}")
-message(STATUS "IDF_TARGET = ${IDF_TARGET}")
-message(STATUS "PROJECT_NAME = ${PROJECT_NAME}")
-message(STATUS "PROJECT_DIR = ${PROJECT_DIR}")
-message(STATUS "BUILD_DIR = ${BUILD_DIR}")
-message(STATUS "SDKCONFIG = ${SDKCONFIG}")
-message(STATUS "SDKCONFIG_DEFAULTS = ${SDKCONFIG_DEFAULTS}")
-message(STATUS "CONFIG_LV_CONF_SKIP = ${CONFIG_LV_CONF_SKIP}")
-message(STATUS "CMAKE_SOURCE_DIR = ${CMAKE_SOURCE_DIR}")
-message(STATUS "CMAKE_BINARY_DIR = ${CMAKE_BINARY_DIR}")
-message(STATUS "COMPILE_OPTIONS = ${COMPILE_OPTIONS}")
-message(STATUS "--------------------------------------")

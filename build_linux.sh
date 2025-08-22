@@ -20,9 +20,9 @@ fi
 
 cd "$BUILD_DIR"
 
-# Configure with CMake
-echo -e "${YELLOW}Configuring with CMake...${NC}"
-cmake -DCMAKE_BUILD_TYPE=Release ..
+# Configure with CMake - force Linux target
+echo -e "${YELLOW}Configuring with CMake (Linux target)...${NC}"
+cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_LINUX=ON ..
 
 # Build
 echo -e "${YELLOW}Building...${NC}"

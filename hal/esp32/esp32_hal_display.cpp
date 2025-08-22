@@ -1,6 +1,7 @@
 #include "esp32_hal_display.h"
 #include "logging.h"
 #include "bsp_board_extra.h"
+#include "bsp/display.h"
 
 static const char* TAG = "ESP32_HAL_DISPLAY";
 
@@ -8,8 +9,8 @@ HalResult Esp32HalDisplay::init()
 {
     bsp_display_cfg_t cfg = {
         .lvgl_port_cfg = ESP_LVGL_PORT_INIT_CONFIG(),
-        .buffer_size = BSP_LCD_DRAW_BUFF_SIZE,
-        .double_buffer = BSP_LCD_DRAW_BUFF_DOUBLE,
+        .buffer_size = BSP_LCD_H_RES * 100, // Increase buffer to 100 lines instead of 50
+        .double_buffer = true, // Enable double buffering to prevent tearing
         .flags = {
             .buff_dma = false,
             .buff_spiram = true,

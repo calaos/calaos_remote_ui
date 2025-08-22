@@ -33,7 +33,7 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     file(WRITE ${IMG_HEADER_FILE} "#pragma once\n\n#include \"lvgl.h\"\n\n")
     set(LVGL_IMAGE_CONVERTER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/LVGLImage.py")
 
-    file(GLOB IMAGE_FILES "${IMAGE_DIR}/*.png")
+    file(GLOB IMAGE_FILES CONFIGURE_DEPENDS "${IMAGE_DIR}/*.png")
 
     foreach(png_file ${IMAGE_FILES})
         get_filename_component(file_name ${png_file} NAME_WE)

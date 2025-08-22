@@ -1,21 +1,29 @@
 #include "app_main.h"
 #include "logging.h"
 
+#include "startup_page.h"
+#include "smooth_ui_toolkit.h"
+
 #ifdef ESP_PLATFORM
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_timer.h"
 #else
 #include <iostream>
 #endif
 
 static const char* TAG = "main";
 
+AppMain* g_appMain = nullptr;
+
 AppMain::AppMain() : hal(nullptr), initialized(false), running(false)
 {
+    g_appMain = this;
 }
 
 AppMain::~AppMain()
 {
+    g_appMain = nullptr;
     deinit();
 }
 
@@ -30,6 +38,19 @@ bool AppMain::init()
 
     hal->getDisplay().backlightOn();
     hal->getDisplay().setBacklight(50);
+
+#ifdef ESP_PLATFORM
+    // Configure smooth_ui_toolkit HAL for ESP32
+    smooth_ui_toolkit::ui_hal::on_get_tick([]() -> uint32_t {
+        return static_cast<uint32_t>(esp_timer_get_time() / 1000); // Convert microseconds to milliseconds
+    });
+
+    smooth_ui_toolkit::ui_hal::on_delay([](uint32_t ms) {
+        vTaskDelay(pdMS_TO_TICKS(ms));
+    });
+
+    ESP_LOGI(TAG, "Configured smooth_ui_toolkit HAL for ESP32");
+#endif
 
     logSystemInfo();
     createBasicUi();
@@ -48,20 +69,31 @@ void AppMain::run()
 
     while (running)
     {
-        uint32_t timeMs = 10;
+        hal->getDisplay().lock(0);
+
+        renderLoop();
+        uint32_t timeMs = 5;
 
         #ifndef ESP_PLATFORM
+        // On Linux, we need to handle LVGL timers ourselves
         timeMs = lv_timer_handler();
-        
-        // Check if display is still valid (window not closed)
+
+        // Check if display is still valid (window not closed) - Linux only
         lv_display_t* disp = hal->getDisplay().getLvglDisplay();
         if (!disp || !lv_display_get_driver_data(disp))
         {
             ESP_LOGI(TAG, "Display no longer valid, shutting down");
+            hal->getDisplay().unlock();
             running = false;
             break;
         }
         #endif
+
+        hal->getDisplay().unlock();
+
+        // Ensure minimum delay to avoid watchdog issues
+        if (timeMs < 1)
+            timeMs = 1;
 
         hal->getSystem().delay(timeMs);
     }
@@ -95,28 +127,16 @@ void AppMain::createBasicUi()
 {
     hal->getDisplay().lock(0);
 
-    lv_obj_t* btn = lv_button_create(lv_screen_active());
-    lv_obj_set_pos(btn, 10, 10);
-    lv_obj_set_size(btn, 120, 50);
-    lv_obj_add_event_cb(btn, btnEventCb, LV_EVENT_ALL, NULL);
+    stackView = std::make_unique<StackView>(lv_screen_active());
 
-    lv_obj_t* label = lv_label_create(btn);
-    lv_label_set_text(label, "Button");
-    lv_obj_center(label);
+    auto startupPage = std::make_unique<StartupPage>(lv_screen_active());
+    stackView->push(std::move(startupPage));
 
     hal->getDisplay().unlock();
 }
 
-void AppMain::btnEventCb(lv_event_t* e)
+void AppMain::renderLoop()
 {
-    lv_event_code_t code = lv_event_get_code(e);
-    lv_obj_t* btn = lv_event_get_target_obj(e);
-    if (code == LV_EVENT_CLICKED)
-    {
-        static uint8_t cnt = 0;
-        cnt++;
-
-        lv_obj_t* label = lv_obj_get_child(btn, 0);
-        lv_label_set_text_fmt(label, "Button: %d", cnt);
-    }
+    if (stackView)
+        stackView->render();
 }

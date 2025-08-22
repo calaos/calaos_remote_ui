@@ -15,6 +15,7 @@
     "cstdlib": "c",
     "cstdint": "c",
     "*.in": "cpp",
-    "iostream": "cpp"
+    "iostream": "cpp",
+    "sstream": "cpp"
   }
 }

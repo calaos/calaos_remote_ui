@@ -1,10 +1,18 @@
 # Common source file definitions for both ESP-IDF and Linux builds
 # This file is included by both main/CMakeLists.txt (ESP-IDF) and CMakeLists.txt (Linux)
 
+# Set policy for string comparisons to avoid warnings
+cmake_policy(SET CMP0054 NEW)
+
 # Main application sources
 set(MAIN_SOURCES
     main/main.cpp
     main/app_main.cpp
+    main/startup_page.cpp
+    main/page_base.cpp
+    main/stack_view.cpp
+    main/test_page.cpp
+    main/theme.cpp
 )
 
 # HAL sources - ESP32 specific
@@ -17,7 +25,7 @@ set(ESP32_HAL_SOURCES
     hal/esp32/esp32_hal_system.cpp
 )
 
-# HAL sources - Linux specific  
+# HAL sources - Linux specific
 set(LINUX_HAL_SOURCES
     hal/hal.cpp
     hal/linux/linux_hal.cpp
@@ -35,18 +43,30 @@ set(COMMON_INCLUDE_DIRS
 )
 
 # Platform-specific source selection
-if(DEFINED ENV{IDF_PATH})
+# For ESP-IDF builds, DETECTED_PLATFORM might not be set yet, so detect here
+if(NOT DEFINED DETECTED_PLATFORM)
+    # This happens in ESP-IDF builds where sources.cmake is included early
+    if(DEFINED ENV{IDF_PATH})
+        set(DETECTED_PLATFORM "ESP32")
+    else()
+        set(DETECTED_PLATFORM "LINUX")
+    endif()
+endif()
+
+if(DETECTED_PLATFORM STREQUAL "ESP32")
     # ESP-IDF build - use ESP32 HAL
     set(PLATFORM_HAL_SOURCES ${ESP32_HAL_SOURCES})
     message(STATUS "Using ESP32 HAL sources")
-else()
-    # Linux build - use Linux HAL  
+elseif(DETECTED_PLATFORM STREQUAL "LINUX")
+    # Linux build - use Linux HAL
     set(PLATFORM_HAL_SOURCES ${LINUX_HAL_SOURCES})
     message(STATUS "Using Linux HAL sources")
+else()
+    message(FATAL_ERROR "Unknown DETECTED_PLATFORM: ${DETECTED_PLATFORM}")
 endif()
 
 # Combined source list for the current platform
-set(ALL_SOURCES 
+set(ALL_SOURCES
     ${MAIN_SOURCES}
     ${PLATFORM_HAL_SOURCES}
 )
