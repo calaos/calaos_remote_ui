@@ -12,14 +12,14 @@ public:
 
 private:
     std::unique_ptr<smooth_ui_toolkit::lvgl_cpp::Image> logo;
-    std::unique_ptr<smooth_ui_toolkit::lvgl_cpp::Button> testButton;
     std::unique_ptr<smooth_ui_toolkit::lvgl_cpp::Label> networkStatusLabel;
+    std::unique_ptr<smooth_ui_toolkit::lvgl_cpp::Spinner> networkSpinner;
     smooth_ui_toolkit::Animate logoDropAnimation;
     smooth_ui_toolkit::Animate networkStatusAnimation;
-    
+
     void initLogoAnimation();
     void updateNetworkStatus();
     static void testButtonCb(lv_event_t* e);
-    
+
     bool lastNetworkState;
 };

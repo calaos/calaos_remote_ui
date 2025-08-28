@@ -18,6 +18,14 @@ StartupPage::StartupPage(lv_obj_t *parent):
     logo->setSrc(&logo_full);
     logo->align(LV_ALIGN_CENTER, 0, -720); // Start off-screen
 
+    // Network spinner - positioned above the label
+    networkSpinner = std::make_unique<lvgl_cpp::Spinner>(*this);
+    networkSpinner->align(LV_ALIGN_BOTTOM_MID, 0, -180);
+    lv_obj_set_size(networkSpinner->get(), 80, 80);
+    lv_spinner_set_anim_params(networkSpinner->get(), 2000, 200);
+    lv_obj_set_style_arc_color(networkSpinner->get(), theme_color_blue, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_color(networkSpinner->get(), theme_color_black, LV_PART_MAIN);
+
     // Network status label
     networkStatusLabel = std::make_unique<lvgl_cpp::Label>(*this);
     networkStatusLabel->setText("Initializing network...");
@@ -32,27 +40,20 @@ StartupPage::StartupPage(lv_obj_t *parent):
     networkStatusAnimation.easingOptions().duration = 1.0f;
     networkStatusAnimation.easingOptions().easingFunction = smooth_ui_toolkit::ease::ease_in_out_quad;
 
-    networkStatusAnimation.onUpdate([this](const float& value) {
-        if (networkStatusLabel && !lastNetworkState) {
+    networkStatusAnimation.onUpdate([this](const float& value)
+    {
+        if (networkStatusLabel && !lastNetworkState)
             lv_obj_set_style_opa(networkStatusLabel->get(), static_cast<lv_opa_t>(value), LV_PART_MAIN);
-        }
     });
 
     networkStatusAnimation.init();
     networkStatusAnimation.play();
-
-    testButton = std::make_unique<lvgl_cpp::Button>(*this);
-    testButton->setSize(LV_SIZE_CONTENT, 50);
-    testButton->align(LV_ALIGN_BOTTOM_MID, 0, -50);
-    lv_obj_add_event_cb(testButton->get(), testButtonCb, LV_EVENT_CLICKED, nullptr);
-    testButton->label().setText("Test animations");
 
     initLogoAnimation();
 }
 
 void StartupPage::initLogoAnimation()
 {
-    // Now using lightweight easing animations - should work on both platforms
     logoDropAnimation.start = -getHeight();
     logoDropAnimation.end = 0;
     logoDropAnimation.delay = 0.2f;
@@ -60,7 +61,8 @@ void StartupPage::initLogoAnimation()
     logoDropAnimation.easingOptions().duration = 0.6f;
     logoDropAnimation.easingOptions().easingFunction = smooth_ui_toolkit::ease::ease_out_quad;
 
-    logoDropAnimation.onUpdate([this](const float& value) {
+    logoDropAnimation.onUpdate([this](const float& value)
+    {
         logo->align(LV_ALIGN_CENTER, 0, static_cast<int32_t>(value));
     });
 
@@ -89,14 +91,19 @@ void StartupPage::updateNetworkStatus()
     bool networkReady = g_appMain->isNetworkReady();
 
     // Check for state change
-    if (networkReady != lastNetworkState) {
+    if (networkReady != lastNetworkState)
+    {
         lastNetworkState = networkReady;
 
-        if (networkReady) {
+        if (networkReady)
+        {
             // Network is now ready
             networkStatusLabel->setText("Network ready!");
             lv_obj_set_style_text_color(networkStatusLabel->get(), lv_color_hex(0x00FF00), LV_PART_MAIN);
             lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);  // Full opacity
+
+            // Hide the spinner when network is ready
+            lv_obj_add_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
 
             // Stop the pulsing animation
             networkStatusAnimation.cancel();

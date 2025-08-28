@@ -6,7 +6,8 @@ applyTo: "**"
 ## Naming Conventions
 - Use camelCase for variables, functions, and methods for C++ code
 - Use snake_case for variables, functions, and methods for C code
-- In C and C++ always append openning { on a new line
+- In C and C++ always append opening { on a new line
+- In c++ lambda functions, always use { on a new line
 - Use ALL_CAPS for constants in #define in C
 - Use PascalCase for class names in C++
 - All comments should be in English and should be clear and concise and only used when necessary
