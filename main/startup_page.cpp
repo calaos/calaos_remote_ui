@@ -3,13 +3,16 @@
 #include "images_generated.h"
 #include "test_page.h"
 #include "app_main.h"
+#include "logging.h"
+#include "../hal/hal.h"
 
 using namespace smooth_ui_toolkit;
 
 extern AppMain* g_appMain;
+static const char* TAG = "StartupPage";
 
 StartupPage::StartupPage(lv_obj_t *parent):
-    PageBase(parent), lastNetworkState(false)
+    PageBase(parent)
 {
     setBgColor(theme_color_black);
     setBgOpa(LV_OPA_COVER);
@@ -42,12 +45,21 @@ StartupPage::StartupPage(lv_obj_t *parent):
 
     networkStatusAnimation.onUpdate([this](const float& value)
     {
-        if (networkStatusLabel && !lastNetworkState)
+        if (networkStatusLabel && !lastNetworkState.isReady)
             lv_obj_set_style_opa(networkStatusLabel->get(), static_cast<lv_opa_t>(value), LV_PART_MAIN);
     });
 
     networkStatusAnimation.init();
     networkStatusAnimation.play();
+
+    // Subscribe to state changes from AppStore
+    AppStore::getInstance().subscribe([this](const AppState& state)
+    {
+        onStateChanged(state);
+    });
+
+    // Get initial state
+    onStateChanged(AppStore::getInstance().getState());
 
     initLogoAnimation();
 }
@@ -75,32 +87,46 @@ void StartupPage::render()
     // Update logo animation
     logoDropAnimation.update();
 
-    // Update network status
-    updateNetworkStatus();
-
     // Update network status animation if still connecting
-    if (!lastNetworkState) {
+    if (!lastNetworkState.isReady) {
         networkStatusAnimation.update();
     }
 }
 
-void StartupPage::updateNetworkStatus()
+void StartupPage::onStateChanged(const AppState& state)
 {
-    if (!g_appMain) return;
+    ESP_LOGD(TAG, "State changed - isReady=%d, hasTimeout=%d, connectionType=%d",
+             state.network.isReady, state.network.hasTimeout, static_cast<int>(state.network.connectionType));
 
-    bool networkReady = g_appMain->isNetworkReady();
+    // Lock LVGL display for thread-safe UI updates
+    HAL::getInstance().getDisplay().lock(0);
 
-    // Check for state change
-    if (networkReady != lastNetworkState)
+    // Check if network state has changed
+    if (state.network.isReady != lastNetworkState.isReady ||
+        state.network.hasTimeout != lastNetworkState.hasTimeout ||
+        state.network.ipAddress != lastNetworkState.ipAddress ||
+        state.network.connectionType != lastNetworkState.connectionType)
     {
-        lastNetworkState = networkReady;
-
-        if (networkReady)
+        if (state.network.isReady)
         {
-            // Network is now ready
-            networkStatusLabel->setText("Network ready!");
-            lv_obj_set_style_text_color(networkStatusLabel->get(), lv_color_hex(0x00FF00), LV_PART_MAIN);
-            lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);  // Full opacity
+            // Create network info string
+            std::string networkInfo = "IP: " + state.network.ipAddress;
+
+            if (state.network.connectionType == NetworkConnectionType::WiFi && !state.network.ssid.empty())
+            {
+                networkInfo += "\nWiFi: " + state.network.ssid;
+                if (state.network.rssi != 0)
+                    networkInfo += " (" + std::to_string(state.network.rssi) + " dBm)";
+            }
+            else if (state.network.connectionType == NetworkConnectionType::Ethernet)
+            {
+                networkInfo += "\nEthernet connected";
+            }
+
+            // Update UI with network info
+            networkStatusLabel->setText(networkInfo.c_str());
+            lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_white, LV_PART_MAIN);
+            lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);
 
             // Hide the spinner when network is ready
             lv_obj_add_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
@@ -108,7 +134,36 @@ void StartupPage::updateNetworkStatus()
             // Stop the pulsing animation
             networkStatusAnimation.cancel();
         }
+        else if (state.network.hasTimeout)
+        {
+            // Network timeout - show error message
+            networkStatusLabel->setText("Network connection failed\nPlease connect WiFi or Ethernet\nand restart the device");
+            lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_red, LV_PART_MAIN);
+            lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);
+            networkStatusLabel->setTextFont(&lv_font_montserrat_28);
+
+            // Hide the spinner on timeout
+            lv_obj_add_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+
+            // Stop the pulsing animation
+            networkStatusAnimation.cancel();
+        }
+        else
+        {
+            // Network still connecting
+            networkStatusLabel->setText("Initializing network...");
+            lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_white, LV_PART_MAIN);
+
+            // Show the spinner
+            lv_obj_clear_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+        }
     }
+
+    // Update cached state
+    lastNetworkState = state.network;
+
+    // Unlock LVGL display
+    HAL::getInstance().getDisplay().unlock();
 }
 
 void StartupPage::testButtonCb(lv_event_t* e)

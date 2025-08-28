@@ -3,6 +3,7 @@
 #include "../hal_network.h"
 #include <thread>
 #include <atomic>
+#include <chrono>
 
 class LinuxHalNetwork : public HalNetwork {
 public:
@@ -21,8 +22,15 @@ private:
     void statusMonitorThread();
     WifiStatus checkWifiStatus();
     
+    void startNetworkTimeout();
+    void stopNetworkTimeout();
+    void networkTimeoutTask();
+    
     WifiStatus wifi_status_ = WifiStatus::DISCONNECTED;
     WifiEventCallback wifi_callback_;
     std::thread status_thread_;
     std::atomic<bool> thread_running_{false};
+    std::thread timeout_thread_;
+    std::atomic<bool> timeout_active_{false};
+    std::atomic<bool> network_connected_{false};
 };

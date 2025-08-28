@@ -25,11 +25,13 @@ RUN apt-get update \
   golang \
   cifs-utils \
   python3-pip \
+  python3-png \
   python3-lz4 \
   libx11-dev \
   && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --break-system-packages pypng
+RUN python3 -m pip install --break-system-packages lz4
 
 RUN sudo npm i lv_i18n -g
 RUN sudo npm i lv_font_conv -g

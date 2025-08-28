@@ -2,6 +2,7 @@
 #include "logging.h"
 #include "lvgl.h"
 #include <thread>
+#include "../../flux/app_dispatcher.h"
 
 static const char* TAG = "hal";
 

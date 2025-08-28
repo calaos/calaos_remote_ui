@@ -3,6 +3,7 @@
 #include "page_base.h"
 #include "smooth_ui_toolkit.h"
 #include "lvgl/smooth_lvgl.h"
+#include "../flux/app_store.h"
 
 class StartupPage: public PageBase
 {
@@ -18,8 +19,8 @@ private:
     smooth_ui_toolkit::Animate networkStatusAnimation;
 
     void initLogoAnimation();
-    void updateNetworkStatus();
+    void onStateChanged(const AppState& state);
     static void testButtonCb(lv_event_t* e);
 
-    bool lastNetworkState;
+    NetworkState lastNetworkState;
 };

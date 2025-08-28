@@ -2,8 +2,9 @@
 #include "logging.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "flux.h"
 
-static const char* TAG = "ESP32_HAL";
+static const char* TAG = "hal";
 
 Esp32HAL& Esp32HAL::getInstance()
 {
@@ -14,11 +15,11 @@ Esp32HAL& Esp32HAL::getInstance()
 HalResult Esp32HAL::init()
 {
     ESP_LOGI(TAG, "Initializing ESP32 HAL (legacy mode)");
-    
+
     // Legacy init - initialize everything sequentially
     if (initEssentials() != HalResult::OK)
         return HalResult::ERROR;
-        
+
     // Initialize network synchronously in legacy mode
     network = std::make_unique<Esp32HalNetwork>();
     if (network->init() != HalResult::OK)
@@ -64,7 +65,7 @@ HalResult Esp32HAL::initEssentials()
 HalResult Esp32HAL::initNetworkAsync()
 {
     ESP_LOGI(TAG, "Starting network initialization task");
-    
+
     // Create FreeRTOS task for network initialization
     BaseType_t ret = xTaskCreate(
         networkInitTask,
@@ -74,13 +75,13 @@ HalResult Esp32HAL::initNetworkAsync()
         5,     // Priority
         nullptr // Task handle
     );
-    
+
     if (ret != pdPASS)
     {
         ESP_LOGE(TAG, "Failed to create network init task");
         return HalResult::ERROR;
     }
-    
+
     ESP_LOGI(TAG, "Network initialization task started");
     return HalResult::OK;
 }
@@ -89,7 +90,7 @@ void Esp32HAL::networkInitTask(void* parameter)
 {
     Esp32HAL* hal = static_cast<Esp32HAL*>(parameter);
     ESP_LOGI(TAG, "Network init task started");
-    
+
     // Initialize network in background
     hal->network = std::make_unique<Esp32HalNetwork>();
     if (hal->network->init() != HalResult::OK)
@@ -101,7 +102,7 @@ void Esp32HAL::networkInitTask(void* parameter)
         ESP_LOGI(TAG, "Network HAL initialized successfully in async task");
         hal->networkReady = true;
     }
-    
+
     // Task terminates automatically
     vTaskDelete(nullptr);
 }

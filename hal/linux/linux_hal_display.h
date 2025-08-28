@@ -24,7 +24,7 @@ public:
 private:
     lv_display_t* display = nullptr;
     DisplayInfo displayInfo;
-    std::timed_mutex displayMutex;
+    std::recursive_timed_mutex displayMutex;
     calaos_display_backend_t currentBackend = CALAOS_DISPLAY_BACKEND_NONE;
 
     // Backend-specific initialization

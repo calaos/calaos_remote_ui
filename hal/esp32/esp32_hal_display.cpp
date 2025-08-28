@@ -3,7 +3,7 @@
 #include "bsp_board_extra.h"
 #include "bsp/display.h"
 
-static const char* TAG = "ESP32_HAL_DISPLAY";
+static const char* TAG = "hal.display";
 
 HalResult Esp32HalDisplay::init()
 {

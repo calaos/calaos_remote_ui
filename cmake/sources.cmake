@@ -15,6 +15,12 @@ set(MAIN_SOURCES
     main/theme.cpp
 )
 
+# Flux architecture sources
+set(FLUX_SOURCES
+    flux/app_dispatcher.cpp
+    flux/app_store.cpp
+)
+
 # HAL sources - ESP32 specific
 set(ESP32_HAL_SOURCES
     hal/hal.cpp
@@ -40,6 +46,7 @@ set(LINUX_HAL_SOURCES
 set(COMMON_INCLUDE_DIRS
     main
     hal
+    flux
 )
 
 # Platform-specific source selection
@@ -68,5 +75,6 @@ endif()
 # Combined source list for the current platform
 set(ALL_SOURCES
     ${MAIN_SOURCES}
+    ${FLUX_SOURCES}
     ${PLATFORM_HAL_SOURCES}
 )

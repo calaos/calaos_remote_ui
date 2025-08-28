@@ -1,7 +1,7 @@
 #include "esp32_hal_input.h"
 #include "logging.h"
 
-static const char* TAG = "ESP32_HAL_INPUT";
+static const char* TAG = "hal.input";
 
 HalResult Esp32HalInput::init()
 {

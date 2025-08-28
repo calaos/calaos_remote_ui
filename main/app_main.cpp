@@ -3,6 +3,7 @@
 
 #include "startup_page.h"
 #include "smooth_ui_toolkit.h"
+#include "../flux/flux.h"
 
 #ifdef ESP_PLATFORM
 #include "freertos/FreeRTOS.h"
@@ -30,6 +31,10 @@ AppMain::~AppMain()
 bool AppMain::init()
 {
     ESP_LOGI(TAG, "Using legacy full initialization");
+    
+    // Initialize Flux architecture
+    initFlux();
+    
     hal = &HAL::getInstance();
     if (hal->init() != HalResult::OK)
     {
@@ -66,6 +71,10 @@ bool AppMain::init()
 bool AppMain::initFast()
 {
     ESP_LOGI(TAG, "Using fast initialization with async network");
+    
+    // Initialize Flux architecture
+    initFlux();
+    
     hal = &HAL::getInstance();
     
     // Fast init - only essentials (system, display, input)
