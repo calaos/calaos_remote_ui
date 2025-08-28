@@ -7,6 +7,7 @@
 #include <cstring>
 #include "ethernet_init.h"
 #include "esp_eth.h"
+#include "esp_hosted.h"
 
 static const char* TAG = "ESP32_HAL_NETWORK";
 
@@ -88,18 +89,30 @@ HalResult Esp32HalNetwork::init()
     ESP_LOGI(TAG, "Initializing WiFi (optional)");
     esp_netif_create_default_wifi_sta();
 
+    esp_hosted_coprocessor_fwver_t ver_info = {};
+    ret = esp_hosted_get_coprocessor_fwversion(&ver_info);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGW(TAG, "Failed to get coprocessor fw version: %s", esp_err_to_name(ret));
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Hosted Coprocessor FW Version: %d.%d.%d", ver_info.major1, ver_info.minor1, ver_info.patch1);
+    }
+
     // Use simplified WiFi configuration
-    wifi_init_config_t cfg = {};
-    cfg.osi_funcs = &g_wifi_osi_funcs;
-    cfg.wpa_crypto_funcs = g_wifi_default_wpa_crypto_funcs;
-    cfg.static_rx_buf_num = 10;
-    cfg.dynamic_rx_buf_num = 32;
-    cfg.tx_buf_type = 1;
-    cfg.dynamic_tx_buf_num = 16;
-    cfg.ampdu_rx_enable = 1;
-    cfg.ampdu_tx_enable = 1;
-    cfg.nvs_enable = 1;
-    cfg.magic = WIFI_INIT_CONFIG_MAGIC;
+    // wifi_init_config_t cfg = {};
+    // cfg.osi_funcs = &g_wifi_osi_funcs;
+    // cfg.wpa_crypto_funcs = g_wifi_default_wpa_crypto_funcs;
+    // cfg.static_rx_buf_num = 10;
+    // cfg.dynamic_rx_buf_num = 32;
+    // cfg.tx_buf_type = 1;
+    // cfg.dynamic_tx_buf_num = 16;
+    // cfg.ampdu_rx_enable = 1;
+    // cfg.ampdu_tx_enable = 1;
+    // cfg.nvs_enable = 1;
+    // cfg.magic = WIFI_INIT_CONFIG_MAGIC;
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ret = esp_wifi_init(&cfg);
     if (ret != ESP_OK)
     {

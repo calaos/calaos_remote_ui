@@ -16,6 +16,7 @@ StartupPage::StartupPage(lv_obj_t *parent):
 
     logo = std::make_unique<lvgl_cpp::Image>(*this);
     logo->setSrc(&logo_full);
+    logo->align(LV_ALIGN_CENTER, 0, -720); // Start off-screen
 
     // Network status label
     networkStatusLabel = std::make_unique<lvgl_cpp::Label>(*this);

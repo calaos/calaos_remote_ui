@@ -1,4 +1,4 @@
-FROM espressif/idf:v5.4
+FROM espressif/idf:release-v5.5
 
 ARG DEBIAN_FRONTEND=nointeractive
 ARG CONTAINER_USER=esp
@@ -91,8 +91,8 @@ RUN echo "source /opt/esp/idf/export.sh > /dev/null 2>&1" >> ~/.bashrc
 RUN echo 'eval "$(starship init bash)"' >> ~/.bashrc
 
 RUN . /opt/esp/idf/export.sh ; \
-    pip3 install pypng && \
-    pip3 install lz4
+    pip3 install --break-system-packages pypng && \
+    pip3 install --break-system-packages lz4
 
 ENTRYPOINT [ "/opt/esp/entrypoint.sh" ]
 

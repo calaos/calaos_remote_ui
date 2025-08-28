@@ -16,6 +16,7 @@
     "cstdint": "c",
     "*.in": "cpp",
     "iostream": "cpp",
-    "sstream": "cpp"
+    "sstream": "cpp",
+    "port_esp_hosted_host_config.h": "c"
   }
 }

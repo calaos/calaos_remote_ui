@@ -14,7 +14,7 @@ HalResult Esp32HalDisplay::init()
         .flags = {
             .buff_dma = false,
             .buff_spiram = true,
-            .sw_rotate = false,
+            .sw_rotate = true,
         }
     };
 
@@ -24,6 +24,10 @@ HalResult Esp32HalDisplay::init()
         ESP_LOGE(TAG, "Failed to get LVGL display");
         return HalResult::ERROR;
     }
+
+    lv_display_set_dpi(display, 180);
+
+    // lv_display_set_rotation(display, LV_DISP_ROTATION_90);
 
     displayInfo.width = 720;
     displayInfo.height = 720;
