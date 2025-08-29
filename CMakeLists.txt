@@ -163,6 +163,12 @@ if(DETECTED_PLATFORM STREQUAL "LINUX")
     list(APPEND LINUX_DISPLAY_INCLUDES ${LIBWEBSOCKETS_INCLUDE_DIRS})
     message(STATUS "libwebsockets detected - websocket support enabled")
 
+    # Check for mbedtls (required)
+    pkg_check_modules(MBEDTLS REQUIRED mbedtls)
+    list(APPEND LINUX_DISPLAY_LIBS ${MBEDTLS_LIBRARIES})
+    list(APPEND LINUX_DISPLAY_INCLUDES ${MBEDTLS_INCLUDE_DIRS})
+    message(STATUS "mbedtls detected - TLS/SSL support enabled")
+
     # Generate platform configuration
     configure_file(
         ${CMAKE_SOURCE_DIR}/hal/linux/lv_conf_platform.h.in
