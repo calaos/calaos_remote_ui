@@ -164,7 +164,7 @@ if(DETECTED_PLATFORM STREQUAL "LINUX")
     message(STATUS "libwebsockets detected - websocket support enabled")
 
     # Check for mbedtls (required)
-    pkg_check_modules(MBEDTLS REQUIRED mbedtls)
+    pkg_check_modules(MBEDTLS REQUIRED mbedtls mbedcrypto)
     list(APPEND LINUX_DISPLAY_LIBS ${MBEDTLS_LIBRARIES})
     list(APPEND LINUX_DISPLAY_INCLUDES ${MBEDTLS_INCLUDE_DIRS})
     message(STATUS "mbedtls detected - TLS/SSL support enabled")
@@ -245,7 +245,7 @@ if(DETECTED_PLATFORM STREQUAL "LINUX")
         components/lvgl
         components/lvgl/src
         ${LINUX_DISPLAY_INCLUDES}
-        ${CMAKE_SOURCE_DIR}/components/nlohmann-json/single_include/nlohmann
+        ${CMAKE_SOURCE_DIR}/components/nlohmann-json/single_include
     )
 
     # Link libraries

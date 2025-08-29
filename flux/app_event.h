@@ -14,6 +14,9 @@ enum class AppEventType
     CalaosServerFound,
     CalaosDiscoveryTimeout,
     CalaosDiscoveryStopped,
+    ProvisioningCodeGenerated,
+    ProvisioningCompleted,
+    ProvisioningFailed,
     // Add more event types as needed
 };
 
@@ -46,11 +49,25 @@ struct CalaosServerFoundData
     std::string serverIp;
 };
 
+struct ProvisioningCodeGeneratedData
+{
+    std::string provisioningCode;
+    std::string macAddress;
+};
+
+struct ProvisioningCompletedData
+{
+    std::string deviceId;
+    std::string serverUrl;
+};
+
 using AppEventData = std::variant<
     std::monostate,  // For events without data
     NetworkStatusChangedData,
     NetworkIpAssignedData,
-    CalaosServerFoundData
+    CalaosServerFoundData,
+    ProvisioningCodeGeneratedData,
+    ProvisioningCompletedData
 >;
 
 class AppEvent

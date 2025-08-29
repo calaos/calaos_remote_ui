@@ -48,10 +48,38 @@ struct CalaosServerState
     }
 };
 
+enum class ProvisioningStatus
+{
+    NotProvisioned,    // Device needs provisioning
+    ShowingCode,       // Displaying provisioning code
+    Provisioned        // Device is provisioned and ready
+};
+
+struct ProvisioningState
+{
+    ProvisioningStatus status = ProvisioningStatus::NotProvisioned;
+    std::string provisioningCode;
+    std::string macAddress;
+    std::string deviceId;
+    std::string serverUrl;
+    bool hasFailed = false;
+    
+    bool isProvisioned() const 
+    {
+        return status == ProvisioningStatus::Provisioned;
+    }
+    
+    bool needsCodeDisplay() const
+    {
+        return status == ProvisioningStatus::ShowingCode;
+    }
+};
+
 struct AppState
 {
     NetworkState network;
     CalaosServerState calaosServer;
+    ProvisioningState provisioning;
 
     bool operator==(const AppState& other) const
     {
@@ -65,7 +93,12 @@ struct AppState
                calaosServer.isDiscovering == other.calaosServer.isDiscovering &&
                calaosServer.hasTimeout == other.calaosServer.hasTimeout &&
                calaosServer.discoveredServers == other.calaosServer.discoveredServers &&
-               calaosServer.selectedServer == other.calaosServer.selectedServer;
+               calaosServer.selectedServer == other.calaosServer.selectedServer &&
+               provisioning.status == other.provisioning.status &&
+               provisioning.provisioningCode == other.provisioning.provisioningCode &&
+               provisioning.deviceId == other.provisioning.deviceId &&
+               provisioning.serverUrl == other.provisioning.serverUrl &&
+               provisioning.hasFailed == other.provisioning.hasFailed;
     }
 
     bool operator!=(const AppState& other) const

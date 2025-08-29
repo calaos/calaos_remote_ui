@@ -15,6 +15,8 @@ set(MAIN_SOURCES
     main/theme.cpp
     main/calaos_discovery.cpp
     main/lvgl_timer.cpp
+    main/provisioning_crypto.cpp
+    main/provisioning_manager.cpp
 )
 
 # Flux architecture sources

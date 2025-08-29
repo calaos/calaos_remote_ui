@@ -136,6 +136,42 @@ void AppStore::handleEvent(const AppEvent& event)
                 ESP_LOGD(TAG, "Calaos discovery stopped");
                 break;
             }
+            
+            case AppEventType::ProvisioningCodeGenerated:
+            {
+                if (auto* data = event.getData<ProvisioningCodeGeneratedData>())
+                {
+                    state_.provisioning.status = ProvisioningStatus::ShowingCode;
+                    state_.provisioning.provisioningCode = data->provisioningCode;
+                    state_.provisioning.macAddress = data->macAddress;
+                    state_.provisioning.hasFailed = false;
+                    stateChanged = true;
+                    ESP_LOGD(TAG, "Provisioning code generated: %s", data->provisioningCode.c_str());
+                }
+                break;
+            }
+            
+            case AppEventType::ProvisioningCompleted:
+            {
+                if (auto* data = event.getData<ProvisioningCompletedData>())
+                {
+                    state_.provisioning.status = ProvisioningStatus::Provisioned;
+                    state_.provisioning.deviceId = data->deviceId;
+                    state_.provisioning.serverUrl = data->serverUrl;
+                    state_.provisioning.hasFailed = false;
+                    stateChanged = true;
+                    ESP_LOGD(TAG, "Provisioning completed: %s", data->deviceId.c_str());
+                }
+                break;
+            }
+            
+            case AppEventType::ProvisioningFailed:
+            {
+                state_.provisioning.hasFailed = true;
+                stateChanged = true;
+                ESP_LOGD(TAG, "Provisioning failed");
+                break;
+            }
         }
     }
 

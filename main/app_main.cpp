@@ -4,6 +4,7 @@
 #include "startup_page.h"
 #include "smooth_ui_toolkit.h"
 #include "../flux/flux.h"
+#include "provisioning_manager.h"
 
 #ifdef ESP_PLATFORM
 #include "freertos/FreeRTOS.h"
@@ -59,6 +60,14 @@ bool AppMain::init()
 #endif
 
     logSystemInfo();
+    
+    // Initialize provisioning manager
+    if (!getProvisioningManager().init())
+    {
+        ESP_LOGE(TAG, "Failed to initialize provisioning manager");
+        return false;
+    }
+    
     createBasicUi();
 
     initialized = true;
