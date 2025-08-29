@@ -32,11 +32,11 @@ make -j$(nproc)
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}Build completed successfully!${NC}"
     echo -e "${BLUE}Executable: $(pwd)/calaos-remote-ui${NC}"
-    
+
     # Show available backends
     echo -e "${YELLOW}Available display backends:${NC}"
     ./calaos-remote-ui --list-backends
-    
+
     echo -e "${YELLOW}Usage examples:${NC}"
     echo "  ./calaos-remote-ui"
     echo "  ./calaos-remote-ui --display-backend sdl"

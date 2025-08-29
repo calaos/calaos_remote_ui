@@ -28,6 +28,8 @@ RUN apt-get update \
   python3-png \
   python3-lz4 \
   libx11-dev \
+  libsdl2-dev \
+  libwebsockets-dev \
   && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --break-system-packages pypng
@@ -92,9 +94,8 @@ RUN echo "source /opt/esp/idf/export.sh > /dev/null 2>&1" >> ~/.bashrc
 
 RUN echo 'eval "$(starship init bash)"' >> ~/.bashrc
 
-RUN . /opt/esp/idf/export.sh ; \
-    pip3 install --break-system-packages pypng && \
-    pip3 install --break-system-packages lz4
+RUN IDF_PATH_FORCE=1 . /opt/esp/idf/export.sh IDF_PATH=/opt/esp/idf && \
+    pip3 install pypng lz4
 
 ENTRYPOINT [ "/opt/esp/entrypoint.sh" ]
 

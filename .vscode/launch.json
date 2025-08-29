@@ -11,7 +11,7 @@
             "program": "${workspaceFolder}/build_linux/calaos-remote-ui",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${fileDirname}",
+            "cwd": "${workspaceFolder}/build_linux/",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
