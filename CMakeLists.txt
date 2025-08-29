@@ -239,6 +239,7 @@ if(DETECTED_PLATFORM STREQUAL "LINUX")
         components/lvgl
         components/lvgl/src
         ${LINUX_DISPLAY_INCLUDES}
+        ${CMAKE_SOURCE_DIR}/components/nlohmann-json/single_include/nlohmann
     )
 
     # Link libraries
