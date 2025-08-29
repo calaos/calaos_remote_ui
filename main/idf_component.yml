@@ -3,3 +3,4 @@ dependencies:
   espressif/esp_wifi_remote: ^0.16.1
   espressif/esp_hosted: ^2.3.0
   espressif/ethernet_init: ^0.6.1
+  espressif/libwebsockets: ^4.3.3

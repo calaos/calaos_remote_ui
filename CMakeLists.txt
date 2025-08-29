@@ -157,6 +157,12 @@ if(DETECTED_PLATFORM STREQUAL "LINUX")
         message(STATUS "libinput not found - LV_USE_LINUX_LIBINPUT disabled")
     endif()
 
+    # Check for libwebsockets (required)
+    pkg_check_modules(LIBWEBSOCKETS REQUIRED libwebsockets)
+    list(APPEND LINUX_DISPLAY_LIBS ${LIBWEBSOCKETS_LIBRARIES})
+    list(APPEND LINUX_DISPLAY_INCLUDES ${LIBWEBSOCKETS_INCLUDE_DIRS})
+    message(STATUS "libwebsockets detected - websocket support enabled")
+
     # Generate platform configuration
     configure_file(
         ${CMAKE_SOURCE_DIR}/hal/linux/lv_conf_platform.h.in
