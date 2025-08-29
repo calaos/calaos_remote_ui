@@ -13,12 +13,23 @@ set(MAIN_SOURCES
     main/stack_view.cpp
     main/test_page.cpp
     main/theme.cpp
+    main/calaos_discovery.cpp
+    main/lvgl_timer.cpp
 )
 
 # Flux architecture sources
 set(FLUX_SOURCES
     flux/app_dispatcher.cpp
     flux/app_store.cpp
+)
+
+# Network sources
+set(NETWORK_SOURCES
+    network/calaos_net.cpp
+    network/udp/udp_client.cpp
+    network/udp/udp_server.cpp
+    network/http/http_client.cpp
+    network/websocket/websocket_client.cpp
 )
 
 # HAL sources - ESP32 specific
@@ -47,6 +58,7 @@ set(COMMON_INCLUDE_DIRS
     main
     hal
     flux
+    network
 )
 
 # Platform-specific source selection
@@ -76,5 +88,6 @@ endif()
 set(ALL_SOURCES
     ${MAIN_SOURCES}
     ${FLUX_SOURCES}
+    ${NETWORK_SOURCES}
     ${PLATFORM_HAL_SOURCES}
 )

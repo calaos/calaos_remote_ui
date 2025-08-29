@@ -20,9 +20,38 @@ struct NetworkState
     int rssi = 0;
 };
 
+struct CalaosServerState
+{
+    bool isDiscovering = false;
+    bool hasTimeout = false;
+    std::vector<std::string> discoveredServers;
+    std::string selectedServer;
+    
+    bool hasServers() const 
+    {
+        return !discoveredServers.empty();
+    }
+    
+    void addServer(const std::string& serverIp)
+    {
+        // Avoid duplicates
+        for (const auto& server : discoveredServers)
+        {
+            if (server == serverIp)
+                return;
+        }
+        discoveredServers.push_back(serverIp);
+        
+        // Auto-select first server found
+        if (selectedServer.empty())
+            selectedServer = serverIp;
+    }
+};
+
 struct AppState
 {
     NetworkState network;
+    CalaosServerState calaosServer;
 
     bool operator==(const AppState& other) const
     {
@@ -32,7 +61,11 @@ struct AppState
                network.connectionType == other.network.connectionType &&
                network.ipAddress == other.network.ipAddress &&
                network.ssid == other.network.ssid &&
-               network.rssi == other.network.rssi;
+               network.rssi == other.network.rssi &&
+               calaosServer.isDiscovering == other.calaosServer.isDiscovering &&
+               calaosServer.hasTimeout == other.calaosServer.hasTimeout &&
+               calaosServer.discoveredServers == other.calaosServer.discoveredServers &&
+               calaosServer.selectedServer == other.calaosServer.selectedServer;
     }
 
     bool operator!=(const AppState& other) const

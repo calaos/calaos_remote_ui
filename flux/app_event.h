@@ -10,6 +10,10 @@ enum class AppEventType
     NetworkIpAssigned,
     NetworkDisconnected,
     NetworkTimeout,
+    CalaosDiscoveryStarted,
+    CalaosServerFound,
+    CalaosDiscoveryTimeout,
+    CalaosDiscoveryStopped,
     // Add more event types as needed
 };
 
@@ -37,10 +41,16 @@ struct NetworkIpAssignedData
     int rssi;
 };
 
+struct CalaosServerFoundData
+{
+    std::string serverIp;
+};
+
 using AppEventData = std::variant<
     std::monostate,  // For events without data
     NetworkStatusChangedData,
-    NetworkIpAssignedData
+    NetworkIpAssignedData,
+    CalaosServerFoundData
 >;
 
 class AppEvent

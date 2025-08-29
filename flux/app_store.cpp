@@ -99,6 +99,43 @@ void AppStore::handleEvent(const AppEvent& event)
                 }
                 break;
             }
+            
+            case AppEventType::CalaosDiscoveryStarted:
+            {
+                state_.calaosServer.isDiscovering = true;
+                state_.calaosServer.hasTimeout = false;
+                stateChanged = true;
+                ESP_LOGD(TAG, "Calaos discovery started");
+                break;
+            }
+            
+            case AppEventType::CalaosServerFound:
+            {
+                if (auto* data = event.getData<CalaosServerFoundData>())
+                {
+                    state_.calaosServer.addServer(data->serverIp);
+                    stateChanged = true;
+                    ESP_LOGD(TAG, "Calaos server found: %s", data->serverIp.c_str());
+                }
+                break;
+            }
+            
+            case AppEventType::CalaosDiscoveryTimeout:
+            {
+                state_.calaosServer.isDiscovering = false;
+                state_.calaosServer.hasTimeout = true;
+                stateChanged = true;
+                ESP_LOGD(TAG, "Calaos discovery timeout");
+                break;
+            }
+            
+            case AppEventType::CalaosDiscoveryStopped:
+            {
+                state_.calaosServer.isDiscovering = false;
+                stateChanged = true;
+                ESP_LOGD(TAG, "Calaos discovery stopped");
+                break;
+            }
         }
     }
 

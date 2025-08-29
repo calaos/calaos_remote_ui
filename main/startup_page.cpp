@@ -8,12 +8,13 @@
 
 using namespace smooth_ui_toolkit;
 
-extern AppMain* g_appMain;
 static const char* TAG = "StartupPage";
 
 StartupPage::StartupPage(lv_obj_t *parent):
     PageBase(parent)
 {
+    // Initialize Calaos discovery
+    calaosDiscovery = std::make_unique<CalaosDiscovery>();
     setBgColor(theme_color_black);
     setBgOpa(LV_OPA_COVER);
 
@@ -87,52 +88,43 @@ void StartupPage::render()
     // Update logo animation
     logoDropAnimation.update();
 
-    // Update network status animation if still connecting
-    if (!lastNetworkState.isReady) {
+    // Update network status animation if still connecting or discovering
+    if (!lastNetworkState.isReady || lastCalaosServerState.isDiscovering)
+    {
         networkStatusAnimation.update();
     }
 }
 
 void StartupPage::onStateChanged(const AppState& state)
 {
-    ESP_LOGD(TAG, "State changed - isReady=%d, hasTimeout=%d, connectionType=%d",
-             state.network.isReady, state.network.hasTimeout, static_cast<int>(state.network.connectionType));
+    ESP_LOGD(TAG, "State changed - network isReady=%d, hasTimeout=%d, calaos isDiscovering=%d, hasServers=%d",
+             state.network.isReady, state.network.hasTimeout,
+             state.calaosServer.isDiscovering, state.calaosServer.hasServers());
 
     // Lock LVGL display for thread-safe UI updates
     HAL::getInstance().getDisplay().lock(0);
 
     // Check if network state has changed
-    if (state.network.isReady != lastNetworkState.isReady ||
-        state.network.hasTimeout != lastNetworkState.hasTimeout ||
-        state.network.ipAddress != lastNetworkState.ipAddress ||
-        state.network.connectionType != lastNetworkState.connectionType)
+    bool networkStateChanged = (state.network.isReady != lastNetworkState.isReady ||
+                               state.network.hasTimeout != lastNetworkState.hasTimeout ||
+                               state.network.ipAddress != lastNetworkState.ipAddress ||
+                               state.network.connectionType != lastNetworkState.connectionType);
+
+    // Check if Calaos server state has changed
+    bool calaosStateChanged = (state.calaosServer.isDiscovering != lastCalaosServerState.isDiscovering ||
+                              state.calaosServer.hasTimeout != lastCalaosServerState.hasTimeout ||
+                              state.calaosServer.discoveredServers != lastCalaosServerState.discoveredServers);
+
+    if (networkStateChanged)
     {
-        if (state.network.isReady)
+        if (state.network.isReady && !lastNetworkState.isReady)
         {
-            // Create network info string
-            std::string networkInfo = "IP: " + state.network.ipAddress;
-
-            if (state.network.connectionType == NetworkConnectionType::WiFi && !state.network.ssid.empty())
-            {
-                networkInfo += "\nWiFi: " + state.network.ssid;
-                if (state.network.rssi != 0)
-                    networkInfo += " (" + std::to_string(state.network.rssi) + " dBm)";
-            }
-            else if (state.network.connectionType == NetworkConnectionType::Ethernet)
-            {
-                networkInfo += "\nEthernet connected";
-            }
-
-            // Update UI with network info
-            networkStatusLabel->setText(networkInfo.c_str());
-            lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_white, LV_PART_MAIN);
-            lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);
-
-            // Hide the spinner when network is ready
-            lv_obj_add_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
-
-            // Stop the pulsing animation
-            networkStatusAnimation.cancel();
+            // Network just became ready - wait 2 seconds before starting Calaos discovery
+            ESP_LOGI(TAG, "Network ready, waiting 2 seconds before starting Calaos discovery");
+            discoveryDelayTimer = LvglTimer::createOneShot([this]() {
+                ESP_LOGI(TAG, "Starting Calaos discovery after 2-second delay");
+                calaosDiscovery->startDiscovery();
+            }, 2000);
         }
         else if (state.network.hasTimeout)
         {
@@ -140,7 +132,7 @@ void StartupPage::onStateChanged(const AppState& state)
             networkStatusLabel->setText("Network connection failed\nPlease connect WiFi or Ethernet\nand restart the device");
             lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_red, LV_PART_MAIN);
             lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);
-            networkStatusLabel->setTextFont(&lv_font_montserrat_28);
+            networkStatusLabel->setTextFont(&lv_font_montserrat_26);
 
             // Hide the spinner on timeout
             lv_obj_add_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
@@ -148,7 +140,7 @@ void StartupPage::onStateChanged(const AppState& state)
             // Stop the pulsing animation
             networkStatusAnimation.cancel();
         }
-        else
+        else if (!state.network.isReady)
         {
             // Network still connecting
             networkStatusLabel->setText("Initializing network...");
@@ -159,37 +151,91 @@ void StartupPage::onStateChanged(const AppState& state)
         }
     }
 
-    // Update cached state
+    // Handle Calaos discovery state changes
+    if (calaosStateChanged)
+    {
+        if (state.calaosServer.isDiscovering)
+        {
+            // Show discovery in progress
+            networkStatusLabel->setText("Searching for Calaos Server");
+            lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_white, LV_PART_MAIN);
+            lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);
+
+            // Show the spinner
+            lv_obj_clear_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+
+            // Restart pulsing animation if not already running
+            if (networkStatusAnimation.currentPlayingState() != animate_state::playing)
+            {
+                networkStatusAnimation.play();
+            }
+        }
+        else if (state.calaosServer.hasServers())
+        {
+            // Server found - show success
+            std::string serverInfo = "Calaos Server found:\n" + state.calaosServer.selectedServer;
+            if (state.calaosServer.discoveredServers.size() > 1)
+            {
+                serverInfo += "\n(" + std::to_string(state.calaosServer.discoveredServers.size()) + " servers found)";
+            }
+
+            networkStatusLabel->setText(serverInfo.c_str());
+            lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_white, LV_PART_MAIN);
+            lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);
+
+            // Hide the spinner when server found
+            lv_obj_add_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+
+            // Stop the pulsing animation
+            networkStatusAnimation.cancel();
+        }
+        else if (state.calaosServer.hasTimeout)
+        {
+            // Discovery timeout - show error message
+            networkStatusLabel->setText("No Calaos Server found\nPlease check your network\nand try again");
+            lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_red, LV_PART_MAIN);
+            lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);
+
+            // Hide the spinner on timeout
+            lv_obj_add_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+
+            // Stop the pulsing animation
+            networkStatusAnimation.cancel();
+        }
+    }
+
+    // Update cached states
     lastNetworkState = state.network;
+    lastCalaosServerState = state.calaosServer;
 
     // Unlock LVGL display
     HAL::getInstance().getDisplay().unlock();
 }
 
-void StartupPage::testButtonCb(lv_event_t* e)
-{
-    static int testPageCount = 0;
+// void StartupPage::testButtonCb(lv_event_t* e)
+// {
+//     static int testPageCount = 0;
 
-    if (g_appMain && g_appMain->getStackView())
-    {
-        auto testPage = std::make_unique<TestPage>(lv_screen_active(),
-            ("Test Page " + std::to_string(++testPageCount)).c_str());
+//     if (g_appMain && g_appMain->getStackView())
+//     {
+//         auto testPage = std::make_unique<TestPage>(lv_screen_active(),
+//             ("Test Page " + std::to_string(++testPageCount)).c_str());
 
-        // Alternate between different animation types for testing
-        stack_animation_type::Type_t animType;
-        switch (testPageCount % 3)
-        {
-            case 1:
-                animType = stack_animation_type::SlideVertical;
-                break;
-            case 2:
-                animType = stack_animation_type::SlideHorizontal;
-                break;
-            default:
-                animType = stack_animation_type::NoAnim;
-                break;
-        }
+//         // Alternate between different animation types for testing
+//         stack_animation_type::Type_t animType;
+//         switch (testPageCount % 3)
+//         {
+//             case 1:
+//                 animType = stack_animation_type::SlideVertical;
+//                 break;
+//             case 2:
+//                 animType = stack_animation_type::SlideHorizontal;
+//                 break;
+//             default:
+//                 animType = stack_animation_type::NoAnim;
+//                 break;
+//         }
 
-        g_appMain->getStackView()->push(std::move(testPage), animType);
-    }
-}
+//         g_appMain->getStackView()->push(std::move(testPage), animType);
+//     }
+// }
