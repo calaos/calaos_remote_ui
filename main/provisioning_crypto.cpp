@@ -146,6 +146,8 @@ std::string ProvisioningCrypto::encodeBase32(const std::vector<uint8_t>& data, s
 std::string ProvisioningCrypto::generateProvisioningCode(const std::string& macAddress,
                                                         const std::vector<uint8_t>& salt)
 {
+    ESP_LOGD(TAG, "Generating new provision code with mac address: %s", macAddress.c_str());
+
     // Convert MAC address to bytes
     std::vector<uint8_t> macBytes = hexStringToBytes(macAddress);
     if (macBytes.empty())
@@ -168,11 +170,16 @@ std::string ProvisioningCrypto::generateProvisioningCode(const std::string& macA
         return "ERROR2";
     }
 
-    // Take first 4 bytes and encode to base32
+    // Take first 4 bytes and encode to base32 
     std::vector<uint8_t> codeBytes(hash.begin(), hash.begin() + 4);
-    std::string code = encodeBase32(codeBytes, 6);
-
-    if (code.length() < 6)
+    std::string code = encodeBase32(codeBytes, 10); // Get more than needed first
+    
+    // Ensure we have exactly 6 characters
+    if (code.length() >= 6)
+    {
+        code = code.substr(0, 6);
+    }
+    else
     {
         // Pad with first characters if needed
         while (code.length() < 6)

@@ -77,15 +77,15 @@ bool ProvisioningManager::init()
 {
     ESP_LOGI(TAG, "Initializing provisioning manager");
 
-    // Get MAC address
-    config_.macAddress = HAL::getInstance().getNetwork().getMacAddress();
-    if (config_.macAddress.empty())
+    // Get MAC address first
+    std::string macAddress = HAL::getInstance().getNetwork().getMacAddress();
+    if (macAddress.empty())
     {
         ESP_LOGE(TAG, "Failed to get MAC address");
         return false;
     }
 
-    ESP_LOGI(TAG, "Device MAC address: %s", config_.macAddress.c_str());
+    ESP_LOGI(TAG, "Device MAC address: %s", macAddress.c_str());
 
     // Load existing configuration
     if (!loadConfig())
@@ -93,6 +93,9 @@ bool ProvisioningManager::init()
         ESP_LOGW(TAG, "No existing provisioning config found, will generate new one");
         resetProvisioning();
     }
+    
+    // Always ensure MAC address is set correctly (loadConfig might have overwritten it)
+    config_.macAddress = macAddress;
 
     // Dispatch initial provisioning state
     if (isProvisioned())
@@ -122,8 +125,10 @@ bool ProvisioningManager::isProvisioned() const
 
 std::string ProvisioningManager::getProvisioningCode()
 {
-    if (config_.provisioningCode.empty())
+    if (config_.provisioningCode.empty() ||
+        config_.provisioningCode.starts_with("ERROR"))
     {
+        ESP_LOGD(TAG, "getProvisioningCode must generate new code with mac address: %s", config_.macAddress.c_str());
         config_.provisioningCode = generateNewCode();
         saveConfig();
     }
@@ -233,6 +238,8 @@ std::string ProvisioningManager::generateNewCode()
     {
         config_.salt = ProvisioningCrypto::generateRandomSalt(4);
     }
+
+    ESP_LOGD(TAG, "generateNewCode with mac address: %s", config_.macAddress.c_str());
 
     return ProvisioningCrypto::generateProvisioningCode(config_.macAddress, config_.salt);
 }

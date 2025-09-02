@@ -95,9 +95,9 @@ void StartupPage::createProvisioningUI()
     // Provisioning code box (large background box)
     provisioningCodeBox = std::make_unique<lvgl_cpp::Label>(*this);
     provisioningCodeBox->setText("");
-    lv_obj_set_size(provisioningCodeBox->get(), 400, 120);
+    lv_obj_set_size(provisioningCodeBox->get(), 500, 220);
     lv_obj_align(provisioningCodeBox->get(), LV_ALIGN_CENTER, 0, -50);
-    lv_obj_set_style_bg_opa(provisioningCodeBox->get(), LV_OPA_80, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(provisioningCodeBox->get(), LV_OPA_20, LV_PART_MAIN);
     lv_obj_set_style_bg_color(provisioningCodeBox->get(), theme_color_blue, LV_PART_MAIN);
     lv_obj_set_style_border_width(provisioningCodeBox->get(), 2, LV_PART_MAIN);
     lv_obj_set_style_border_color(provisioningCodeBox->get(), theme_color_white, LV_PART_MAIN);
@@ -116,7 +116,7 @@ void StartupPage::createProvisioningUI()
     // Provisioning instruction label
     provisioningInstructionLabel = std::make_unique<lvgl_cpp::Label>(*this);
     provisioningInstructionLabel->setText("Add this code in\nCalaos Installer");
-    lv_obj_align(provisioningInstructionLabel->get(), LV_ALIGN_CENTER, 0, 50);
+    lv_obj_align(provisioningInstructionLabel->get(), LV_ALIGN_CENTER, 0, 150);
     lv_obj_set_style_text_color(provisioningInstructionLabel->get(), theme_color_white, LV_PART_MAIN);
     lv_obj_set_style_text_font(provisioningInstructionLabel->get(), &lv_font_montserrat_24, LV_PART_MAIN);
     lv_obj_set_style_text_align(provisioningInstructionLabel->get(), LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -127,7 +127,7 @@ void StartupPage::initProvisioningAnimations()
 {
     // Logo move up animation (for when showing provisioning code)
     logoMoveUpAnimation.start = 0;
-    logoMoveUpAnimation.end = -150;
+    logoMoveUpAnimation.end = -250;
     logoMoveUpAnimation.easingOptions().duration = 0.8f;
     logoMoveUpAnimation.easingOptions().easingFunction = smooth_ui_toolkit::ease::ease_out_quad;
 
@@ -153,6 +153,20 @@ void StartupPage::initProvisioningAnimations()
     });
 
     codeBoxAppearAnimation.init();
+
+    // Code box fade-in animation
+    codeBoxFadeInAnimation.start = 0;
+    codeBoxFadeInAnimation.end = 255;
+    codeBoxFadeInAnimation.delay = 0.4f; // Same delay as slide animation
+    codeBoxFadeInAnimation.easingOptions().duration = 0.6f;
+
+    codeBoxFadeInAnimation.onUpdate([this](const float& value)
+    {
+        if (provisioningCodeBox)
+            lv_obj_set_style_opa(provisioningCodeBox->get(), static_cast<lv_opa_t>(value), LV_PART_MAIN);
+    });
+
+    codeBoxFadeInAnimation.init();
 
     // Code text appear animation (fade in)
     codeTextAppearAnimation.start = 0;
@@ -197,6 +211,7 @@ void StartupPage::showProvisioningUI(const std::string& code)
     if (provisioningCodeBox)
     {
         lv_obj_clear_flag(provisioningCodeBox->get(), LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_opa(provisioningCodeBox->get(), LV_OPA_TRANSP, LV_PART_MAIN);
     }
     if (provisioningCodeLabel)
     {
@@ -225,6 +240,7 @@ void StartupPage::showProvisioningUI(const std::string& code)
     // Start provisioning animations sequence
     logoMoveUpAnimation.play();
     codeBoxAppearAnimation.play();
+    codeBoxFadeInAnimation.play();
     codeTextAppearAnimation.play();
     instructionTextAppearAnimation.play();
 }
@@ -272,6 +288,7 @@ void StartupPage::render()
     // Update provisioning animations
     logoMoveUpAnimation.update();
     codeBoxAppearAnimation.update();
+    codeBoxFadeInAnimation.update();
     codeTextAppearAnimation.update();
     instructionTextAppearAnimation.update();
 

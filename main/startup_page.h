@@ -29,6 +29,7 @@ private:
     // Provisioning animations
     smooth_ui_toolkit::Animate logoMoveUpAnimation;
     smooth_ui_toolkit::Animate codeBoxAppearAnimation;
+    smooth_ui_toolkit::Animate codeBoxFadeInAnimation;
     smooth_ui_toolkit::Animate codeTextAppearAnimation;
     smooth_ui_toolkit::Animate instructionTextAppearAnimation;
 

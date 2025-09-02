@@ -28,4 +28,6 @@ void HAL::initLogger()
     esp_log_level_set("AppStore", ESP_LOG_VERBOSE);
     esp_log_level_set("StartupPage", ESP_LOG_VERBOSE);
     esp_log_level_set("hal.network", ESP_LOG_VERBOSE);
+    esp_log_level_set("provisioning.manager", ESP_LOG_VERBOSE);
+    esp_log_level_set("provisioning.crypto", ESP_LOG_VERBOSE);
 }
