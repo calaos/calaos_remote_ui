@@ -10,14 +10,15 @@ enum class AppEventType
     NetworkIpAssigned,
     NetworkDisconnected,
     NetworkTimeout,
+
     CalaosDiscoveryStarted,
     CalaosServerFound,
     CalaosDiscoveryTimeout,
     CalaosDiscoveryStopped,
+
     ProvisioningCodeGenerated,
     ProvisioningCompleted,
     ProvisioningFailed,
-    // Add more event types as needed
 };
 
 enum class NetworkConnectionType
@@ -74,19 +75,19 @@ class AppEvent
 {
 public:
     AppEvent(AppEventType type) : type_(type), data_(std::monostate{}) {}
-    
+
     template<typename T>
     AppEvent(AppEventType type, const T& data) : type_(type), data_(data) {}
 
     AppEventType getType() const { return type_; }
-    
+
     template<typename T>
-    const T* getData() const 
+    const T* getData() const
     {
         return std::get_if<T>(&data_);
     }
 
-    bool hasData() const 
+    bool hasData() const
     {
         return !std::holds_alternative<std::monostate>(data_);
     }

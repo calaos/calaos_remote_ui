@@ -90,12 +90,19 @@ void AppStore::handleEvent(const AppEvent& event)
 
             case AppEventType::NetworkTimeout:
             {
-                ESP_LOGD(TAG, "Network timeout event received, isReady=%d", state_.network.isReady);
-                if (!state_.network.isReady)
+                ESP_LOGD(TAG, "Network timeout event received, isReady=%d, isConnected=%d", 
+                         state_.network.isReady, state_.network.isConnected);
+                // Only set timeout if no network connection is established at all
+                if (!state_.network.isConnected)
                 {
                     state_.network.hasTimeout = true;
                     stateChanged = true;
                     ESP_LOGD(TAG, "Setting hasTimeout=true, stateChanged=true");
+                }
+                else
+                {
+                    ESP_LOGD(TAG, "Network timeout ignored - already connected via %s", 
+                             state_.network.connectionType == NetworkConnectionType::Ethernet ? "Ethernet" : "WiFi");
                 }
                 break;
             }

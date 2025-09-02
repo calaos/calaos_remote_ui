@@ -17,17 +17,17 @@ struct ProvisioningConfig
     std::string deviceSecret;
     std::string serverUrl;
     std::string macAddress;
-    
+
     // Serialize to JSON string for storage
     std::string toJson() const;
-    
+
     // Deserialize from JSON string
     bool fromJson(const std::string& json);
-    
+
     // Check if provisioning is complete
     bool isComplete() const
     {
-        return provisioned && !deviceId.empty() && !authToken.empty() && 
+        return provisioned && !deviceId.empty() && !authToken.empty() &&
                !deviceSecret.empty() && !serverUrl.empty();
     }
 };
@@ -76,7 +76,6 @@ private:
     std::string generateDeviceInfoJson() const;
 
     ProvisioningConfig config_;
-    bool initialized_ = false;
 
     static const char* STORAGE_KEY_PROVISIONING;
 };

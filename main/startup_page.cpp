@@ -5,6 +5,7 @@
 #include "app_main.h"
 #include "logging.h"
 #include "../hal/hal.h"
+#include "provisioning_manager.h"
 
 using namespace smooth_ui_toolkit;
 
@@ -34,6 +35,8 @@ StartupPage::StartupPage(lv_obj_t *parent):
     networkStatusLabel = std::make_unique<lvgl_cpp::Label>(*this);
     networkStatusLabel->setText("Initializing network...");
     networkStatusLabel->align(LV_ALIGN_BOTTOM_MID, 0, -120);
+    networkStatusLabel->setTextFont(&lv_font_montserrat_26);
+
     lv_obj_set_style_text_color(networkStatusLabel->get(), lv_color_white(), LV_PART_MAIN);
 
     // Provisioning UI elements (initially hidden)
@@ -100,7 +103,7 @@ void StartupPage::createProvisioningUI()
     lv_obj_set_style_border_color(provisioningCodeBox->get(), theme_color_white, LV_PART_MAIN);
     lv_obj_set_style_radius(provisioningCodeBox->get(), 15, LV_PART_MAIN);
     lv_obj_add_flag(provisioningCodeBox->get(), LV_OBJ_FLAG_HIDDEN); // Initially hidden
-    
+
     // Provisioning code label (large text inside box)
     provisioningCodeLabel = std::make_unique<lvgl_cpp::Label>(*this);
     provisioningCodeLabel->setText("------");
@@ -109,7 +112,7 @@ void StartupPage::createProvisioningUI()
     lv_obj_set_style_text_font(provisioningCodeLabel->get(), &lv_font_montserrat_48, LV_PART_MAIN);
     lv_obj_set_style_text_align(provisioningCodeLabel->get(), LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_add_flag(provisioningCodeLabel->get(), LV_OBJ_FLAG_HIDDEN); // Initially hidden
-    
+
     // Provisioning instruction label
     provisioningInstructionLabel = std::make_unique<lvgl_cpp::Label>(*this);
     provisioningInstructionLabel->setText("Add this code in\nCalaos Installer");
@@ -127,69 +130,69 @@ void StartupPage::initProvisioningAnimations()
     logoMoveUpAnimation.end = -150;
     logoMoveUpAnimation.easingOptions().duration = 0.8f;
     logoMoveUpAnimation.easingOptions().easingFunction = smooth_ui_toolkit::ease::ease_out_quad;
-    
+
     logoMoveUpAnimation.onUpdate([this](const float& value)
     {
         if (logo)
             logo->align(LV_ALIGN_CENTER, 0, static_cast<int32_t>(value));
     });
-    
+
     logoMoveUpAnimation.init();
-    
+
     // Code box appear animation (slide up from bottom)
     codeBoxAppearAnimation.start = 200;  // Start below screen
     codeBoxAppearAnimation.end = -50;    // End position
     codeBoxAppearAnimation.delay = 0.4f; // Delay after logo animation
     codeBoxAppearAnimation.easingOptions().duration = 0.6f;
     codeBoxAppearAnimation.easingOptions().easingFunction = smooth_ui_toolkit::ease::ease_out_back;
-    
+
     codeBoxAppearAnimation.onUpdate([this](const float& value)
     {
         if (provisioningCodeBox)
             lv_obj_align(provisioningCodeBox->get(), LV_ALIGN_CENTER, 0, static_cast<int32_t>(value));
     });
-    
+
     codeBoxAppearAnimation.init();
-    
+
     // Code text appear animation (fade in)
     codeTextAppearAnimation.start = 0;
     codeTextAppearAnimation.end = 255;
     codeTextAppearAnimation.delay = 0.8f; // Delay after box animation
     codeTextAppearAnimation.easingOptions().duration = 0.4f;
-    
+
     codeTextAppearAnimation.onUpdate([this](const float& value)
     {
         if (provisioningCodeLabel)
             lv_obj_set_style_opa(provisioningCodeLabel->get(), static_cast<lv_opa_t>(value), LV_PART_MAIN);
     });
-    
+
     codeTextAppearAnimation.init();
-    
+
     // Instruction text appear animation (fade in)
     instructionTextAppearAnimation.start = 0;
     instructionTextAppearAnimation.end = 255;
     instructionTextAppearAnimation.delay = 1.0f; // Delay after code text
     instructionTextAppearAnimation.easingOptions().duration = 0.4f;
-    
+
     instructionTextAppearAnimation.onUpdate([this](const float& value)
     {
         if (provisioningInstructionLabel)
             lv_obj_set_style_opa(provisioningInstructionLabel->get(), static_cast<lv_opa_t>(value), LV_PART_MAIN);
     });
-    
+
     instructionTextAppearAnimation.init();
 }
 
 void StartupPage::showProvisioningUI(const std::string& code)
 {
     ESP_LOGI(TAG, "Showing provisioning UI with code: %s", code.c_str());
-    
+
     // Update code text
     if (provisioningCodeLabel)
     {
         provisioningCodeLabel->setText(code.c_str());
     }
-    
+
     // Show elements (initially transparent)
     if (provisioningCodeBox)
     {
@@ -205,7 +208,7 @@ void StartupPage::showProvisioningUI(const std::string& code)
         lv_obj_clear_flag(provisioningInstructionLabel->get(), LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_opa(provisioningInstructionLabel->get(), LV_OPA_TRANSP, LV_PART_MAIN);
     }
-    
+
     // Hide network status elements
     if (networkStatusLabel)
     {
@@ -215,10 +218,10 @@ void StartupPage::showProvisioningUI(const std::string& code)
     {
         lv_obj_add_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
     }
-    
+
     // Stop network animation
     networkStatusAnimation.cancel();
-    
+
     // Start provisioning animations sequence
     logoMoveUpAnimation.play();
     codeBoxAppearAnimation.play();
@@ -229,7 +232,7 @@ void StartupPage::showProvisioningUI(const std::string& code)
 void StartupPage::hideProvisioningUI()
 {
     ESP_LOGI(TAG, "Hiding provisioning UI");
-    
+
     // Hide provisioning elements
     if (provisioningCodeBox)
     {
@@ -243,7 +246,7 @@ void StartupPage::hideProvisioningUI()
     {
         lv_obj_add_flag(provisioningInstructionLabel->get(), LV_OBJ_FLAG_HIDDEN);
     }
-    
+
     // Show network status elements
     if (networkStatusLabel)
     {
@@ -253,7 +256,7 @@ void StartupPage::hideProvisioningUI()
     {
         lv_obj_clear_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
     }
-    
+
     // Move logo back to center
     if (logo)
     {
@@ -265,7 +268,7 @@ void StartupPage::render()
 {
     // Update logo animation
     logoDropAnimation.update();
-    
+
     // Update provisioning animations
     logoMoveUpAnimation.update();
     codeBoxAppearAnimation.update();
@@ -299,7 +302,7 @@ void StartupPage::onStateChanged(const AppState& state)
     bool calaosStateChanged = (state.calaosServer.isDiscovering != lastCalaosServerState.isDiscovering ||
                               state.calaosServer.hasTimeout != lastCalaosServerState.hasTimeout ||
                               state.calaosServer.discoveredServers != lastCalaosServerState.discoveredServers);
-    
+
     // Check if provisioning state has changed
     bool provisioningStateChanged = (state.provisioning.status != lastProvisioningState.status ||
                                    state.provisioning.provisioningCode != lastProvisioningState.provisioningCode ||
@@ -310,17 +313,20 @@ void StartupPage::onStateChanged(const AppState& state)
         if (state.network.isReady && !lastNetworkState.isReady)
         {
             // Network just became ready - only start discovery if already provisioned
-            if (state.provisioning.isProvisioned())
+            if (!state.provisioning.isProvisioned())
             {
-                ESP_LOGI(TAG, "Network ready, waiting 2 seconds before starting Calaos discovery");
-                discoveryDelayTimer = LvglTimer::createOneShot([this]() {
-                    ESP_LOGI(TAG, "Starting Calaos discovery after 2-second delay");
+                ESP_LOGI(TAG, "Network ready, waiting 1 seconds before starting Calaos discovery");
+                discoveryDelayTimer = LvglTimer::createOneShot([this]()
+                {
+                    ESP_LOGI(TAG, "Starting Calaos discovery after 1-second delay");
                     calaosDiscovery->startDiscovery();
-                }, 2000);
+                }, 1000);
             }
             else
             {
-                ESP_LOGI(TAG, "Network ready but device not provisioned, showing provisioning UI");
+                ESP_LOGI(TAG, "Network ready but device not provisioned, starting provisioning");
+                // Trigger provisioning code generation
+                getProvisioningManager().init();
             }
         }
         else if (state.network.hasTimeout)
@@ -363,9 +369,7 @@ void StartupPage::onStateChanged(const AppState& state)
 
             // Restart pulsing animation if not already running
             if (networkStatusAnimation.currentPlayingState() != animate_state::playing)
-            {
                 networkStatusAnimation.play();
-            }
         }
         else if (state.calaosServer.hasServers())
         {
@@ -385,6 +389,10 @@ void StartupPage::onStateChanged(const AppState& state)
 
             // Stop the pulsing animation
             networkStatusAnimation.cancel();
+
+            ESP_LOGI(TAG, "Calaos server found, start provisioning");
+            // Trigger provisioning code generation
+            getProvisioningManager().init();
         }
         else if (state.calaosServer.hasTimeout)
         {
@@ -400,7 +408,7 @@ void StartupPage::onStateChanged(const AppState& state)
             networkStatusAnimation.cancel();
         }
     }
-    
+
     // Handle provisioning state changes
     if (provisioningStateChanged)
     {
@@ -415,12 +423,12 @@ void StartupPage::onStateChanged(const AppState& state)
                 }
                 break;
             }
-            
+
             case ProvisioningStatus::Provisioned:
             {
                 // Hide provisioning UI and continue normal flow
                 hideProvisioningUI();
-                
+
                 // If network is ready, start discovery
                 if (state.network.isReady)
                 {
@@ -432,7 +440,7 @@ void StartupPage::onStateChanged(const AppState& state)
                 }
                 break;
             }
-            
+
             case ProvisioningStatus::NotProvisioned:
             default:
             {
@@ -441,7 +449,7 @@ void StartupPage::onStateChanged(const AppState& state)
                 break;
             }
         }
-        
+
         if (state.provisioning.hasFailed)
         {
             ESP_LOGW(TAG, "Provisioning failed - could show error message");

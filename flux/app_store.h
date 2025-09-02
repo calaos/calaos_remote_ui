@@ -15,6 +15,7 @@ struct NetworkState
     std::string ipAddress;
     std::string gateway;
     std::string netmask;
+
     // WiFi specific info
     std::string ssid;
     int rssi = 0;
@@ -26,12 +27,12 @@ struct CalaosServerState
     bool hasTimeout = false;
     std::vector<std::string> discoveredServers;
     std::string selectedServer;
-    
-    bool hasServers() const 
+
+    bool hasServers() const
     {
         return !discoveredServers.empty();
     }
-    
+
     void addServer(const std::string& serverIp)
     {
         // Avoid duplicates
@@ -41,7 +42,7 @@ struct CalaosServerState
                 return;
         }
         discoveredServers.push_back(serverIp);
-        
+
         // Auto-select first server found
         if (selectedServer.empty())
             selectedServer = serverIp;
@@ -63,12 +64,12 @@ struct ProvisioningState
     std::string deviceId;
     std::string serverUrl;
     bool hasFailed = false;
-    
-    bool isProvisioned() const 
+
+    bool isProvisioned() const
     {
         return status == ProvisioningStatus::Provisioned;
     }
-    
+
     bool needsCodeDisplay() const
     {
         return status == ProvisioningStatus::ShowingCode;

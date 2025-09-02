@@ -53,6 +53,7 @@ set(LINUX_HAL_SOURCES
     hal/linux/linux_hal_network.cpp
     hal/linux/linux_hal_system.cpp
     hal/linux/display_backend_selector.cpp
+    hal/linux/logging.cpp
 )
 
 # Common include directories

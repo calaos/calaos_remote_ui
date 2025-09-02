@@ -75,11 +75,6 @@ ProvisioningManager::~ProvisioningManager()
 
 bool ProvisioningManager::init()
 {
-    if (initialized_)
-    {
-        return true;
-    }
-
     ESP_LOGI(TAG, "Initializing provisioning manager");
 
     // Get MAC address
@@ -98,8 +93,6 @@ bool ProvisioningManager::init()
         ESP_LOGW(TAG, "No existing provisioning config found, will generate new one");
         resetProvisioning();
     }
-
-    initialized_ = true;
 
     // Dispatch initial provisioning state
     if (isProvisioned())

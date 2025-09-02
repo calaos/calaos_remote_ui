@@ -18,7 +18,10 @@ static const char* TAG = "main";
 
 AppMain* g_appMain = nullptr;
 
-AppMain::AppMain() : hal(nullptr), initialized(false), running(false)
+AppMain::AppMain():
+    hal(&HAL::getInstance()),
+    initialized(false),
+    running(false)
 {
     g_appMain = this;
 }
@@ -32,11 +35,10 @@ AppMain::~AppMain()
 bool AppMain::init()
 {
     ESP_LOGI(TAG, "Using legacy full initialization");
-    
+
     // Initialize Flux architecture
     initFlux();
-    
-    hal = &HAL::getInstance();
+
     if (hal->init() != HalResult::OK)
     {
         ESP_LOGE(TAG, "Failed to initialize HAL");
@@ -60,14 +62,14 @@ bool AppMain::init()
 #endif
 
     logSystemInfo();
-    
+
     // Initialize provisioning manager
     if (!getProvisioningManager().init())
     {
         ESP_LOGE(TAG, "Failed to initialize provisioning manager");
         return false;
     }
-    
+
     createBasicUi();
 
     initialized = true;
@@ -80,12 +82,12 @@ bool AppMain::init()
 bool AppMain::initFast()
 {
     ESP_LOGI(TAG, "Using fast initialization with async network");
-    
+
     // Initialize Flux architecture
     initFlux();
-    
+
     hal = &HAL::getInstance();
-    
+
     // Fast init - only essentials (system, display, input)
     if (hal->initEssentials() != HalResult::OK)
     {

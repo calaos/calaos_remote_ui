@@ -58,9 +58,7 @@ static void got_ip_event_handler(void *arg, esp_event_base_t event_base,
     // Stop network timeout - we have a connection
     Esp32HalNetwork* networkHal = static_cast<Esp32HalNetwork*>(arg);
     if (networkHal)
-    {
         networkHal->onNetworkConnected();
-    }
 }
 
 HalResult Esp32HalNetwork::init()
@@ -93,6 +91,9 @@ HalResult Esp32HalNetwork::init()
         esp_netif_t *eth_netif = esp_netif_new(&cfg);
         // Attach Ethernet driver to TCP/IP stack
         ESP_ERROR_CHECK(esp_netif_attach(eth_netif, esp_eth_new_netif_glue(eth_handles[0])));
+
+        // Store Ethernet handle for MAC address retrieval
+        this->ethHandle = eth_handles[0];
     }
     else
     {
@@ -360,14 +361,34 @@ std::string Esp32HalNetwork::getLocalIp() const
 std::string Esp32HalNetwork::getMacAddress() const
 {
     uint8_t mac[6];
-    esp_err_t ret = esp_wifi_get_mac(WIFI_IF_STA, mac);
-    if (ret != ESP_OK)
-        return "";
 
-    char macStr[18];
-    snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
-             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    return std::string(macStr);
+    // Try Ethernet first if connected
+    if (ethernetConnected && ethHandle)
+    {
+        esp_err_t ret = esp_eth_ioctl(ethHandle, ETH_CMD_G_MAC_ADDR, mac);
+        if (ret == ESP_OK)
+        {
+            auto macStr = std::make_unique<char[]>(18);
+            snprintf(macStr.get(), 18, "%02X:%02X:%02X:%02X:%02X:%02X",
+                     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+            return std::string(macStr.get());
+        }
+    }
+
+    // Fallback to WiFi if connected
+    if (wifiConnected)
+    {
+        esp_err_t ret = esp_wifi_get_mac(WIFI_IF_STA, mac);
+        if (ret == ESP_OK)
+        {
+            auto macStr = std::make_unique<char[]>(18);
+            snprintf(macStr.get(), 18, "%02X:%02X:%02X:%02X:%02X:%02X",
+                     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+            return std::string(macStr.get());
+        }
+    }
+
+    return "";
 }
 
 void Esp32HalNetwork::wifiEventHandler(void* arg, esp_event_base_t eventBase,
@@ -383,6 +404,7 @@ void Esp32HalNetwork::wifiEventHandler(void* arg, esp_event_base_t eventBase,
     {
         ESP_LOGI(TAG, "WiFi disconnected");
         self->wifiStatus = WifiStatus::DISCONNECTED;
+        self->wifiConnected = false;
         if (self->wifiCallback)
             self->wifiCallback(self->wifiStatus);
     }
@@ -391,6 +413,7 @@ void Esp32HalNetwork::wifiEventHandler(void* arg, esp_event_base_t eventBase,
         ip_event_got_ip_t* event = (ip_event_got_ip_t*)eventData;
         ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
         self->wifiStatus = WifiStatus::CONNECTED;
+        self->wifiConnected = true;
 
         // Get WiFi info (SSID, RSSI)
         wifi_ap_record_t apInfo;
@@ -424,7 +447,8 @@ void Esp32HalNetwork::wifiEventHandler(void* arg, esp_event_base_t eventBase,
         AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NetworkIpAssigned, ipData));
 
         // Stop network timeout - WiFi connected
-        self->onNetworkConnected();
+        self->networkConnected = true;
+        self->stopNetworkTimeout();
 
         if (self->wifiCallback)
             self->wifiCallback(self->wifiStatus);
@@ -434,6 +458,7 @@ void Esp32HalNetwork::wifiEventHandler(void* arg, esp_event_base_t eventBase,
 void Esp32HalNetwork::onNetworkConnected()
 {
     networkConnected = true;
+    ethernetConnected = true;
     stopNetworkTimeout();
 }
 
