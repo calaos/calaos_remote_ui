@@ -29,27 +29,32 @@ static void got_ip_event_handler(void *arg, esp_event_base_t event_base,
     ESP_LOGI(TAG, "GW: " IPSTR, IP2STR(&ip_info->gw));
     ESP_LOGI(TAG, "~~~~~~~~~~~");
 
-    // Convert IP info to strings
-    char ipStr[16], gwStr[16], netmaskStr[16];
-    snprintf(ipStr, sizeof(ipStr), IPSTR, IP2STR(&ip_info->ip));
-    snprintf(gwStr, sizeof(gwStr), IPSTR, IP2STR(&ip_info->gw));
-    snprintf(netmaskStr, sizeof(netmaskStr), IPSTR, IP2STR(&ip_info->netmask));
+    // Allocate IP data on heap to avoid stack overflow
+    auto ipDataPtr = std::make_unique<NetworkIpAssignedData>();
+
+    // Convert IP info to strings using heap-allocated buffers
+    auto ipStr = std::make_unique<char[]>(16);
+    auto gwStr = std::make_unique<char[]>(16);
+    auto netmaskStr = std::make_unique<char[]>(16);
+
+    snprintf(ipStr.get(), 16, IPSTR, IP2STR(&ip_info->ip));
+    snprintf(gwStr.get(), 16, IPSTR, IP2STR(&ip_info->gw));
+    snprintf(netmaskStr.get(), 16, IPSTR, IP2STR(&ip_info->netmask));
+
+    ipDataPtr->ipAddress = std::string(ipStr.get());
+    ipDataPtr->gateway = std::string(gwStr.get());
+    ipDataPtr->netmask = std::string(netmaskStr.get());
+    ipDataPtr->connectionType = NetworkConnectionType::Ethernet;
+    ipDataPtr->ssid = "";
+    ipDataPtr->rssi = 0;
 
     // Dispatch network connected event
     NetworkStatusChangedData statusData = { true, NetworkConnectionType::Ethernet };
     AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NetworkStatusChanged, statusData));
 
     // Dispatch IP assigned event
-    NetworkIpAssignedData ipData = {
-        .ipAddress = std::string(ipStr),
-        .gateway = std::string(gwStr),
-        .netmask = std::string(netmaskStr),
-        .connectionType = NetworkConnectionType::Ethernet,
-        .ssid = "",  // Empty for Ethernet
-        .rssi = 0    // Not applicable for Ethernet
-    };
-    AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NetworkIpAssigned, ipData));
-    
+    AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NetworkIpAssigned, *ipDataPtr));
+
     // Stop network timeout - we have a connection
     Esp32HalNetwork* networkHal = static_cast<Esp32HalNetwork*>(arg);
     if (networkHal)
@@ -196,12 +201,12 @@ HalResult Esp32HalNetwork::init()
 
     ESP_LOGI(TAG, "WiFi initialized successfully");
     ESP_LOGI(TAG, "Network initialized successfully (ethernet + wifi)");
-    
+
     // Create timeout queue and task (only once, static)
     if (timeoutQueue == nullptr)
     {
         timeoutQueue = xQueueCreate(5, sizeof(uint32_t));
-        
+
         xTaskCreate(
             networkTimeoutTask,
             "network_timeout",
@@ -211,7 +216,7 @@ HalResult Esp32HalNetwork::init()
             &timeoutTaskHandle
         );
     }
-    
+
     // Create and start network timeout timer (30 seconds)
     networkTimeoutTimer = xTimerCreate(
         "network_timeout",
@@ -220,10 +225,10 @@ HalResult Esp32HalNetwork::init()
         this,                 // Timer ID (pass this pointer)
         networkTimeoutCallback
     );
-    
+
     networkConnected = false;
     startNetworkTimeout();
-    
+
     return HalResult::OK;
 }
 
@@ -236,7 +241,7 @@ HalResult Esp32HalNetwork::deinit()
         xTimerDelete(networkTimeoutTimer, 0);
         networkTimeoutTimer = nullptr;
     }
-    
+
     esp_wifi_stop();
     esp_wifi_deinit();
     return HalResult::OK;
@@ -450,7 +455,7 @@ void Esp32HalNetwork::networkTimeoutCallback(TimerHandle_t timer)
     if (networkHal && !networkHal->networkConnected)
     {
         ESP_LOGW(TAG, "Network connection timeout - no connection after 30 seconds");
-        
+
         // Send timeout signal to the task via queue (safe from timer context)
         uint32_t timeoutSignal = 1;
         if (timeoutQueue)
@@ -463,7 +468,7 @@ void Esp32HalNetwork::networkTimeoutCallback(TimerHandle_t timer)
 void Esp32HalNetwork::networkTimeoutTask(void* parameter)
 {
     uint32_t signal;
-    
+
     while (true)
     {
         // Wait for timeout signals from timer callback
