@@ -51,16 +51,19 @@ bool ProvisioningConfig::fromJson(const std::string& jsonStr)
     catch (const json::parse_error& e)
     {
         ESP_LOGE(TAG, "Failed to parse JSON config: %s", e.what());
+        ESP_LOGD(TAG, "Invalid JSON: %s", jsonStr.c_str());
         return false;
     }
     catch (const json::type_error& e)
     {
         ESP_LOGE(TAG, "Invalid JSON type in config: %s", e.what());
+        ESP_LOGD(TAG, "Invalid JSON: %s", jsonStr.c_str());
         return false;
     }
     catch (const std::exception& e)
     {
         ESP_LOGE(TAG, "Unexpected error parsing JSON config: %s", e.what());
+        ESP_LOGD(TAG, "Invalid JSON: %s", jsonStr.c_str());
         return false;
     }
 }
@@ -93,7 +96,7 @@ bool ProvisioningManager::init()
         ESP_LOGW(TAG, "No existing provisioning config found, will generate new one");
         resetProvisioning();
     }
-    
+
     // Always ensure MAC address is set correctly (loadConfig might have overwritten it)
     config_.macAddress = macAddress;
 

@@ -2,6 +2,8 @@
 
 #include "../hal_system.h"
 #include <map>
+#include <string>
+#include <filesystem>
 
 class LinuxHalSystem : public HalSystem {
 public:
@@ -17,10 +19,10 @@ public:
     HalResult eraseConfig(const std::string& key) override;
 
 private:
-    std::string getConfigFilePath() const;
-    HalResult loadConfigFile();
-    HalResult saveConfigFile();
+    std::string getConfigDirPath() const;
+    std::string sanitizeFilename(const std::string& filename) const;
+    std::string getConfigFilePath(const std::string& key) const;
+    HalResult ensureConfigDir();
     
-    std::map<std::string, std::string> config_data_;
-    std::string config_file_path_;
+    std::string config_dir_path_;
 };

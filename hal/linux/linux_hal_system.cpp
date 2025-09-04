@@ -7,6 +7,8 @@
 #include <cstdlib>
 #include <unistd.h>
 #include <sys/utsname.h>
+#include <filesystem>
+#include <sys/stat.h>
 
 static const char* TAG = "hal.system";
 
@@ -14,17 +16,20 @@ HalResult LinuxHalSystem::init()
 {
     ESP_LOGI(TAG, "Initializing Linux system");
 
-    config_file_path_ = getConfigFilePath();
-    loadConfigFile();
+    config_dir_path_ = getConfigDirPath();
+    if (ensureConfigDir() != HalResult::OK)
+    {
+        ESP_LOGE(TAG, "Failed to create config directory");
+        return HalResult::ERROR;
+    }
 
-    ESP_LOGI(TAG, "Linux system initialized");
+    ESP_LOGI(TAG, "Linux system initialized with config dir: %s", config_dir_path_.c_str());
     return HalResult::OK;
 }
 
 HalResult LinuxHalSystem::deinit()
 {
-    saveConfigFile();
-    config_data_.clear();
+    ESP_LOGI(TAG, "Deinitializing Linux system");
     return HalResult::OK;
 }
 
@@ -43,7 +48,6 @@ uint64_t LinuxHalSystem::getTimeMs()
 void LinuxHalSystem::restart()
 {
     ESP_LOGI(TAG, "System restart requested");
-    saveConfigFile();
 
     // In a real embedded Linux system, you might use:
     // system("reboot");
@@ -90,71 +94,115 @@ std::string LinuxHalSystem::getFirmwareVersion() const
 
 HalResult LinuxHalSystem::saveConfig(const std::string& key, const std::string& value)
 {
-    config_data_[key] = value;
-    return saveConfigFile();
+    std::string filePath = getConfigFilePath(key);
+
+    std::ofstream file(filePath);
+    if (!file.is_open())
+    {
+        ESP_LOGE(TAG, "Failed to open config file for writing: %s", filePath.c_str());
+        return HalResult::ERROR;
+    }
+
+    file << value;
+    file.close();
+
+    ESP_LOGD(TAG, "Saved config key '%s' to file: %s", key.c_str(), filePath.c_str());
+    return HalResult::OK;
 }
 
 HalResult LinuxHalSystem::loadConfig(const std::string& key, std::string& value)
 {
-    auto it = config_data_.find(key);
-    if (it != config_data_.end())
+    std::string filePath = getConfigFilePath(key);
+
+    std::ifstream file(filePath);
+    if (!file.is_open())
     {
-        value = it->second;
-        return HalResult::OK;
+        ESP_LOGD(TAG, "Config file not found: %s", filePath.c_str());
+        return HalResult::ERROR;
     }
-    return HalResult::ERROR;
+
+    // Read entire file content
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    value = buffer.str();
+
+    ESP_LOGD(TAG, "Loaded config key '%s' from file: %s", key.c_str(), filePath.c_str());
+    return HalResult::OK;
 }
 
 HalResult LinuxHalSystem::eraseConfig(const std::string& key)
 {
-    config_data_.erase(key);
-    return saveConfigFile();
-}
+    std::string filePath = getConfigFilePath(key);
 
-std::string LinuxHalSystem::getConfigFilePath() const
-{
-    const char* home = getenv("HOME");
-    if (home)
-        return std::string(home) + "/.calaos_remote_ui_config";
-
-    return "/tmp/calaos_remote_ui_config";
-}
-
-HalResult LinuxHalSystem::loadConfigFile()
-{
-    std::ifstream file(config_file_path_);
-    if (!file.is_open())
+    if (std::filesystem::exists(filePath))
     {
-        // File doesn't exist yet, that's okay
-        return HalResult::OK;
-    }
-
-    std::string line;
-    while (std::getline(file, line))
-    {
-        size_t pos = line.find('=');
-        if (pos != std::string::npos)
+        std::error_code ec;
+        if (!std::filesystem::remove(filePath, ec))
         {
-            std::string key = line.substr(0, pos);
-            std::string value = line.substr(pos + 1);
-            config_data_[key] = value;
+            ESP_LOGE(TAG, "Failed to remove config file: %s - %s", filePath.c_str(), ec.message().c_str());
+            return HalResult::ERROR;
         }
+        ESP_LOGD(TAG, "Erased config key '%s' (removed file: %s)", key.c_str(), filePath.c_str());
     }
 
     return HalResult::OK;
 }
 
-HalResult LinuxHalSystem::saveConfigFile()
+std::string LinuxHalSystem::getConfigDirPath() const
 {
-    std::ofstream file(config_file_path_);
-    if (!file.is_open())
+    // Priority: environment variable > $HOME/.config/calaos_remote_ui > /tmp/calaos_remote_ui
+    const char* configPath = getenv("CALAOS_UI_CONFIG_PATH");
+    if (configPath)
+        return std::string(configPath);
+
+    const char* home = getenv("HOME");
+    if (home)
+        return std::string(home) + "/.config/calaos_remote_ui";
+
+    return "/tmp/calaos_remote_ui";
+}
+
+std::string LinuxHalSystem::sanitizeFilename(const std::string& filename) const
+{
+    std::string sanitized = filename;
+
+    // Replace invalid filesystem characters with underscores
+    for (char& c : sanitized)
     {
-        ESP_LOGE(TAG, "Failed to open config file for writing: %s", config_file_path_.c_str());
-        return HalResult::ERROR;
+        if (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' ||
+            c == '"' || c == '<' || c == '>' || c == '|' || c == '\0')
+        {
+            c = '_';
+        }
     }
 
-    for (const auto& pair : config_data_)
-        file << pair.first << "=" << pair.second << std::endl;
+    // Ensure the filename is not empty and doesn't start with a dot
+    if (sanitized.empty() || sanitized[0] == '.')
+        sanitized = "_" + sanitized;
+
+    return sanitized;
+}
+
+std::string LinuxHalSystem::getConfigFilePath(const std::string& key) const
+{
+    std::string sanitizedKey = sanitizeFilename(key);
+    return config_dir_path_ + "/" + sanitizedKey;
+}
+
+HalResult LinuxHalSystem::ensureConfigDir()
+{
+    std::error_code ec;
+
+    if (!std::filesystem::exists(config_dir_path_, ec))
+    {
+        if (!std::filesystem::create_directories(config_dir_path_, ec))
+        {
+            ESP_LOGE(TAG, "Failed to create config directory '%s': %s",
+                     config_dir_path_.c_str(), ec.message().c_str());
+            return HalResult::ERROR;
+        }
+        ESP_LOGI(TAG, "Created config directory: %s", config_dir_path_.c_str());
+    }
 
     return HalResult::OK;
 }
