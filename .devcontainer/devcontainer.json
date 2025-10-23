@@ -4,7 +4,7 @@
 		"dockerfile": "Dockerfile",
 		"options": []
 	},
-	
+
 	"mounts": [
 		"source=extensionCache,target=/root/.vscode-server/extensions,type=volume"
 	],
@@ -51,6 +51,7 @@
 		"--privileged",
 		"-p", "3333:3333",
 		"-p", "3000:3000",
+		"--network=host",
 	]
 }
 

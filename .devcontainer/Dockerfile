@@ -9,7 +9,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
 
 RUN apt-get update \
   && apt install -y -q \
-  cmake \
+  cmake iproute2 \
   git \
   hwdata \
   libglib2.0-0 \
