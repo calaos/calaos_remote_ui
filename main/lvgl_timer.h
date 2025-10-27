@@ -11,7 +11,7 @@ public:
 
     // Constructor with callback and period in milliseconds
     LvglTimer(TimerCallback callback, uint32_t period_ms);
-    
+
     // Constructor with callback, period and repeat count
     LvglTimer(TimerCallback callback, uint32_t period_ms, int32_t repeat_count);
 
@@ -52,6 +52,6 @@ private:
     static void timerCallbackWrapper(lv_timer_t* timer);
     void cleanup();
 
-    lv_timer_t* timer_;
+    lv_timer_t* timer_ = nullptr;
     TimerCallback callback_;
 };

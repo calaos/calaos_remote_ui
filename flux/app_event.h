@@ -62,13 +62,19 @@ struct ProvisioningCompletedData
     std::string serverUrl;
 };
 
+struct ProvisioningFailedData
+{
+    std::string errorMessage;
+};
+
 using AppEventData = std::variant<
     std::monostate,  // For events without data
     NetworkStatusChangedData,
     NetworkIpAssignedData,
     CalaosServerFoundData,
     ProvisioningCodeGeneratedData,
-    ProvisioningCompletedData
+    ProvisioningCompletedData,
+    ProvisioningFailedData
 >;
 
 class AppEvent

@@ -157,12 +157,6 @@ if(DETECTED_PLATFORM STREQUAL "LINUX")
         message(STATUS "libinput not found - LV_USE_LINUX_LIBINPUT disabled")
     endif()
 
-    # Check for libwebsockets (required)
-    pkg_check_modules(LIBWEBSOCKETS REQUIRED libwebsockets)
-    list(APPEND LINUX_DISPLAY_LIBS ${LIBWEBSOCKETS_LIBRARIES})
-    list(APPEND LINUX_DISPLAY_INCLUDES ${LIBWEBSOCKETS_INCLUDE_DIRS})
-    message(STATUS "libwebsockets detected - websocket support enabled")
-
     # Check for mbedtls (required)
     pkg_check_modules(MBEDTLS REQUIRED mbedtls mbedcrypto)
     list(APPEND LINUX_DISPLAY_LIBS ${MBEDTLS_LIBRARIES})
@@ -182,6 +176,12 @@ if(DETECTED_PLATFORM STREQUAL "LINUX")
     set (LV_CONF_BUILD_DISABLE_DEMOS ON)
     set (LV_CONF_BUILD_DISABLE_THORVG_INTERNAL ON)
     add_subdirectory(components/lvgl)
+
+    # Add mongoose
+    add_library(mongoose STATIC components/mongoose/mongoose/mongoose.c)
+    target_include_directories(mongoose PUBLIC components/mongoose/mongoose)
+    target_compile_definitions(mongoose PRIVATE MG_ENABLE_MBEDTLS=1 MG_ARCH=MG_ARCH_UNIX)
+    target_link_libraries(mongoose ${MBEDTLS_LIBRARIES})
 
     # Add smooth_ui_toolkit
     set(SMOOTH_UI_TOOLKIT_BUILD_EXAMPLE OFF)
@@ -246,8 +246,9 @@ if(DETECTED_PLATFORM STREQUAL "LINUX")
         components/lvgl/src
         ${LINUX_DISPLAY_INCLUDES}
         ${CMAKE_SOURCE_DIR}/components/nlohmann-json/single_include
+        ${CMAKE_SOURCE_DIR}/components/mongoose/mongoose
     )
 
     # Link libraries
-    target_link_libraries(${PROJECT_NAME} lvgl smooth_ui_toolkit pthread ${LINUX_DISPLAY_LIBS})
+    target_link_libraries(${PROJECT_NAME} lvgl smooth_ui_toolkit mongoose pthread ${LINUX_DISPLAY_LIBS})
 endif()

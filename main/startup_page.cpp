@@ -14,8 +14,9 @@ static const char* TAG = "StartupPage";
 StartupPage::StartupPage(lv_obj_t *parent):
     PageBase(parent)
 {
-    // Initialize Calaos discovery
+    // Initialize Calaos discovery and provisioning requester
     calaosDiscovery = std::make_unique<CalaosDiscovery>();
+    provisioningRequester = std::make_unique<ProvisioningRequester>();
     setBgColor(theme_color_black);
     setBgOpa(LV_OPA_COVER);
 
@@ -70,6 +71,24 @@ StartupPage::StartupPage(lv_obj_t *parent):
 
     initLogoAnimation();
     initProvisioningAnimations();
+}
+
+StartupPage::~StartupPage()
+{
+    ESP_LOGI(TAG, "Destroying StartupPage");
+
+    // Stop discovery and provisioning threads before destruction
+    if (calaosDiscovery)
+    {
+        calaosDiscovery->stopDiscovery();
+    }
+
+    if (provisioningRequester)
+    {
+        provisioningRequester->stopRequesting();
+    }
+
+    ESP_LOGI(TAG, "StartupPage destroyed");
 }
 
 void StartupPage::initLogoAnimation()
@@ -329,22 +348,21 @@ void StartupPage::onStateChanged(const AppState& state)
     {
         if (state.network.isReady && !lastNetworkState.isReady)
         {
-            // Network just became ready - only start discovery if already provisioned
-            if (!state.provisioning.isProvisioned())
+            // Network just became ready
+            // Initialize provisioning manager now that network is available
+            ESP_LOGI(TAG, "Network ready, initializing provisioning manager");
+            if (!getProvisioningManager().init())
             {
-                ESP_LOGI(TAG, "Network ready, waiting 1 seconds before starting Calaos discovery");
-                discoveryDelayTimer = LvglTimer::createOneShot([this]()
-                {
-                    ESP_LOGI(TAG, "Starting Calaos discovery after 1-second delay");
-                    calaosDiscovery->startDiscovery();
-                }, 1000);
+                ESP_LOGE(TAG, "Failed to initialize provisioning manager");
             }
-            else
+
+            // Start discovery to find Calaos server
+            ESP_LOGI(TAG, "Waiting 1 seconds before starting Calaos discovery");
+            discoveryDelayTimer = LvglTimer::createOneShot([this]()
             {
-                ESP_LOGI(TAG, "Network ready but device not provisioned, starting provisioning");
-                // Trigger provisioning code generation
-                getProvisioningManager().init();
-            }
+                ESP_LOGI(TAG, "Starting Calaos discovery after 1-second delay");
+                calaosDiscovery->startDiscovery();
+            }, 1000);
         }
         else if (state.network.hasTimeout)
         {
@@ -407,9 +425,29 @@ void StartupPage::onStateChanged(const AppState& state)
             // Stop the pulsing animation
             networkStatusAnimation.cancel();
 
-            ESP_LOGI(TAG, "Calaos server found, start provisioning");
-            // Trigger provisioning code generation
-            getProvisioningManager().init();
+            ESP_LOGI(TAG, "Calaos server found, checking provisioning status");
+
+            // If showing provisioning code, start provisioning requests
+            // Use a deferred callback to avoid holding display lock during HTTP client init
+            if (state.provisioning.needsCodeDisplay() && !state.provisioning.provisioningCode.empty())
+            {
+                ESP_LOGI(TAG, "Scheduling provisioning requests to server: %s with code: %s",
+                        state.calaosServer.selectedServer.c_str(),
+                        state.provisioning.provisioningCode.c_str());
+
+                if (!provisioningRequester->isRequesting())
+                {
+                    std::string serverIp = state.calaosServer.selectedServer;
+                    std::string code = state.provisioning.provisioningCode;
+
+                    // Start requester in a deferred callback (after display unlock)
+                    LvglTimer::createOneShot([this, serverIp, code]()
+                    {
+                        ESP_LOGI(TAG, "Starting provisioning requests (deferred)");
+                        provisioningRequester->startRequesting(serverIp, code);
+                    }, 10);  // 10ms delay
+                }
+            }
         }
         else if (state.calaosServer.hasTimeout)
         {
@@ -437,12 +475,41 @@ void StartupPage::onStateChanged(const AppState& state)
                 if (!state.provisioning.provisioningCode.empty())
                 {
                     showProvisioningUI(state.provisioning.provisioningCode);
+
+                    // If server already found, start provisioning requests
+                    // Use a deferred callback to avoid holding display lock during HTTP client init
+                    if (state.calaosServer.hasServers())
+                    {
+                        ESP_LOGI(TAG, "Scheduling provisioning requests to server: %s with code: %s",
+                                state.calaosServer.selectedServer.c_str(),
+                                state.provisioning.provisioningCode.c_str());
+
+                        if (!provisioningRequester->isRequesting())
+                        {
+                            std::string serverIp = state.calaosServer.selectedServer;
+                            std::string code = state.provisioning.provisioningCode;
+
+                            // Start requester in a deferred callback (after display unlock)
+                            LvglTimer::createOneShot([this, serverIp, code]()
+                            {
+                                ESP_LOGI(TAG, "Starting provisioning requests (deferred)");
+                                provisioningRequester->startRequesting(serverIp, code);
+                            }, 10);  // 10ms delay
+                        }
+                    }
                 }
                 break;
             }
 
             case ProvisioningStatus::Provisioned:
             {
+                // Stop provisioning requests if still running
+                if (provisioningRequester->isRequesting())
+                {
+                    ESP_LOGI(TAG, "Stopping provisioning requests - device provisioned");
+                    provisioningRequester->stopRequesting();
+                }
+
                 // Hide provisioning UI and continue normal flow
                 hideProvisioningUI();
 
@@ -463,6 +530,12 @@ void StartupPage::onStateChanged(const AppState& state)
             {
                 // Ensure provisioning UI is hidden in case we're transitioning back
                 hideProvisioningUI();
+
+                // Stop provisioning requests if running
+                if (provisioningRequester->isRequesting())
+                {
+                    provisioningRequester->stopRequesting();
+                }
                 break;
             }
         }

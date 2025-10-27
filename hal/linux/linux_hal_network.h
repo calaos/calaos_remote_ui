@@ -4,6 +4,8 @@
 #include <thread>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <mutex>
 
 class LinuxHalNetwork : public HalNetwork {
 public:
@@ -21,11 +23,11 @@ public:
 private:
     void statusMonitorThread();
     WifiStatus checkWifiStatus();
-    
+
     void startNetworkTimeout();
     void stopNetworkTimeout();
     void networkTimeoutTask();
-    
+
     WifiStatus wifi_status_ = WifiStatus::DISCONNECTED;
     WifiEventCallback wifi_callback_;
     std::thread status_thread_;
@@ -33,4 +35,8 @@ private:
     std::thread timeout_thread_;
     std::atomic<bool> timeout_active_{false};
     std::atomic<bool> network_connected_{false};
+    std::mutex timeout_mutex_;
+    std::condition_variable timeout_cv_;
+    std::mutex status_mutex_;
+    std::condition_variable status_cv_;
 };

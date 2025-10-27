@@ -200,8 +200,16 @@ void CalaosDiscovery::onUdpDataReceived(NetworkResult result, const NetworkBuffe
 
     std::string serverIp = message.substr(9);
 
+    // Trim leading/trailing whitespace from IP
+    size_t start = serverIp.find_first_not_of(" \t\r\n");
+    size_t end = serverIp.find_last_not_of(" \t\r\n");
+    if (start != std::string::npos && end != std::string::npos)
+    {
+        serverIp = serverIp.substr(start, end - start + 1);
+    }
+
     // Basic IP validation (simple check for dots)
-    if (serverIp.find('.') == std::string::npos)
+    if (serverIp.empty() || serverIp.find('.') == std::string::npos)
     {
         ESP_LOGW(TAG, "Invalid IP address in CALAOS_IP message: %s", serverIp.c_str());
         return;
@@ -217,7 +225,7 @@ void CalaosDiscovery::onUdpDataReceived(NetworkResult result, const NetworkBuffe
     // Stop discovery once we found a server to avoid continuous processing
     ESP_LOGI(TAG, "Stopping discovery after finding server");
     discovering_.store(false);
-    
+
     // Dispatch discovery stopped event
     AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::CalaosDiscoveryStopped));
 }

@@ -17,6 +17,7 @@ set(MAIN_SOURCES
     main/lvgl_timer.cpp
     main/provisioning_crypto.cpp
     main/provisioning_manager.cpp
+    main/provisioning_requester.cpp
 )
 
 # Flux architecture sources
@@ -54,6 +55,7 @@ set(LINUX_HAL_SOURCES
     hal/linux/linux_hal_system.cpp
     hal/linux/display_backend_selector.cpp
     hal/linux/logging.cpp
+    components/mongoose/mongoose/mongoose.c
 )
 
 # Common include directories
@@ -62,6 +64,7 @@ set(COMMON_INCLUDE_DIRS
     hal
     flux
     network
+    components/mongoose/mongoose
 )
 
 # Platform-specific source selection

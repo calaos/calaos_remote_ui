@@ -120,6 +120,9 @@ bool AppMain::initFast()
         ESP_LOGW(TAG, "Failed to start network initialization task");
     }
 
+    // Note: ProvisioningManager will be initialized in StartupPage when network becomes ready
+    // This ensures MAC address is available from network stack
+
     initialized = true;
     running = true;
     ESP_LOGI(TAG, "Application initialized successfully (network initializing in background)");
@@ -137,12 +140,27 @@ void AppMain::run()
     if (!initialized)
         return;
 
+    ESP_LOGI(TAG, "Starting main render loop");
+    int loop_count = 0;
+    
     while (running)
     {
+        if (loop_count < 5 || loop_count % 100 == 0)
+        {
+            ESP_LOGD(TAG, "Main loop iteration %d - acquiring lock", loop_count);
+        }
+        
         hal->getDisplay().lock(0);
 
+        if (loop_count < 5)
+        {
+            ESP_LOGD(TAG, "Main loop iteration %d - lock acquired, calling renderLoop", loop_count);
+        }
+        
         renderLoop();
         uint32_t timeMs = 5;
+        
+        loop_count++;
 
         #ifndef ESP_PLATFORM
         // On Linux, we need to handle LVGL timers ourselves

@@ -44,10 +44,11 @@ HalResult LinuxHalNetwork::deinit()
 {
     // Stop timeout thread
     stopNetworkTimeout();
-    
+
     if (thread_running_.load())
     {
         thread_running_ = false;
+        status_cv_.notify_one();
 
         if (status_thread_.joinable())
             status_thread_.join();
@@ -198,6 +199,7 @@ std::string LinuxHalNetwork::getMacAddress() const
 
 WifiStatus LinuxHalNetwork::checkWifiStatus()
 {
+#if 0
     FILE* pipe = popen("wpa_cli status", "r");
     if (!pipe)
         return WifiStatus::ERROR;
@@ -237,6 +239,7 @@ WifiStatus LinuxHalNetwork::checkWifiStatus()
 
     if (has_ssid)
         return WifiStatus::CONNECTED;
+#endif
 
     return WifiStatus::DISCONNECTED;
 }
@@ -247,23 +250,23 @@ void LinuxHalNetwork::statusMonitorThread() {
     while (thread_running_)
     {
         WifiStatus current_status = checkWifiStatus();
-        
+
         // Check if we have any network connection (WiFi or Ethernet)
         std::string localIp = getLocalIp();
         bool hasConnection = !localIp.empty();
-        
+
         if (hasConnection && !network_connected_.load())
         {
             network_connected_ = true;
             stopNetworkTimeout();
-            
+
             // Dispatch network events - assume Ethernet for Linux for now
             NetworkStatusChangedData statusData = { true, NetworkConnectionType::Ethernet };
             AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NetworkStatusChanged, statusData));
-            
+
             NetworkIpAssignedData ipData = {
                 .ipAddress = localIp,
-                .gateway = "192.168.1.1", // Simplified for Linux 
+                .gateway = "192.168.1.1", // Simplified for Linux
                 .netmask = "255.255.255.0",
                 .connectionType = NetworkConnectionType::Ethernet,
                 .ssid = "",
@@ -280,7 +283,9 @@ void LinuxHalNetwork::statusMonitorThread() {
             last_status = current_status;
         }
 
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+        // Wait for 5 seconds OR until thread_running_ becomes false
+        std::unique_lock<std::mutex> lock(status_mutex_);
+        status_cv_.wait_for(lock, std::chrono::seconds(5), [this] { return !thread_running_.load(); });
     }
 }
 
@@ -288,18 +293,31 @@ void LinuxHalNetwork::startNetworkTimeout()
 {
     timeout_active_ = true;
     timeout_thread_ = std::thread(&LinuxHalNetwork::networkTimeoutTask, this);
-    timeout_thread_.detach();
 }
 
 void LinuxHalNetwork::stopNetworkTimeout()
 {
     timeout_active_ = false;
+    timeout_cv_.notify_one();
+
+    if (timeout_thread_.joinable())
+    {
+        timeout_thread_.join();
+    }
 }
 
 void LinuxHalNetwork::networkTimeoutTask()
 {
-    std::this_thread::sleep_for(std::chrono::seconds(30));
-    
+    std::unique_lock<std::mutex> lock(timeout_mutex_);
+
+    // Wait for 30 seconds OR until timeout_active_ becomes false
+    if (timeout_cv_.wait_for(lock, std::chrono::seconds(30), [this] { return !timeout_active_.load(); }))
+    {
+        // Timeout was cancelled (timeout_active_ became false)
+        return;
+    }
+
+    // Timeout expired
     if (timeout_active_.load() && !network_connected_.load())
     {
         ESP_LOGW(TAG, "Network connection timeout - no connection after 30 seconds");

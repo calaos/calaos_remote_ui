@@ -30,4 +30,6 @@ void HAL::initLogger()
     esp_log_level_set("hal.network", ESP_LOG_VERBOSE);
     esp_log_level_set("provisioning.manager", ESP_LOG_VERBOSE);
     esp_log_level_set("provisioning.crypto", ESP_LOG_VERBOSE);
+    esp_log_level_set("net.http", ESP_LOG_VERBOSE);
+    esp_log_level_set("net.ws", ESP_LOG_VERBOSE);
 }

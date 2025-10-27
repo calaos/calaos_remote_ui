@@ -1,13 +1,13 @@
 #include "http_client.h"
 #include "logging.h"
-#include <libwebsockets.h>
+#include "mongoose.h"
 #include <chrono>
 #include <condition_variable>
 
 static const char *TAG = "net.http";
 
 HttpClient::HttpClient():
-    context_(nullptr),
+    mgr_(nullptr),
     running_(false),
     next_request_id_(1),
     default_timeout_ms_(30000),
@@ -22,15 +22,27 @@ HttpClient::~HttpClient()
 
 NetworkResult HttpClient::init()
 {
-    std::lock_guard<std::mutex> lock(requests_mutex_);
-
-    if (context_ != nullptr)
+    if (mgr_ != nullptr)
     {
-        ESP_LOGE(TAG, "HTTP client already initialized");
-        return NetworkResult::ALREADY_CONNECTED;
+        ESP_LOGW(TAG, "HTTP client already initialized");
+        return NetworkResult::OK;
     }
 
-    return createContext();
+    mgr_ = new mg_mgr();
+    if (!mgr_)
+    {
+        ESP_LOGE(TAG, "Failed to allocate mongoose manager");
+        return NetworkResult::ERROR;
+    }
+
+    mg_mgr_init(mgr_);
+    mgr_->userdata = this;
+
+    running_.store(true);
+    service_thread_ = std::thread(&HttpClient::serviceThread, this);
+
+    ESP_LOGI(TAG, "HTTP client initialized successfully");
+    return NetworkResult::OK;
 }
 
 void HttpClient::cleanup()
@@ -45,7 +57,7 @@ void HttpClient::cleanup()
         }
     }
 
-    destroyContext();
+    destroyManager();
 
     std::lock_guard<std::mutex> lock(requests_mutex_);
     while (!pending_requests_.empty())
@@ -55,40 +67,14 @@ void HttpClient::cleanup()
     active_requests_.clear();
 }
 
-NetworkResult HttpClient::createContext()
+void HttpClient::destroyManager()
 {
-    lws_set_log_level(LLL_ERR | LLL_WARN, nullptr);
-
-    struct lws_context_creation_info info;
-    memset(&info, 0, sizeof(info));
-
-    info.port = CONTEXT_PORT_NO_LISTEN;
-    info.protocols = nullptr;
-    info.gid = -1;
-    info.uid = -1;
-    info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
-
-    context_ = lws_create_context(&info);
-    if (!context_)
+    if (mgr_)
     {
-        ESP_LOGE(TAG, "Failed to create libwebsockets context");
-        return NetworkResult::ERROR;
-    }
-
-    running_.store(true);
-    service_thread_ = std::thread(&HttpClient::serviceThread, this);
-
-    ESP_LOGI(TAG, "HTTP client initialized successfully");
-    return NetworkResult::OK;
-}
-
-void HttpClient::destroyContext()
-{
-    if (context_)
-    {
-        lws_context_destroy(context_);
-        context_ = nullptr;
-        ESP_LOGI(TAG, "HTTP client context destroyed");
+        mg_mgr_free(mgr_);
+        delete mgr_;
+        mgr_ = nullptr;
+        ESP_LOGI(TAG, "HTTP client manager destroyed");
     }
 }
 
@@ -210,13 +196,17 @@ void HttpClient::cancelAllRequests()
         pending_requests_.pop();
     }
 
-    for (auto& [wsi, request] : active_requests_)
+    for (auto& [conn, request] : active_requests_)
     {
         if (request->callback && !request->completed)
         {
             request->response->error_message = "Request cancelled";
             request->callback(*request->response);
             request->completed = true;
+        }
+        if (conn)
+        {
+            conn->is_closing = 1;
         }
     }
     active_requests_.clear();
@@ -246,14 +236,17 @@ void HttpClient::setErrorCallback(NetworkErrorCallback callback)
     error_callback_ = callback;
 }
 
+
 void HttpClient::serviceThread()
 {
     ESP_LOGD(TAG, "HTTP client service thread started");
 
     while (running_.load())
     {
-        std::shared_ptr<HttpRequestInternal> request;
+        bool has_work = false;
 
+        // Check for new pending requests
+        std::shared_ptr<HttpRequestInternal> request;
         {
             std::lock_guard<std::mutex> lock(requests_mutex_);
             if (!pending_requests_.empty())
@@ -261,197 +254,293 @@ void HttpClient::serviceThread()
                 request = pending_requests_.front();
                 pending_requests_.pop();
             }
+
+            has_work = !active_requests_.empty();
         }
 
-        if (request)
+        // Process the request outside the mutex
+        if (request && mgr_)
         {
-            struct lws_client_connect_info connect_info;
-            memset(&connect_info, 0, sizeof(connect_info));
+            has_work = true;
 
-            std::string url = request->request.url;
-            std::string protocol, host, path;
-            int port = 80;
-            bool use_ssl = false;
+            // Set timeout
+            request->timeout_time = mg_millis() + request->request.timeout_ms;
 
-            if (url.find("https://") == 0)
-            {
-                use_ssl = true;
-                port = 443;
-                url = url.substr(8);
-            }
-            else if (url.find("http://") == 0)
-            {
-                url = url.substr(7);
-            }
+            // Create connection
+            struct mg_connection* c = mg_http_connect(mgr_, request->request.url.c_str(),
+                                                      eventHandler, request.get());
 
-            size_t path_pos = url.find('/');
-            if (path_pos != std::string::npos)
+            if (!c)
             {
-                host = url.substr(0, path_pos);
-                path = url.substr(path_pos);
-            }
-            else
-            {
-                host = url;
-                path = "/";
-            }
-
-            size_t port_pos = host.find(':');
-            if (port_pos != std::string::npos)
-            {
-                port = std::stoi(host.substr(port_pos + 1));
-                host = host.substr(0, port_pos);
-            }
-
-            connect_info.context = context_;
-            connect_info.address = host.c_str();
-            connect_info.port = port;
-            connect_info.path = path.c_str();
-            connect_info.host = host.c_str();
-            connect_info.origin = host.c_str();
-            connect_info.method = methodToString(request->request.method).c_str();
-            connect_info.userdata = request.get();
-
-            if (use_ssl)
-            {
-                connect_info.ssl_connection = LCCSCF_USE_SSL;
-                if (!request->request.verify_ssl)
-                {
-                    connect_info.ssl_connection |= LCCSCF_ALLOW_SELFSIGNED |
-                                                   LCCSCF_SKIP_SERVER_CERT_HOSTNAME_CHECK |
-                                                   LCCSCF_ALLOW_INSECURE;
-                }
-            }
-
-            struct lws* wsi = lws_client_connect_via_info(&connect_info);
-            if (!wsi)
-            {
-                ESP_LOGE(TAG, "Failed to create HTTP client connection");
+                ESP_LOGE(TAG, "Failed to create HTTP connection to %s", request->request.url.c_str());
                 request->response->error_message = "Failed to create connection";
                 if (request->callback)
                 {
                     request->callback(*request->response);
                 }
-                continue;
             }
-
+            else
             {
-                std::lock_guard<std::mutex> lock(requests_mutex_);
-                active_requests_[wsi] = request;
-            }
+                request->connection = c;
 
-            ESP_LOGD(TAG, "Started HTTP %s request to %s:%d%s (ID: %u)",
-                     methodToString(request->request.method).c_str(),
-                     host.c_str(), port, path.c_str(), request->request_id);
+                {
+                    std::lock_guard<std::mutex> lock(requests_mutex_);
+                    active_requests_[c] = request;
+                }
+
+                ESP_LOGI(TAG, "Started HTTP %s request to %s (ID: %u)",
+                         methodToString(request->request.method).c_str(),
+                         request->request.url.c_str(), request->request_id);
+            }
         }
 
-        if (context_)
+        // Check for timeouts
         {
-            lws_service(context_, 50);
+            std::lock_guard<std::mutex> lock(requests_mutex_);
+            uint64_t now = mg_millis();
+
+            for (auto it = active_requests_.begin(); it != active_requests_.end();)
+            {
+                auto& req = it->second;
+                if (req->timeout_time > 0 && now > req->timeout_time &&
+                    (it->first->is_connecting || it->first->is_resolving))
+                {
+                    ESP_LOGW(TAG, "Request ID %u timed out", req->request_id);
+                    req->response->error_message = "Request timeout";
+                    if (req->callback && !req->completed)
+                    {
+                        req->callback(*req->response);
+                        req->completed = true;
+                    }
+                    it->first->is_closing = 1;
+                    it = active_requests_.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+        }
+
+        // Service the manager to process network events
+        if (has_work && mgr_)
+        {
+            mg_mgr_poll(mgr_, 50);
+        }
+        else
+        {
+            // No work to do, sleep longer to reduce CPU usage
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
 
     ESP_LOGD(TAG, "HTTP client service thread terminated");
 }
 
-int HttpClient::httpCallback(struct lws* wsi, enum lws_callback_reasons reason, void* user, void* in, size_t len)
-{
-    HttpRequestInternal* request = static_cast<HttpRequestInternal*>(user);
 
-    if (!request || !request->response)
+void HttpClient::eventHandler(struct mg_connection* c, int ev, void* ev_data, void* fn_data)
+{
+    HttpRequestInternal* request = static_cast<HttpRequestInternal*>(fn_data);
+
+    if (!request)
     {
-        return -1;
+        ESP_LOGW(TAG, "Request is null in event handler");
+        return;
     }
 
-    switch (reason)
+    HttpClient* client = static_cast<HttpClient*>(c->mgr->userdata);
+
+    switch (ev)
     {
-        case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
+        case MG_EV_OPEN:
         {
-            const char* error_msg = in ? static_cast<const char*>(in) : "Connection error";
-            ESP_LOGE(TAG, "HTTP client connection error: %s", error_msg);
-            request->response->error_message = error_msg;
-            if (request->callback && !request->completed)
+            ESP_LOGD(TAG, "Connection opened for request ID: %u", request->request_id);
+            break;
+        }
+
+        case MG_EV_CONNECT:
+        {
+            ESP_LOGI(TAG, "Connection established for request ID: %u", request->request_id);
+
+            // Build HTTP headers
+            std::string extra_headers;
+            for (const auto& header : request->request.headers)
             {
-                request->callback(*request->response);
-                request->completed = true;
+                extra_headers += header.first + ": " + header.second + "\r\n";
             }
-            return -1;
-        }
 
-        case LWS_CALLBACK_CLIENT_ESTABLISHED:
-        {
-            ESP_LOGD(TAG, "HTTP client connection established");
-            return 0;
-        }
+            // Send HTTP request
+            const char* method = nullptr;
+            switch (request->request.method)
+            {
+                case HttpMethod::GET: method = "GET"; break;
+                case HttpMethod::POST: method = "POST"; break;
+                case HttpMethod::PUT: method = "PUT"; break;
+                case HttpMethod::DELETE: method = "DELETE"; break;
+                case HttpMethod::HEAD: method = "HEAD"; break;
+                case HttpMethod::OPTIONS: method = "OPTIONS"; break;
+                default: method = "GET"; break;
+            }
 
-        case LWS_CALLBACK_CLIENT_RECEIVE:
-        {
-            const char* data = static_cast<const char*>(in);
-            request->response->body.data.insert(request->response->body.data.end(),
-                                               data, data + len);
-            request->response->body.size = request->response->body.data.size();
-            return 0;
-        }
+            // Extract URI from URL
+            struct mg_str host = mg_url_host(request->request.url.c_str());
+            const char* uri = mg_url_uri(request->request.url.c_str());
+            if (!uri || uri[0] == '\0')
+            {
+                uri = "/";
+            }
 
-        case LWS_CALLBACK_CLIENT_HTTP_WRITEABLE:
-        {
+            // Build complete HTTP request
+            std::string http_request;
+            http_request.reserve(512); // Pre-allocate to avoid reallocs
+
+            // Request line
+            http_request += method;
+            http_request += " ";
+            http_request += uri;
+            http_request += " HTTP/1.1\r\n";
+
+            // Host header
+            http_request += "Host: ";
+            http_request.append(host.ptr, host.len);
+            http_request += "\r\n";
+
+            // Content-Length if body present
             if (!request->request.body.data.empty())
             {
-                unsigned char buffer[LWS_PRE + 4096];
-                size_t body_size = request->request.body.size;
-
-                if (body_size > 4096)
-                {
-                    body_size = 4096;
-                }
-
-                memcpy(&buffer[LWS_PRE], request->request.body.data.data(), body_size);
-
-                int write_result = lws_write(wsi, &buffer[LWS_PRE], body_size,
-                                           LWS_WRITE_HTTP_FINAL);
-
-                if (write_result < 0)
-                {
-                    ESP_LOGE(TAG, "Failed to write HTTP request body");
-                    return -1;
-                }
-
-                request->request.body.data.erase(request->request.body.data.begin(),
-                                                request->request.body.data.begin() + body_size);
-                request->request.body.size = request->request.body.data.size();
-
-                if (!request->request.body.data.empty())
-                {
-                    lws_callback_on_writable(wsi);
-                }
+                http_request += "Content-Length: ";
+                http_request += std::to_string(request->request.body.size);
+                http_request += "\r\n";
             }
-            return 0;
+
+            // Extra headers
+            http_request += extra_headers;
+
+            // Empty line to end headers
+            http_request += "\r\n";
+
+            // Send headers
+            mg_send(c, http_request.data(), http_request.size());
+
+            // Send body if present
+            if (!request->request.body.data.empty())
+            {
+                mg_send(c, request->request.body.data.data(), request->request.body.size);
+            }
+            break;
         }
 
-        case LWS_CALLBACK_COMPLETED_CLIENT_HTTP:
+        case MG_EV_HTTP_MSG:
         {
-            int status = lws_http_client_http_response(wsi);
-            request->response->status_code = static_cast<HttpStatus>(status);
+            struct mg_http_message* hm = static_cast<struct mg_http_message*>(ev_data);
 
-            ESP_LOGD(TAG, "HTTP request completed with status %d", status);
+            ESP_LOGI(TAG, "HTTP response received for request ID: %u", request->request_id);
+
+            // Parse status code
+            int status_code = mg_http_status(hm);
+            request->response->status_code = client->intToHttpStatus(status_code);
+
+            ESP_LOGI(TAG, "HTTP status: %d", status_code);
+
+            // Copy response body
+            if (hm->body.len > 0)
+            {
+                request->response->body.data.assign(hm->body.ptr, hm->body.ptr + hm->body.len);
+                request->response->body.size = hm->body.len;
+                ESP_LOGD(TAG, "Received body: %zu bytes", hm->body.len);
+            }
+
+            // Copy response headers
+            for (int i = 0; i < MG_MAX_HTTP_HEADERS && hm->headers[i].name.len > 0; i++)
+            {
+                std::string name(hm->headers[i].name.ptr, hm->headers[i].name.len);
+                std::string value(hm->headers[i].value.ptr, hm->headers[i].value.len);
+                request->response->headers[name] = value;
+            }
+
+            // Call callback
+            if (request->callback && !request->completed)
+            {
+                request->callback(*request->response);
+                request->completed = true;
+            }
+
+            // Remove from active requests
+            if (client)
+            {
+                std::lock_guard<std::mutex> lock(client->requests_mutex_);
+                client->active_requests_.erase(c);
+            }
+
+            c->is_closing = 1;
+            break;
+        }
+
+        case MG_EV_ERROR:
+        {
+            const char* error_msg = static_cast<const char*>(ev_data);
+            ESP_LOGE(TAG, "HTTP error for request ID %u: %s", request->request_id, error_msg);
+
+            request->response->error_message = error_msg;
 
             if (request->callback && !request->completed)
             {
                 request->callback(*request->response);
                 request->completed = true;
             }
-            return -1;
+
+            // Remove from active requests
+            if (client)
+            {
+                std::lock_guard<std::mutex> lock(client->requests_mutex_);
+                client->active_requests_.erase(c);
+            }
+            break;
         }
 
-        case LWS_CALLBACK_CLOSED_CLIENT_HTTP:
+        case MG_EV_CLOSE:
         {
-            ESP_LOGD(TAG, "HTTP client connection closed");
-            return -1;
+            ESP_LOGD(TAG, "Connection closed for request ID: %u", request->request_id);
+
+            // If not completed yet, it's an unexpected close
+            if (!request->completed)
+            {
+                request->response->error_message = "Connection closed unexpectedly";
+                if (request->callback)
+                {
+                    request->callback(*request->response);
+                    request->completed = true;
+                }
+            }
+
+            // Remove from active requests
+            if (client)
+            {
+                std::lock_guard<std::mutex> lock(client->requests_mutex_);
+                client->active_requests_.erase(c);
+            }
+            break;
         }
 
         default:
             break;
     }
-
-    return lws_callback_http_dummy(wsi, reason, user, in, len);
 }
+
+std::shared_ptr<HttpRequestInternal> HttpClient::findRequestForConnection(struct mg_connection* c)
+{
+    std::unique_lock<std::mutex> lock(requests_mutex_, std::try_to_lock);
+    if (!lock.owns_lock())
+    {
+        return nullptr;
+    }
+
+    auto it = active_requests_.find(c);
+    if (it != active_requests_.end())
+    {
+        return it->second;
+    }
+    return nullptr;
+}
+
+

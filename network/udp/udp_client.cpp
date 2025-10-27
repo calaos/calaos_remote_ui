@@ -216,10 +216,6 @@ void UdpClient::receiveThread()
     const size_t BUFFER_SIZE = 4096;
     std::vector<uint8_t> buffer(BUFFER_SIZE);
 
-    struct timeval timeout;
-    timeout.tv_sec = receive_timeout_ms_ / 1000;
-    timeout.tv_usec = (receive_timeout_ms_ % 1000) * 1000;
-
     while (receiving_.load())
     {
         fd_set read_fds;
@@ -233,6 +229,12 @@ void UdpClient::receiveThread()
             }
             FD_SET(socket_, &read_fds);
         }
+
+        // Use a short timeout (100ms) to allow quick thread termination
+        // select() can modify the timeval, so recreate it each iteration
+        struct timeval timeout;
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 100000; // 100ms
 
         int select_result = select(socket_ + 1, &read_fds, nullptr, nullptr, &timeout);
 
