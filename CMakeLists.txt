@@ -175,6 +175,7 @@ if(DETECTED_PLATFORM STREQUAL "LINUX")
     set (LV_CONF_BUILD_DISABLE_EXAMPLES ON)
     set (LV_CONF_BUILD_DISABLE_DEMOS ON)
     set (LV_CONF_BUILD_DISABLE_THORVG_INTERNAL ON)
+    set (LV_BUILD_CONF_PATH ${CMAKE_SOURCE_DIR}/main/lv_conf.h)
     add_subdirectory(components/lvgl)
 
     # Add mongoose
