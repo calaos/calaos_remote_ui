@@ -2,9 +2,11 @@
 
 #include "app_event.h"
 #include "thread_safety.h"
+#include "calaos_protocol.h"
 #include <string>
 #include <functional>
 #include <vector>
+#include <map>
 
 struct NetworkState
 {
@@ -76,11 +78,23 @@ struct ProvisioningState
     }
 };
 
+struct CalaosWebSocketState
+{
+    bool isConnected = false;
+    bool isConnecting = false;
+    bool hasError = false;
+    bool authFailed = false;
+    std::string errorMessage;
+};
+
 struct AppState
 {
     NetworkState network;
     CalaosServerState calaosServer;
     ProvisioningState provisioning;
+    CalaosWebSocketState websocket;
+    std::map<std::string, CalaosProtocol::IoState> ioStates;
+    CalaosProtocol::RemoteUIConfig config;
 
     bool operator==(const AppState& other) const
     {
@@ -99,7 +113,12 @@ struct AppState
                provisioning.provisioningCode == other.provisioning.provisioningCode &&
                provisioning.deviceId == other.provisioning.deviceId &&
                provisioning.serverUrl == other.provisioning.serverUrl &&
-               provisioning.hasFailed == other.provisioning.hasFailed;
+               provisioning.hasFailed == other.provisioning.hasFailed &&
+               websocket.isConnected == other.websocket.isConnected &&
+               websocket.isConnecting == other.websocket.isConnecting &&
+               websocket.hasError == other.websocket.hasError &&
+               websocket.authFailed == other.websocket.authFailed;
+               // Note: ioStates and config not compared for performance
     }
 
     bool operator!=(const AppState& other) const

@@ -73,6 +73,11 @@ void Esp32HalDisplay::lock(uint32_t timeoutMs)
     bsp_display_lock(timeoutMs);
 }
 
+bool Esp32HalDisplay::tryLock(uint32_t timeoutMs)
+{
+    return bsp_display_lock(timeoutMs);
+}
+
 void Esp32HalDisplay::unlock()
 {
     bsp_display_unlock();

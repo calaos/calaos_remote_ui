@@ -90,7 +90,7 @@ void AppStore::handleEvent(const AppEvent& event)
 
             case AppEventType::NetworkTimeout:
             {
-                ESP_LOGD(TAG, "Network timeout event received, isReady=%d, isConnected=%d", 
+                ESP_LOGD(TAG, "Network timeout event received, isReady=%d, isConnected=%d",
                          state_.network.isReady, state_.network.isConnected);
                 // Only set timeout if no network connection is established at all
                 if (!state_.network.isConnected)
@@ -101,12 +101,12 @@ void AppStore::handleEvent(const AppEvent& event)
                 }
                 else
                 {
-                    ESP_LOGD(TAG, "Network timeout ignored - already connected via %s", 
+                    ESP_LOGD(TAG, "Network timeout ignored - already connected via %s",
                              state_.network.connectionType == NetworkConnectionType::Ethernet ? "Ethernet" : "WiFi");
                 }
                 break;
             }
-            
+
             case AppEventType::CalaosDiscoveryStarted:
             {
                 state_.calaosServer.isDiscovering = true;
@@ -115,7 +115,7 @@ void AppStore::handleEvent(const AppEvent& event)
                 ESP_LOGD(TAG, "Calaos discovery started");
                 break;
             }
-            
+
             case AppEventType::CalaosServerFound:
             {
                 if (auto* data = event.getData<CalaosServerFoundData>())
@@ -126,7 +126,7 @@ void AppStore::handleEvent(const AppEvent& event)
                 }
                 break;
             }
-            
+
             case AppEventType::CalaosDiscoveryTimeout:
             {
                 state_.calaosServer.isDiscovering = false;
@@ -135,7 +135,7 @@ void AppStore::handleEvent(const AppEvent& event)
                 ESP_LOGD(TAG, "Calaos discovery timeout");
                 break;
             }
-            
+
             case AppEventType::CalaosDiscoveryStopped:
             {
                 state_.calaosServer.isDiscovering = false;
@@ -143,7 +143,7 @@ void AppStore::handleEvent(const AppEvent& event)
                 ESP_LOGD(TAG, "Calaos discovery stopped");
                 break;
             }
-            
+
             case AppEventType::ProvisioningCodeGenerated:
             {
                 if (auto* data = event.getData<ProvisioningCodeGeneratedData>())
@@ -157,7 +157,7 @@ void AppStore::handleEvent(const AppEvent& event)
                 }
                 break;
             }
-            
+
             case AppEventType::ProvisioningCompleted:
             {
                 if (auto* data = event.getData<ProvisioningCompletedData>())
@@ -171,12 +171,108 @@ void AppStore::handleEvent(const AppEvent& event)
                 }
                 break;
             }
-            
+
             case AppEventType::ProvisioningFailed:
             {
                 state_.provisioning.hasFailed = true;
                 stateChanged = true;
                 ESP_LOGD(TAG, "Provisioning failed");
+                break;
+            }
+
+            case AppEventType::WebSocketConnecting:
+            {
+                state_.websocket.isConnecting = true;
+                state_.websocket.isConnected = false;
+                state_.websocket.hasError = false;
+                state_.websocket.authFailed = false;
+                stateChanged = true;
+                ESP_LOGD(TAG, "WebSocket connecting");
+                break;
+            }
+
+            case AppEventType::WebSocketConnected:
+            {
+                state_.websocket.isConnecting = false;
+                state_.websocket.isConnected = true;
+                state_.websocket.hasError = false;
+                state_.websocket.authFailed = false;
+                state_.websocket.errorMessage.clear();
+                stateChanged = true;
+                ESP_LOGD(TAG, "WebSocket connected");
+                break;
+            }
+
+            case AppEventType::WebSocketDisconnected:
+            {
+                state_.websocket.isConnecting = false;
+                state_.websocket.isConnected = false;
+                stateChanged = true;
+                ESP_LOGD(TAG, "WebSocket disconnected");
+                break;
+            }
+
+            case AppEventType::WebSocketAuthFailed:
+            {
+                if (auto* data = event.getData<WebSocketAuthFailedData>())
+                {
+                    state_.websocket.isConnecting = false;
+                    state_.websocket.isConnected = false;
+                    state_.websocket.authFailed = true;
+                    state_.websocket.hasError = true;
+                    state_.websocket.errorMessage = data->message;
+                    stateChanged = true;
+                    ESP_LOGD(TAG, "WebSocket auth failed: %s", data->message.c_str());
+                }
+                break;
+            }
+
+            case AppEventType::WebSocketError:
+            {
+                if (auto* data = event.getData<WebSocketErrorData>())
+                {
+                    state_.websocket.hasError = true;
+                    state_.websocket.errorMessage = data->errorMessage;
+                    stateChanged = true;
+                    ESP_LOGD(TAG, "WebSocket error: %s", data->errorMessage.c_str());
+                }
+                break;
+            }
+
+            case AppEventType::IoStateReceived:
+            {
+                if (auto* data = event.getData<IoStateReceivedData>())
+                {
+                    state_.ioStates[data->ioState.id] = data->ioState;
+                    stateChanged = true;
+                    ESP_LOGD(TAG, "IO state received: %s = %s",
+                             data->ioState.id.c_str(), data->ioState.state.c_str());
+                }
+                break;
+            }
+
+            case AppEventType::IoStatesReceived:
+            {
+                if (auto* data = event.getData<IoStatesReceivedData>())
+                {
+                    // Merge received states
+                    for (const auto& [id, ioState] : data->ioStates)
+                        state_.ioStates[id] = ioState;
+
+                    stateChanged = true;
+                    ESP_LOGD(TAG, "IO states received: %zu states", data->ioStates.size());
+                }
+                break;
+            }
+
+            case AppEventType::ConfigUpdateReceived:
+            {
+                if (auto* data = event.getData<ConfigUpdateReceivedData>())
+                {
+                    state_.config = data->config;
+                    stateChanged = true;
+                    ESP_LOGD(TAG, "Config update received: %s", data->config.name.c_str());
+                }
                 break;
             }
         }

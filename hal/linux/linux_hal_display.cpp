@@ -151,6 +151,12 @@ void LinuxHalDisplay::lock(uint32_t timeoutMs)
     }
 }
 
+bool LinuxHalDisplay::tryLock(uint32_t timeoutMs)
+{
+    auto timeout = std::chrono::milliseconds(timeoutMs);
+    return displayMutex.try_lock_for(timeout);
+}
+
 void LinuxHalDisplay::unlock()
 {
     displayMutex.unlock();

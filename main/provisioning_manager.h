@@ -68,6 +68,12 @@ public:
                              const std::string& deviceSecret,
                              const std::string& serverUrl);
 
+    // Get provisioned credentials
+    std::string getDeviceId() const { return config_.deviceId; }
+    std::string getAuthToken() const { return config_.authToken; }
+    std::string getDeviceSecret() const { return config_.deviceSecret; }
+    std::string getServerUrl() const { return config_.serverUrl; }
+
 private:
     // Generate a new provisioning code
     std::string generateNewCode();

@@ -6,6 +6,7 @@
 #include "logging.h"
 #include "../hal/hal.h"
 #include "provisioning_manager.h"
+#include "../flux/app_dispatcher.h"
 
 using namespace smooth_ui_toolkit;
 
@@ -320,13 +321,29 @@ void StartupPage::render()
 
 void StartupPage::onStateChanged(const AppState& state)
 {
+    // Check if application is shutting down to avoid deadlock
+    if (AppDispatcher::getInstance().isStopping())
+    {
+        ESP_LOGD(TAG, "Ignoring state change - application is shutting down");
+        return;
+    }
+
     ESP_LOGD(TAG, "State changed - network isReady=%d, hasTimeout=%d, calaos isDiscovering=%d, hasServers=%d, provisioning status=%d",
              state.network.isReady, state.network.hasTimeout,
              state.calaosServer.isDiscovering, state.calaosServer.hasServers(),
              static_cast<int>(state.provisioning.status));
 
     // Lock LVGL display for thread-safe UI updates
-    HAL::getInstance().getDisplay().lock(0);
+    // Use a timeout loop to avoid deadlock during shutdown
+    while (!HAL::getInstance().getDisplay().tryLock(100))
+    {
+        // Check if we should abort due to shutdown
+        if (AppDispatcher::getInstance().isStopping())
+        {
+            ESP_LOGD(TAG, "Aborting state change - application is shutting down");
+            return;
+        }
+    }
 
     // Check if network state has changed
     bool networkStateChanged = (state.network.isReady != lastNetworkState.isReady ||
@@ -513,13 +530,23 @@ void StartupPage::onStateChanged(const AppState& state)
                 // Hide provisioning UI and continue normal flow
                 hideProvisioningUI();
 
-                // If network is ready, start discovery
-                if (state.network.isReady)
+                // Connect WebSocket if not already connected
+                if (!calaosWebSocketManager)
                 {
-                    ESP_LOGI(TAG, "Device provisioned and network ready, starting Calaos discovery");
-                    discoveryDelayTimer = LvglTimer::createOneShot([this]() {
-                        ESP_LOGI(TAG, "Starting Calaos discovery after provisioning");
-                        calaosDiscovery->startDiscovery();
+                    ESP_LOGI(TAG, "Creating WebSocket manager");
+                    LvglTimer::createOneShot([this]()
+                    {
+                        calaosWebSocketManager = std::make_unique<CalaosWebSocketManager>();
+                        if (calaosWebSocketManager->connect())
+                        {
+                            ESP_LOGI(TAG, "WebSocket connection initiated");
+                            networkStatusLabel->setText("Connecting to Calaos server...");
+                        }
+                        else
+                        {
+                            ESP_LOGE(TAG, "Failed to initiate WebSocket connection");
+                            networkStatusLabel->setText("Connection failed");
+                        }
                     }, 1000);
                 }
                 break;
@@ -547,10 +574,66 @@ void StartupPage::onStateChanged(const AppState& state)
         }
     }
 
+    // Handle WebSocket state changes
+    if (state.websocket.isConnected != lastWebSocketState.isConnected)
+    {
+        if (state.websocket.isConnected)
+        {
+            ESP_LOGI(TAG, "WebSocket connected successfully");
+            networkStatusLabel->setText("Connected to Calaos!");
+
+            // Hide spinner after connection
+            LvglTimer::createOneShot([this]()
+            {
+                if (networkSpinner)
+                    lv_obj_add_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+                if (networkStatusLabel)
+                    lv_obj_add_flag(networkStatusLabel->get(), LV_OBJ_FLAG_HIDDEN);
+            }, 2000);
+        }
+        else if (state.websocket.isConnecting)
+        {
+            networkStatusLabel->setText("Connecting...");
+        }
+    }
+
+    // Handle WebSocket authentication failure - return to provisioning
+    if (state.websocket.authFailed && !lastWebSocketState.authFailed)
+    {
+        ESP_LOGE(TAG, "WebSocket authentication failed - resetting provisioning");
+
+        // Disconnect WebSocket
+        if (calaosWebSocketManager)
+        {
+            calaosWebSocketManager->disconnect();
+            calaosWebSocketManager.reset();
+        }
+
+        // Reset provisioning
+        LvglTimer::createOneShot([this]()
+        {
+            ProvisioningManager& provMgr = getProvisioningManager();
+            provMgr.resetProvisioning();
+
+            // Show error message
+            networkStatusLabel->setText("Authentication failed - please reprovision");
+            lv_obj_clear_flag(networkStatusLabel->get(), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+
+            // Restart discovery after a delay
+            LvglTimer::createOneShot([this]()
+            {
+                ESP_LOGI(TAG, "Restarting discovery after auth failure");
+                calaosDiscovery->startDiscovery();
+            }, 3000);
+        }, 100);
+    }
+
     // Update cached states
     lastNetworkState = state.network;
     lastCalaosServerState = state.calaosServer;
     lastProvisioningState = state.provisioning;
+    lastWebSocketState = state.websocket;
 
     // Unlock LVGL display
     HAL::getInstance().getDisplay().unlock();

@@ -26,6 +26,8 @@ AppDispatcher::AppDispatcher() : shouldStop_(false)
 
 AppDispatcher::~AppDispatcher()
 {
+    // shutdown() should have been called already, but ensure cleanup
+    // Note: stopWorkerThread/stopWorkerTask are safe to call multiple times
 #ifdef ESP_PLATFORM
     stopWorkerTask();
 #else
@@ -204,7 +206,7 @@ void AppDispatcher::stopWorkerTask()
                 delete eventPtr;
             }
         }
-        
+
         vQueueDelete(eventQueue_);
         eventQueue_ = nullptr;
     }
@@ -230,3 +232,17 @@ void AppDispatcher::stopWorkerThread()
     }
 }
 #endif
+
+void AppDispatcher::shutdown()
+{
+    ESP_LOGI(TAG, "Shutting down dispatcher");
+
+    // Clear subscribers first to prevent any new callbacks from being invoked
+    clearSubscribers();
+
+#ifdef ESP_PLATFORM
+    stopWorkerTask();
+#else
+    stopWorkerThread();
+#endif
+}

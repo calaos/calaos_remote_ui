@@ -26,25 +26,31 @@ class AppDispatcher
 public:
     static AppDispatcher& getInstance();
     ~AppDispatcher();
-    
+
     // Register a callback for all events
     void subscribe(AppEventCallback callback);
-    
+
     // Register a callback for specific event type
     void subscribe(AppEventType eventType, AppEventCallback callback);
-    
+
     // Dispatch an event to all registered callbacks (non-blocking)
     void dispatch(const AppEvent& event);
-    
+
     // Clear all subscribers (useful for cleanup)
     void clearSubscribers();
 
+    // Check if the dispatcher is stopping (useful to avoid deadlocks during shutdown)
+    bool isStopping() const { return shouldStop_.load(); }
+
+    // Explicitly stop the worker thread (call before application cleanup)
+    void shutdown();
+
 private:
     AppDispatcher();
-    
+
     // Worker thread function
     void processEvents();
-    
+
     // Platform-specific worker thread implementations
 #ifdef ESP_PLATFORM
     static void workerTaskFunction(void* parameter);
@@ -54,21 +60,21 @@ private:
     void startWorkerThread();
     void stopWorkerThread();
 #endif
-    
+
     struct Subscription
     {
         AppEventType eventType;
         AppEventCallback callback;
         bool listenAllEvents;
-        
+
         Subscription(AppEventCallback cb) : callback(cb), listenAllEvents(true) {}
         Subscription(AppEventType type, AppEventCallback cb) : eventType(type), callback(cb), listenAllEvents(false) {}
     };
-    
+
     // Subscribers management
     std::vector<Subscription> subscribers_;
     flux::Mutex subscribersMutex_;
-    
+
     // Event queue and worker thread management
 #ifdef ESP_PLATFORM
     // FreeRTOS implementation - use pointers to avoid copy issues with complex objects

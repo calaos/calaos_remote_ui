@@ -60,6 +60,7 @@ endif()
 idf_component_register(
     SRCS ${SRCS_FILES} ${CONVERTED_IMAGE_FILES}
     INCLUDE_DIRS ${COMPONENT_ADD_INCLUDEDIRS}
+    LDFRAGMENTS "linker.lf"
 )
 
 # Add images_build directory to include paths for images_generated.h

@@ -14,6 +14,7 @@ public:
     HalResult backlightOn() override;
     HalResult backlightOff() override;
     void lock(uint32_t timeoutMs = 0) override;
+    bool tryLock(uint32_t timeoutMs) override;
     void unlock() override;
     lv_display_t* getLvglDisplay() override;
 

@@ -142,24 +142,24 @@ void AppMain::run()
 
     ESP_LOGI(TAG, "Starting main render loop");
     int loop_count = 0;
-    
+
     while (running)
     {
         if (loop_count < 5 || loop_count % 100 == 0)
         {
             ESP_LOGD(TAG, "Main loop iteration %d - acquiring lock", loop_count);
         }
-        
+
         hal->getDisplay().lock(0);
 
         if (loop_count < 5)
         {
             ESP_LOGD(TAG, "Main loop iteration %d - lock acquired, calling renderLoop", loop_count);
         }
-        
+
         renderLoop();
         uint32_t timeMs = 5;
-        
+
         loop_count++;
 
         #ifndef ESP_PLATFORM
@@ -171,6 +171,9 @@ void AppMain::run()
         if (!disp || !lv_display_get_driver_data(disp))
         {
             ESP_LOGI(TAG, "Display no longer valid, shutting down");
+            // Shutdown dispatcher before releasing display lock to avoid deadlock
+            // The worker thread may be waiting for the display lock
+            AppDispatcher::getInstance().shutdown();
             hal->getDisplay().unlock();
             running = false;
             break;

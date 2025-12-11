@@ -137,8 +137,24 @@ NetworkResult WebSocketClient::connect(const WebSocketConfig& config)
         state_callback_(WebSocketState::CONNECTING);
     }
 
-    // Create WebSocket connection using mongoose
-    conn_ = mg_ws_connect(mgr_, current_config_.url.c_str(), websocketEventHandler, this, nullptr);
+    // Build headers string for mongoose
+    std::string headerStr;
+    for (const auto& header : current_config_.headers)
+    {
+        headerStr += header.first + ": " + header.second + "\r\n";
+    }
+
+    ESP_LOGD(TAG, "WebSocket headers: %s", headerStr.c_str());
+
+    // Create WebSocket connection using mongoose with headers
+    if (headerStr.empty())
+    {
+        conn_ = mg_ws_connect(mgr_, current_config_.url.c_str(), websocketEventHandler, this, nullptr);
+    }
+    else
+    {
+        conn_ = mg_ws_connect(mgr_, current_config_.url.c_str(), websocketEventHandler, this, "%s", headerStr.c_str());
+    }
 
     if (!conn_)
     {
@@ -277,6 +293,11 @@ void WebSocketClient::setErrorCallback(NetworkErrorCallback callback)
     error_callback_ = callback;
 }
 
+void WebSocketClient::setReconnectConfigCallback(ReconnectConfigCallback callback)
+{
+    reconnect_config_callback_ = callback;
+}
+
 void WebSocketClient::scheduleReconnect()
 {
     if (!current_config_.auto_reconnect || reconnect_attempts_ >= current_config_.max_reconnect_attempts)
@@ -384,6 +405,15 @@ void WebSocketClient::reconnectThread()
             if (running_.load() && state_.load() != WebSocketState::CONNECTED)
             {
                 WebSocketConfig config;
+
+                // If a reconnect config callback is set, use it to get fresh config
+                // This allows regenerating auth headers (nonce, timestamp, HMAC)
+                if (reconnect_config_callback_)
+                {
+                    ESP_LOGD(TAG, "Getting fresh config from reconnect callback");
+                    config = reconnect_config_callback_();
+                }
+                else
                 {
                     std::lock_guard<std::mutex> lock(config_mutex_);
                     config = current_config_;
@@ -471,27 +501,19 @@ void WebSocketClient::websocketEventHandler(struct mg_connection* c, int ev, voi
             WebSocketMessage msg;
             msg.data.assign(wm->data.ptr, wm->data.ptr + wm->data.len);
 
-            // Determine message type based on flags
-            if (wm->flags & 0x01)  // Text frame
+            // Determine message type based on opcode (lower 4 bits of flags)
+            uint8_t opcode = wm->flags & 0x0F;
+            if (opcode == 0x01)  // Text frame
             {
                 msg.is_binary = false;
             }
-            else if (wm->flags & 0x02)  // Binary frame
+            else if (opcode == 0x02)  // Binary frame
             {
                 msg.is_binary = true;
             }
-            else if (wm->flags & 0x09)  // Ping frame
-            {
-                // Mongoose handles ping/pong automatically, so we can ignore
-                break;
-            }
-            else if (wm->flags & 0x0A)  // Pong frame
-            {
-                client->last_pong_time_ = getCurrentTimestamp();
-                break;
-            }
             else
             {
+                // Default to text for continuation frames or unknown
                 msg.is_binary = false;
             }
 
@@ -499,6 +521,27 @@ void WebSocketClient::websocketEventHandler(struct mg_connection* c, int ev, voi
                      msg.data.size(), msg.is_binary);
 
             client->message_callback_(msg);
+            break;
+        }
+
+        case MG_EV_WS_CTL:
+        {
+            struct mg_ws_message* wm = static_cast<struct mg_ws_message*>(ev_data);
+            uint8_t opcode = wm->flags & 0x0F;
+
+            if (opcode == 0x0A)  // Pong frame
+            {
+                ESP_LOGD(TAG, "WebSocket pong received");
+                client->last_pong_time_ = getCurrentTimestamp();
+            }
+            else if (opcode == 0x09)  // Ping frame
+            {
+                ESP_LOGD(TAG, "WebSocket ping received (mongoose auto-responds)");
+            }
+            else if (opcode == 0x08)  // Close frame
+            {
+                ESP_LOGD(TAG, "WebSocket close frame received");
+            }
             break;
         }
 

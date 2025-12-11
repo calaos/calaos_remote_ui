@@ -6,6 +6,7 @@
 #include <thread>
 #include <queue>
 #include <memory>
+#include <functional>
 
 struct mg_mgr;
 struct mg_connection;
@@ -34,6 +35,10 @@ public:
     void setStateCallback(WebSocketStateCallback callback);
     void setCloseCallback(WebSocketCloseCallback callback);
     void setErrorCallback(NetworkErrorCallback callback);
+
+    // Callback called before reconnection to get fresh config (e.g., regenerate auth headers)
+    using ReconnectConfigCallback = std::function<WebSocketConfig()>;
+    void setReconnectConfigCallback(ReconnectConfigCallback callback);
 
 public:
     static void websocketEventHandler(struct mg_connection* c, int ev, void* ev_data, void* fn_data);
@@ -69,4 +74,5 @@ private:
     WebSocketStateCallback state_callback_;
     WebSocketCloseCallback close_callback_;
     NetworkErrorCallback error_callback_;
+    ReconnectConfigCallback reconnect_config_callback_;
 };

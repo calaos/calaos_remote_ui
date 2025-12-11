@@ -18,6 +18,8 @@ set(MAIN_SOURCES
     main/provisioning_crypto.cpp
     main/provisioning_manager.cpp
     main/provisioning_requester.cpp
+    main/hmac_authenticator.cpp
+    main/calaos_websocket_manager.cpp
 )
 
 # Flux architecture sources

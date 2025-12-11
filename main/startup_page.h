@@ -6,6 +6,7 @@
 #include "flux.h"
 #include "calaos_discovery.h"
 #include "provisioning_requester.h"
+#include "calaos_websocket_manager.h"
 #include "lvgl_timer.h"
 #include <memory>
 
@@ -44,6 +45,7 @@ private:
 
     std::unique_ptr<CalaosDiscovery> calaosDiscovery;
     std::unique_ptr<ProvisioningRequester> provisioningRequester;
+    std::unique_ptr<CalaosWebSocketManager> calaosWebSocketManager;
     std::unique_ptr<LvglTimer> discoveryDelayTimer;
 
     void initLogoAnimation();
@@ -56,4 +58,5 @@ private:
     NetworkState lastNetworkState;
     CalaosServerState lastCalaosServerState;
     ProvisioningState lastProvisioningState;
+    CalaosWebSocketState lastWebSocketState;
 };

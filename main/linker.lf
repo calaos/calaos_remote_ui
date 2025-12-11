@@ -1,0 +1,13 @@
+[sections:sdata]
+entries:
+    .sdata+
+    .sdata2+
+
+[scheme:sdata_default]
+entries:
+    sdata -> dram0_data
+
+[mapping:sdata_fix]
+archive: *
+entries:
+    * (sdata_default)

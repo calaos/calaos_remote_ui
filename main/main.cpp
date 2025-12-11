@@ -1,4 +1,5 @@
 #include "app_main.h"
+#include "../flux/app_dispatcher.h"
 #ifndef ESP_PLATFORM
 #include "linux/display_backend_selector.h"
 #include <iostream>
@@ -15,6 +16,9 @@ extern "C" void app_main(void)
     app = new AppMain();
     if (app->initFast())  // Use fast initialization for better UX
         app->run();
+
+    // Stop the dispatcher worker thread before cleanup to avoid deadlock
+    AppDispatcher::getInstance().shutdown();
 
     delete app;
     app = nullptr;

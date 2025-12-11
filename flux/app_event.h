@@ -3,6 +3,8 @@
 #include <string>
 #include <variant>
 #include <memory>
+#include <map>
+#include "calaos_protocol.h"
 
 enum class AppEventType
 {
@@ -19,6 +21,16 @@ enum class AppEventType
     ProvisioningCodeGenerated,
     ProvisioningCompleted,
     ProvisioningFailed,
+
+    WebSocketConnecting,
+    WebSocketConnected,
+    WebSocketDisconnected,
+    WebSocketAuthFailed,
+    WebSocketError,
+
+    IoStateReceived,
+    IoStatesReceived,
+    ConfigUpdateReceived,
 };
 
 enum class NetworkConnectionType
@@ -67,6 +79,37 @@ struct ProvisioningFailedData
     std::string errorMessage;
 };
 
+struct WebSocketDisconnectedData
+{
+    std::string reason;
+    int code;
+};
+
+struct WebSocketAuthFailedData
+{
+    std::string message;
+};
+
+struct WebSocketErrorData
+{
+    std::string errorMessage;
+};
+
+struct IoStateReceivedData
+{
+    CalaosProtocol::IoState ioState;
+};
+
+struct IoStatesReceivedData
+{
+    std::map<std::string, CalaosProtocol::IoState> ioStates;
+};
+
+struct ConfigUpdateReceivedData
+{
+    CalaosProtocol::RemoteUIConfig config;
+};
+
 using AppEventData = std::variant<
     std::monostate,  // For events without data
     NetworkStatusChangedData,
@@ -74,7 +117,13 @@ using AppEventData = std::variant<
     CalaosServerFoundData,
     ProvisioningCodeGeneratedData,
     ProvisioningCompletedData,
-    ProvisioningFailedData
+    ProvisioningFailedData,
+    WebSocketDisconnectedData,
+    WebSocketAuthFailedData,
+    WebSocketErrorData,
+    IoStateReceivedData,
+    IoStatesReceivedData,
+    ConfigUpdateReceivedData
 >;
 
 class AppEvent
