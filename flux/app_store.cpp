@@ -292,6 +292,8 @@ void AppStore::handleEvent(const AppEvent& event)
 void AppStore::notifyStateChange()
 {
     flux::LockGuard lock(mutex_);
+    if (shuttingDown_)
+        return;
     for (auto& callback : subscribers_)
         callback(state_);
 }
@@ -300,4 +302,18 @@ void AppStore::clearSubscribers()
 {
     flux::LockGuard lock(mutex_);
     subscribers_.clear();
+}
+
+void AppStore::shutdown()
+{
+    ESP_LOGI(TAG, "Shutting down AppStore");
+    flux::LockGuard lock(mutex_);
+    shuttingDown_ = true;
+    subscribers_.clear();
+}
+
+bool AppStore::isShuttingDown() const
+{
+    flux::LockGuard lock(mutex_);
+    return shuttingDown_;
 }

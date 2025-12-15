@@ -12,6 +12,7 @@ set(MAIN_SOURCES
     main/page_base.cpp
     main/stack_view.cpp
     main/test_page.cpp
+    main/calaos_page.cpp
     main/theme.cpp
     main/calaos_discovery.cpp
     main/lvgl_timer.cpp

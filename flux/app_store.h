@@ -146,6 +146,12 @@ public:
     // Clear all subscribers
     void clearSubscribers();
 
+    // Shutdown the store - stops notifications and clears subscribers
+    void shutdown();
+
+    // Check if store is shutting down
+    bool isShuttingDown() const;
+
 private:
     AppStore();
 
@@ -154,4 +160,5 @@ private:
     AppState state_;
     std::vector<StateChangeCallback> subscribers_;
     mutable flux::Mutex mutex_;
+    bool shuttingDown_ = false;
 };

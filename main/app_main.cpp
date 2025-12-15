@@ -171,9 +171,12 @@ void AppMain::run()
         if (!disp || !lv_display_get_driver_data(disp))
         {
             ESP_LOGI(TAG, "Display no longer valid, shutting down");
-            // Shutdown dispatcher before releasing display lock to avoid deadlock
-            // The worker thread may be waiting for the display lock
+            // Shutdown stores first to stop all notifications
+            AppStore::getInstance().shutdown();
+            // Shutdown dispatcher to stop processing events
             AppDispatcher::getInstance().shutdown();
+            // Clear UI while we still have the lock
+            stackView.reset();
             hal->getDisplay().unlock();
             running = false;
             break;

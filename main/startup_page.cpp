@@ -2,6 +2,7 @@
 #include "theme.h"
 #include "images_generated.h"
 #include "test_page.h"
+#include "calaos_page.h"
 #include "app_main.h"
 #include "logging.h"
 #include "../hal/hal.h"
@@ -11,6 +12,7 @@
 using namespace smooth_ui_toolkit;
 
 static const char* TAG = "StartupPage";
+extern AppMain* g_appMain;
 
 StartupPage::StartupPage(lv_obj_t *parent):
     PageBase(parent)
@@ -589,6 +591,15 @@ void StartupPage::onStateChanged(const AppState& state)
                     lv_obj_add_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
                 if (networkStatusLabel)
                     lv_obj_add_flag(networkStatusLabel->get(), LV_OBJ_FLAG_HIDDEN);
+
+                // Push CalaosPage after successful connection
+                if (g_appMain && g_appMain->getStackView())
+                {
+                    ESP_LOGI(TAG, "Pushing CalaosPage");
+                    auto calaosPage = std::make_unique<CalaosPage>(lv_screen_active());
+                    g_appMain->getStackView()->push(std::move(calaosPage),
+                                                   stack_animation_type::SlideVertical);
+                }
             }, 2000);
         }
         else if (state.websocket.isConnecting)
