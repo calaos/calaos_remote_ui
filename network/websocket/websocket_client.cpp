@@ -366,11 +366,9 @@ void WebSocketClient::serviceThread()
                 {
                     ping();
                 }
-
-                // Check for pong timeout
-                if (current_config_.pong_timeout_ms > 0 &&
-                    last_ping_time_ > last_pong_time_ &&
-                    now - last_ping_time_ >= current_config_.pong_timeout_ms)
+                else if (current_config_.pong_timeout_ms > 0 &&
+                         last_ping_time_ > last_pong_time_ &&
+                         now - last_ping_time_ >= current_config_.pong_timeout_ms)
                 {
                     ESP_LOGE(TAG, "WebSocket ping timeout");
                     disconnect();

@@ -27,7 +27,7 @@
 				"espressif.esp-idf-extension",
 				"Vue.volar",
 				"golang.go"
-			],
+			]
 		},
 		"codespaces": {
 			"settings": {
@@ -44,14 +44,14 @@
 				"lizebang.bash-extension-pack",
 				"ms-vscode.cmake-tools",
 				"espressif.esp-idf-extension"
-			],
+			]
 		}
 	},
 	"runArgs": [
 		"--privileged",
 		"-p", "3333:3333",
 		"-p", "3000:3000",
-		"--network=host",
+		"--network=host"
 	]
 }
 
