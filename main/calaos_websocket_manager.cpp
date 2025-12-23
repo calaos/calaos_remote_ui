@@ -10,6 +10,9 @@ using json = nlohmann::json;
 
 static const char* TAG = "ws.mgr";
 
+// Global WebSocket manager instance
+CalaosWebSocketManager* g_wsManager = nullptr;
+
 // WebSocket close codes for authentication failures
 static const int WS_CLOSE_UNAUTHORIZED = 4001;
 static const int WS_CLOSE_FORBIDDEN = 4003;
@@ -162,8 +165,8 @@ bool CalaosWebSocketManager::setIoState(const std::string& io_id, const std::str
     {
         json j;
         j["msg"] = CalaosProtocol::MSG_SET_STATE;
-        j["data"]["io"] = io_id;
-        j["data"]["state"] = state;
+        j["data"]["id"] = io_id;
+        j["data"]["value"] = state;
 
         std::string message = j.dump();
         ESP_LOGD(TAG, "Sending IO state: %s", message.c_str());
@@ -266,6 +269,8 @@ void CalaosWebSocketManager::onMessage(const WebSocketMessage& message)
             handleIoState(j.value("data", json::object()));
         else if (msgType == CalaosProtocol::MSG_CONFIG_UPDATE)
             handleConfigUpdate(j.value("data", json::object()));
+        else if (msgType == CalaosProtocol::MSG_EVENT)
+            handleEvent(j.value("data", json::object()));
         else
             ESP_LOGW(TAG, "Unknown message type: %s", msgType.c_str());
     }
@@ -387,29 +392,40 @@ void CalaosWebSocketManager::handleIoStates(const json& data)
         }
         else if (data.is_object())
         {
-            // Object format: keys are IO ids
             for (auto it = data.begin(); it != data.end(); ++it)
             {
                 const std::string& ioId = it.key();
                 const json& ioData = it.value();
 
                 CalaosProtocol::IoState ioState;
-                ioState.id = ioData.value("id", ioId);
-                ioState.type = ioData.value("type", "");
+                ioState.id = ioId;
 
-                // Handle state which can be string or bool
-                if (ioData.contains("state"))
+                if (ioData.is_string())
                 {
-                    if (ioData["state"].is_boolean())
-                        ioState.state = ioData["state"].get<bool>() ? "true" : "false";
-                    else
-                        ioState.state = ioData.value("state", "");
+                    ioState.state = ioData.get<std::string>();
                 }
+                else if (ioData.is_boolean())
+                {
+                    ioState.state = ioData.get<bool>() ? "true" : "false";
+                }
+                else if (ioData.is_object())
+                {
+                    ioState.id = ioData.value("id", ioId);
+                    ioState.type = ioData.value("type", "");
 
-                ioState.gui_type = ioData.value("gui_type", "");
-                ioState.name = ioData.value("name", "");
-                ioState.visible = ioData.value("visible", true);
-                ioState.enabled = ioData.value("enabled", true);
+                    if (ioData.contains("state"))
+                    {
+                        if (ioData["state"].is_boolean())
+                            ioState.state = ioData["state"].get<bool>() ? "true" : "false";
+                        else
+                            ioState.state = ioData.value("state", "");
+                    }
+
+                    ioState.gui_type = ioData.value("gui_type", "");
+                    ioState.name = ioData.value("name", "");
+                    ioState.visible = ioData.value("visible", true);
+                    ioState.enabled = ioData.value("enabled", true);
+                }
 
                 ioStates[ioId] = ioState;
             }
@@ -479,28 +495,69 @@ void CalaosWebSocketManager::handleConfigUpdate(const json& data)
 {
     try
     {
-        if (!data.contains("config"))
+        CalaosProtocol::RemoteUIConfig config;
+        config.name = data.value("name", "");
+
+        // Handle room (can be string or object)
+        if (data.contains("room"))
         {
-            ESP_LOGW(TAG, "Config update missing 'config' field");
-            return;
+            if (data["room"].is_string())
+                config.room = data["room"].get<std::string>();
+            else if (data["room"].is_object() && data["room"].contains("name"))
+                config.room = data["room"]["name"].get<std::string>();
         }
 
-        const json& configJson = data["config"];
+        config.theme = data.value("theme", "dark");
 
-        CalaosProtocol::RemoteUIConfig config;
-        config.name = configJson.value("name", "");
-        config.room = configJson.value("room", "");
-        config.theme = configJson.value("theme", "dark");
-        config.brightness = configJson.value("brightness", 80);
-        config.timeout = configJson.value("timeout", 30);
+        // Handle brightness typo in server (brigtness instead of brightness)
+        if (data.contains("brigtness"))
+            config.brightness = data["brigtness"].get<int>();
+        else
+            config.brightness = data.value("brightness", 80);
 
-        // Store pages as JSON string for now
-        if (configJson.contains("pages"))
-            config.pages_json = configJson["pages"].dump();
+        config.timeout = data.value("timeout", 30);
 
-        ESP_LOGI(TAG, "Config update: %s", config.name.c_str());
+        // Build pages_json with grid info from root level
+        json pagesConfig;
+        pagesConfig["grid_width"] = data.value("grid_width", 3);
+        pagesConfig["grid_height"] = data.value("grid_height", 3);
 
-        // Dispatch event
+        if (data.contains("pages"))
+            pagesConfig["pages"] = data["pages"];
+        else
+            pagesConfig["pages"] = json::array();
+
+        config.pages_json = pagesConfig.dump();
+
+        ESP_LOGI(TAG, "Config update: name=%s, grid=%dx%d, pages=%zu",
+                config.name.c_str(),
+                pagesConfig["grid_width"].get<int>(),
+                pagesConfig["grid_height"].get<int>(),
+                pagesConfig["pages"].size());
+
+        // Handle io_items if present (store IO states)
+        if (data.contains("io_items") && data["io_items"].is_array())
+        {
+            for (const auto& ioItem : data["io_items"])
+            {
+                CalaosProtocol::IoState ioState;
+                ioState.id = ioItem.value("id", "");
+                ioState.type = ioItem.value("type", "");
+                ioState.gui_type = ioItem.value("gui_type", "");
+                ioState.name = ioItem.value("name", "");
+                ioState.visible = ioItem.value("visible", "true") == "true";
+                ioState.enabled = ioItem.value("rw", "true") == "true";
+                ioState.state = "false";  // Default state
+
+                // Dispatch individual IO state
+                AppDispatcher::getInstance().dispatch(
+                    AppEvent(AppEventType::IoStateReceived,
+                            IoStateReceivedData{ioState})
+                );
+            }
+        }
+
+        // Dispatch config event
         AppDispatcher::getInstance().dispatch(
             AppEvent(AppEventType::ConfigUpdateReceived,
                     ConfigUpdateReceivedData{config})
@@ -509,6 +566,52 @@ void CalaosWebSocketManager::handleConfigUpdate(const json& data)
     catch (const std::exception& e)
     {
         ESP_LOGE(TAG, "Error parsing config update: %s", e.what());
+    }
+}
+
+void CalaosWebSocketManager::handleEvent(const json& data)
+{
+    try
+    {
+        std::string typeStr = data.value("type_str", "");
+
+        if (typeStr == "io_changed")
+        {
+            if (!data.contains("data") || !data["data"].is_object())
+            {
+                ESP_LOGW(TAG, "Event io_changed missing data object");
+                return;
+            }
+
+            const json& eventData = data["data"];
+            std::string ioId = eventData.value("id", "");
+            std::string state = eventData.value("state", "");
+
+            if (ioId.empty())
+            {
+                ESP_LOGW(TAG, "Event io_changed missing id");
+                return;
+            }
+
+            ESP_LOGI(TAG, "Event io_changed: %s = %s", ioId.c_str(), state.c_str());
+
+            CalaosProtocol::IoState ioState;
+            ioState.id = ioId;
+            ioState.state = state;
+
+            AppDispatcher::getInstance().dispatch(
+                AppEvent(AppEventType::IoStateReceived,
+                        IoStateReceivedData{ioState})
+            );
+        }
+        else
+        {
+            ESP_LOGD(TAG, "Ignoring event type: %s", typeStr.c_str());
+        }
+    }
+    catch (const std::exception& e)
+    {
+        ESP_LOGE(TAG, "Error parsing event: %s", e.what());
     }
 }
 

@@ -63,7 +63,7 @@ StartupPage::StartupPage(lv_obj_t *parent):
     networkStatusAnimation.play();
 
     // Subscribe to state changes from AppStore
-    AppStore::getInstance().subscribe([this](const AppState& state)
+    subscriptionId_ = AppStore::getInstance().subscribe([this](const AppState& state)
     {
         onStateChanged(state);
     });
@@ -78,6 +78,9 @@ StartupPage::StartupPage(lv_obj_t *parent):
 StartupPage::~StartupPage()
 {
     ESP_LOGI(TAG, "Destroying StartupPage");
+
+    // Unsubscribe from AppStore to prevent dangling pointer
+    AppStore::getInstance().unsubscribe(subscriptionId_);
 
     // Stop discovery and provisioning threads before destruction
     if (calaosDiscovery)
@@ -538,6 +541,7 @@ void StartupPage::onStateChanged(const AppState& state)
                     LvglTimer::createOneShot([this]()
                     {
                         calaosWebSocketManager = std::make_unique<CalaosWebSocketManager>();
+                        g_wsManager = calaosWebSocketManager.get();  // Set global pointer
                         if (calaosWebSocketManager->connect())
                         {
                             ESP_LOGI(TAG, "WebSocket connection initiated");
@@ -616,6 +620,7 @@ void StartupPage::onStateChanged(const AppState& state)
         if (calaosWebSocketManager)
         {
             calaosWebSocketManager->disconnect();
+            g_wsManager = nullptr;  // Unset global pointer
             calaosWebSocketManager.reset();
         }
 

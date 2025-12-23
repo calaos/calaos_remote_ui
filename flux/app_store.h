@@ -127,6 +127,7 @@ struct AppState
     }
 };
 
+using SubscriptionId = uint32_t;
 using StateChangeCallback = std::function<void(const AppState& state)>;
 
 class AppStore
@@ -137,8 +138,11 @@ public:
     // Get current state
     const AppState& getState() const;
 
-    // Subscribe to state changes
-    void subscribe(StateChangeCallback callback);
+    // Subscribe to state changes - returns subscription ID for unsubscribing
+    SubscriptionId subscribe(StateChangeCallback callback);
+
+    // Unsubscribe from state changes
+    void unsubscribe(SubscriptionId id);
 
     // Handle events and update state
     void handleEvent(const AppEvent& event);
@@ -158,7 +162,8 @@ private:
     void notifyStateChange();
 
     AppState state_;
-    std::vector<StateChangeCallback> subscribers_;
+    std::map<SubscriptionId, StateChangeCallback> subscribers_;
+    SubscriptionId nextSubscriptionId_ = 1;
     mutable flux::Mutex mutex_;
     bool shuttingDown_ = false;
 };

@@ -59,4 +59,5 @@ private:
     CalaosServerState lastCalaosServerState;
     ProvisioningState lastProvisioningState;
     CalaosWebSocketState lastWebSocketState;
+    SubscriptionId subscriptionId_;
 };

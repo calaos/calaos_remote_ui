@@ -20,6 +20,11 @@ set(MAIN_SOURCES
     main/provisioning_requester.cpp
     main/hmac_authenticator.cpp
     main/calaos_websocket_manager.cpp
+    main/calaos_protocol.cpp
+    main/calaos_widget.cpp
+    main/widget_factory.cpp
+    main/widgets/widget_error.cpp
+    main/widgets/light_switch_widget.cpp
 )
 
 # Flux architecture sources

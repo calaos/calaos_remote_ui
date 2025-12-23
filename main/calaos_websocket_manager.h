@@ -6,6 +6,9 @@
 #include <memory>
 #include <string>
 
+// Global pointer to WebSocket manager instance (set by StartupPage)
+extern class CalaosWebSocketManager* g_wsManager;
+
 /**
  * @brief Manager for WebSocket connection to Calaos server
  *
@@ -104,6 +107,11 @@ private:
      * @brief Handle remote_ui_config_update message
      */
     void handleConfigUpdate(const nlohmann::json& data);
+
+    /**
+     * @brief Handle event message
+     */
+    void handleEvent(const nlohmann::json& data);
 
     /**
      * @brief Check if error indicates authentication failure

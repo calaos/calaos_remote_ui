@@ -25,10 +25,18 @@ const AppState& AppStore::getState() const
     return state_;
 }
 
-void AppStore::subscribe(StateChangeCallback callback)
+SubscriptionId AppStore::subscribe(StateChangeCallback callback)
 {
     flux::LockGuard lock(mutex_);
-    subscribers_.push_back(callback);
+    SubscriptionId id = nextSubscriptionId_++;
+    subscribers_[id] = callback;
+    return id;
+}
+
+void AppStore::unsubscribe(SubscriptionId id)
+{
+    flux::LockGuard lock(mutex_);
+    subscribers_.erase(id);
 }
 
 void AppStore::handleEvent(const AppEvent& event)
@@ -243,10 +251,18 @@ void AppStore::handleEvent(const AppEvent& event)
             {
                 if (auto* data = event.getData<IoStateReceivedData>())
                 {
+                    auto it = state_.ioStates.find(data->ioState.id);
+                    bool actuallyChanged = (it == state_.ioStates.end() ||
+                                          it->second.state != data->ioState.state);
+
                     state_.ioStates[data->ioState.id] = data->ioState;
-                    stateChanged = true;
-                    ESP_LOGD(TAG, "IO state received: %s = %s",
-                             data->ioState.id.c_str(), data->ioState.state.c_str());
+
+                    if (actuallyChanged)
+                    {
+                        stateChanged = true;
+                        ESP_LOGD(TAG, "IO state received: %s = %s",
+                                 data->ioState.id.c_str(), data->ioState.state.c_str());
+                    }
                 }
                 break;
             }
@@ -255,7 +271,6 @@ void AppStore::handleEvent(const AppEvent& event)
             {
                 if (auto* data = event.getData<IoStatesReceivedData>())
                 {
-                    // Merge received states
                     for (const auto& [id, ioState] : data->ioStates)
                         state_.ioStates[id] = ioState;
 
@@ -278,14 +293,14 @@ void AppStore::handleEvent(const AppEvent& event)
         }
     }
 
-    if (stateChanged && state_ != previousState)
+    if (stateChanged)
     {
-        ESP_LOGD(TAG, "State changed, notifying subscribers");
+        if (state_ != previousState)
+            ESP_LOGD(TAG, "State changed, notifying subscribers");
+        else
+            ESP_LOGD(TAG, "State changed (ioStates/config only), notifying subscribers");
+
         notifyStateChange();
-    }
-    else if (stateChanged)
-    {
-        ESP_LOGD(TAG, "stateChanged=true but state == previousState");
     }
 }
 
@@ -294,7 +309,7 @@ void AppStore::notifyStateChange()
     flux::LockGuard lock(mutex_);
     if (shuttingDown_)
         return;
-    for (auto& callback : subscribers_)
+    for (auto& [id, callback] : subscribers_)
         callback(state_);
 }
 
