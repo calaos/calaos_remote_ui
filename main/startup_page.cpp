@@ -599,7 +599,7 @@ void StartupPage::onStateChanged(const AppState& state)
                     g_appMain->getStackView()->push(std::move(calaosPage),
                                                    stack_animation_type::SlideVertical);
                 }
-            }, 2000);
+            }, 800);
         }
         else if (state.websocket.isConnecting)
         {

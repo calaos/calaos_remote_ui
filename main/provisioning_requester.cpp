@@ -284,7 +284,9 @@ void ProvisioningRequester::onHttpResponse(const HttpResponse& response)
         data.errorMessage = std::string("Error: ") + e.what();
         AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::ProvisioningFailed, data));
     }
-}std::string ProvisioningRequester::buildProvisioningRequestBody() const
+}
+
+std::string ProvisioningRequester::buildProvisioningRequestBody() const
 {
     json j;
 
