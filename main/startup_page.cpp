@@ -1,7 +1,6 @@
 #include "startup_page.h"
 #include "theme.h"
 #include "images_generated.h"
-#include "test_page.h"
 #include "calaos_page.h"
 #include "app_main.h"
 #include "logging.h"
