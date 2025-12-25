@@ -49,6 +49,19 @@ endif()
 # Define the project (works for both ESP-IDF and Linux)
 project(calaos-remote-ui)
 
+# Application version - can be overridden via environment variable or CMake variable
+# Default is defined in version.h as "git" for development builds
+if(DEFINED ENV{APP_VERSION})
+    set(APP_VERSION_VALUE "$ENV{APP_VERSION}")
+    message(STATUS "Using APP_VERSION from environment: ${APP_VERSION_VALUE}")
+    add_compile_definitions(APP_VERSION="${APP_VERSION_VALUE}")
+elseif(DEFINED APP_VERSION)
+    message(STATUS "Using APP_VERSION from CMake variable: ${APP_VERSION}")
+    add_compile_definitions(APP_VERSION="${APP_VERSION}")
+else()
+    message(STATUS "Using default APP_VERSION from version.h (git)")
+endif()
+
 # Linux-specific configuration
 if(DETECTED_PLATFORM STREQUAL "LINUX")
 

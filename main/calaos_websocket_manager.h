@@ -118,6 +118,12 @@ private:
      */
     bool isAuthenticationError(int closeCode, const std::string& reason);
 
+    /**
+     * @brief Check if error is a handshake error (potential auth failure)
+     */
+    bool isHandshakeError(const std::string& message);
+
     WebSocketState currentState_;
     bool isConnecting_;
+    int consecutiveHandshakeErrors_;  // Track consecutive handshake failures
 };

@@ -4,6 +4,7 @@
 #include "hal.h"
 #include "nlohmann/json.hpp"
 #include <sstream>
+#include "version.h"
 
 using json = nlohmann::json;
 
@@ -103,10 +104,10 @@ bool ProvisioningManager::init()
     // Dispatch initial provisioning state
     if (isProvisioned())
     {
-        ProvisioningCompletedData data;
-        data.deviceId = config_.deviceId;
-        data.serverUrl = config_.serverUrl;
-        AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::ProvisioningCompleted, data));
+        // Device is provisioned, but we need to verify credentials with server
+        // Dispatch ProvisioningVerifyStarted - actual verification happens when server is found
+        ESP_LOGI(TAG, "Device is provisioned, verification required");
+        AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::ProvisioningVerifyStarted));
     }
     else
     {
@@ -235,6 +236,22 @@ bool ProvisioningManager::completeProvisioning(const std::string& deviceId,
     return true;
 }
 
+VerifyResult ProvisioningManager::verifyProvisioningWithServer(const std::string& serverIp)
+{
+    ESP_LOGI(TAG, "Verifying provisioning with server: %s", serverIp.c_str());
+
+    if (!isProvisioned())
+    {
+        ESP_LOGW(TAG, "Cannot verify - device is not provisioned");
+        return VerifyResult::InvalidCredentials;
+    }
+
+    // Create a temporary requester for verification
+    // Use stored credentials (device_id + auth_token) for secure verification
+    ProvisioningRequester requester;
+    return requester.verifyProvisioning(serverIp, config_.deviceId, config_.authToken);
+}
+
 std::string ProvisioningManager::generateNewCode()
 {
     if (config_.salt.empty())
@@ -251,7 +268,7 @@ std::string ProvisioningManager::generateDeviceInfoJson() const
 {
     json j = {
         {"model", HAL::getInstance().getSystem().getDeviceInfo()},
-        {"firmware", HAL::getInstance().getSystem().getFirmwareVersion()},
+        {"version", APP_VERSION},
         {"mac_address", config_.macAddress},
     };
 

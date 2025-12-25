@@ -3,6 +3,7 @@
 #include "calaos_net.h"
 #include "logging.h"
 #include "hal.h"
+#include "version.h"
 #include "nlohmann/json.hpp"
 #include <sstream>
 
@@ -298,7 +299,7 @@ std::string ProvisioningRequester::buildProvisioningRequestBody() const
         {"type", "display"},
         {"manufacturer", "calaos"},
         {"model", HAL::getInstance().getSystem().getDeviceInfo()},
-        {"firmware", HAL::getInstance().getSystem().getFirmwareVersion()},
+        {"version", APP_VERSION},
         {"mac_address", getProvisioningManager().getMacAddress()}
     };
 
@@ -335,4 +336,132 @@ std::string ProvisioningRequester::buildDeviceCapabilities() const
     };
 
     return capabilities.dump(0);
+}
+
+VerifyResult ProvisioningRequester::verifyProvisioning(const std::string& serverIp,
+                                                       const std::string& deviceId,
+                                                       const std::string& authToken)
+{
+    ESP_LOGI(TAG, "Verifying provisioning with server: %s for device: %s", serverIp.c_str(), deviceId.c_str());
+
+    // Check if network is initialized
+    if (!CalaosNet::instance().isInitialized())
+    {
+        ESP_LOGE(TAG, "Network not initialized, cannot verify provisioning");
+        return VerifyResult::NetworkError;
+    }
+
+    // Build URL for dedicated verify endpoint
+    std::ostringstream url;
+    url << "http://" << serverIp << ":" << SERVER_PORT << "/api/v3/provision/verify";
+
+    // Build verification request body with stored credentials (no provisioning code)
+    json j;
+    j["device_id"] = deviceId;
+    j["auth_token"] = authToken;
+
+    // Add device info for logging/analytics (no sensitive data)
+    json deviceInfo = {
+        {"type", "display"},
+        {"manufacturer", "calaos"},
+        {"model", HAL::getInstance().getSystem().getDeviceInfo()},
+        {"version", APP_VERSION},
+        {"mac_address", getProvisioningManager().getMacAddress()}
+    };
+    j["device_info"] = deviceInfo;
+
+    std::string body = j.dump(0);
+
+    uint32_t backoff_ms = VERIFY_INITIAL_BACKOFF_MS;
+
+    for (int retry = 0; retry < VERIFY_MAX_RETRIES; retry++)
+    {
+        if (retry > 0)
+        {
+            ESP_LOGI(TAG, "Retrying provisioning verification (attempt %d/%d) after %ums",
+                     retry + 1, VERIFY_MAX_RETRIES, backoff_ms);
+            std::this_thread::sleep_for(std::chrono::milliseconds(backoff_ms));
+            backoff_ms *= 2;  // Exponential backoff
+        }
+
+        ESP_LOGI(TAG, "Sending provisioning verification request to: %s", url.str().c_str());
+
+        // Prepare HTTP request
+        HttpRequest request;
+        request.method = HttpMethod::POST;
+        request.url = url.str();
+        request.headers["Content-Type"] = "application/json";
+        request.body = NetworkBuffer(body.c_str(), body.length());
+        request.timeout_ms = REQUEST_TIMEOUT_MS;
+        request.verify_ssl = false;
+
+        // Send synchronous request
+        HttpResponse response;
+        NetworkResult result = CalaosNet::instance().httpClient().sendRequestSync(request, response);
+
+        if (result != NetworkResult::OK)
+        {
+            ESP_LOGW(TAG, "Verification request failed with network error: %d", static_cast<int>(result));
+            continue;  // Retry on network error
+        }
+
+        ESP_LOGI(TAG, "Verification response: status=%d", static_cast<int>(response.status_code));
+
+        // Check for authentication failure (invalid credentials)
+        if (response.status_code == HttpStatus::UNAUTHORIZED ||
+            response.status_code == HttpStatus::FORBIDDEN)
+        {
+            ESP_LOGW(TAG, "Provisioning verification failed: invalid credentials");
+            return VerifyResult::InvalidCredentials;
+        }
+
+        // Check for success
+        if (response.isSuccess())
+        {
+            // Parse response to verify it's a valid response
+            try
+            {
+                std::string responseBody(reinterpret_cast<const char*>(response.body.data.data()),
+                                        response.body.size);
+
+                json j = json::parse(responseBody);
+                std::string status = j.value("status", "");
+
+                if (status == "valid")
+                {
+                    ESP_LOGI(TAG, "Provisioning verification successful");
+                    return VerifyResult::Verified;
+                }
+                else if (status == "invalid")
+                {
+                    std::string reason = j.value("reason", "unknown");
+                    ESP_LOGW(TAG, "Provisioning verification failed: %s", reason.c_str());
+                    return VerifyResult::InvalidCredentials;
+                }
+                else
+                {
+                    ESP_LOGW(TAG, "Provisioning verification: unexpected status '%s'", status.c_str());
+                    return VerifyResult::InvalidCredentials;
+                }
+            }
+            catch (const std::exception& e)
+            {
+                ESP_LOGE(TAG, "Failed to parse verification response: %s", e.what());
+                continue;  // Retry on parse error
+            }
+        }
+
+        // For NOT_FOUND, the verify endpoint doesn't exist or device unknown
+        if (response.status_code == HttpStatus::NOT_FOUND)
+        {
+            ESP_LOGW(TAG, "Device not found on server");
+            return VerifyResult::InvalidCredentials;
+        }
+
+        // For other errors, retry
+        ESP_LOGW(TAG, "Verification request failed with status: %d", static_cast<int>(response.status_code));
+    }
+
+    ESP_LOGE(TAG, "Provisioning verification failed after %d retries", VERIFY_MAX_RETRIES);
+    return VerifyResult::NetworkError;
 }

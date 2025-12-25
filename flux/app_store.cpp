@@ -188,6 +188,29 @@ void AppStore::handleEvent(const AppEvent& event)
                 break;
             }
 
+            case AppEventType::ProvisioningVerifyStarted:
+            {
+                state_.provisioning.status = ProvisioningStatus::Verifying;
+                state_.provisioning.hasFailed = false;
+                stateChanged = true;
+                ESP_LOGD(TAG, "Provisioning verification started");
+                break;
+            }
+
+            case AppEventType::ProvisioningVerifyFailed:
+            {
+                if (auto* data = event.getData<ProvisioningVerifyFailedData>())
+                {
+                    // On verification failure, we go back to showing code
+                    state_.provisioning.status = ProvisioningStatus::ShowingCode;
+                    state_.provisioning.hasFailed = !data->isNetworkError;
+                    stateChanged = true;
+                    ESP_LOGD(TAG, "Provisioning verification failed: %s (network=%d)",
+                             data->errorMessage.c_str(), data->isNetworkError);
+                }
+                break;
+            }
+
             case AppEventType::WebSocketConnecting:
             {
                 state_.websocket.isConnecting = true;

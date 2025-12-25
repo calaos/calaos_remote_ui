@@ -53,6 +53,8 @@ private:
     void createProvisioningUI();
     void showProvisioningUI(const std::string& code);
     void hideProvisioningUI();
+    void showVerifyingUI();
+    void hideVerifyingUI();
     void onStateChanged(const AppState& state);
 
     NetworkState lastNetworkState;

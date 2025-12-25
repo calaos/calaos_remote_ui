@@ -1,6 +1,7 @@
 #pragma once
 
 #include "provisioning_crypto.h"
+#include "provisioning_requester.h"
 #include "flux.h"
 #include <string>
 #include <vector>
@@ -67,6 +68,10 @@ public:
                              const std::string& authToken,
                              const std::string& deviceSecret,
                              const std::string& serverUrl);
+
+    // Verify existing provisioning credentials with server
+    // Returns VerifyResult enum (Verified, InvalidCredentials, NetworkError)
+    VerifyResult verifyProvisioningWithServer(const std::string& serverIp);
 
     // Get provisioned credentials
     std::string getDeviceId() const { return config_.deviceId; }

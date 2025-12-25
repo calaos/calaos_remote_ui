@@ -298,6 +298,13 @@ void WebSocketClient::setReconnectConfigCallback(ReconnectConfigCallback callbac
     reconnect_config_callback_ = callback;
 }
 
+void WebSocketClient::setAutoReconnect(bool enabled)
+{
+    std::lock_guard<std::mutex> lock(config_mutex_);
+    current_config_.auto_reconnect = enabled;
+    ESP_LOGI(TAG, "Auto-reconnect %s", enabled ? "enabled" : "disabled");
+}
+
 void WebSocketClient::scheduleReconnect()
 {
     if (!current_config_.auto_reconnect || reconnect_attempts_ >= current_config_.max_reconnect_attempts)

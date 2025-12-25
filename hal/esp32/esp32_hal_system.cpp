@@ -76,11 +76,6 @@ std::string Esp32HalSystem::getDeviceInfo() const
     return std::string(info);
 }
 
-std::string Esp32HalSystem::getFirmwareVersion() const
-{
-    return std::string(esp_get_idf_version());
-}
-
 HalResult Esp32HalSystem::saveConfig(const std::string& key, const std::string& value)
 {
     if (!nvsInitialized)

@@ -19,7 +19,8 @@ static const int WS_CLOSE_FORBIDDEN = 4003;
 
 CalaosWebSocketManager::CalaosWebSocketManager():
     currentState_(WebSocketState::DISCONNECTED),
-    isConnecting_(false)
+    isConnecting_(false),
+    consecutiveHandshakeErrors_(0)
 {
 }
 
@@ -69,6 +70,13 @@ bool CalaosWebSocketManager::connect()
     // Build authentication headers
     auto headers = buildAuthHeaders();
 
+    // Reset handshake error counter for new connection attempt
+    consecutiveHandshakeErrors_ = 0;
+
+    // Get WebSocket client and ensure auto-reconnect is enabled for fresh connections
+    WebSocketClient& wsClient = CalaosNet::instance().webSocketClient();
+    wsClient.setAutoReconnect(true);
+
     // Configure WebSocket client
     WebSocketConfig config;
     config.url = wsUrl;
@@ -80,9 +88,6 @@ bool CalaosWebSocketManager::connect()
     config.auto_reconnect = true;
     config.reconnect_delay_ms = 5000;
     config.max_reconnect_attempts = 5;
-
-    // Get WebSocket client from CalaosNet
-    WebSocketClient& wsClient = CalaosNet::instance().webSocketClient();
 
     // Set callbacks
     wsClient.setMessageCallback([this](const WebSocketMessage& msg)
@@ -292,6 +297,7 @@ void CalaosWebSocketManager::onStateChanged(WebSocketState state)
     if (state == WebSocketState::CONNECTED)
     {
         isConnecting_ = false;
+        consecutiveHandshakeErrors_ = 0;  // Reset on successful connection
         AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::WebSocketConnected));
     }
     else if (state == WebSocketState::CONNECTING)
@@ -315,10 +321,15 @@ void CalaosWebSocketManager::onClose(int code, const std::string& reason)
 
     isConnecting_ = false;
     currentState_ = WebSocketState::DISCONNECTED;
+
     // Check if this is an authentication failure
     if (isAuthenticationError(code, reason))
     {
         ESP_LOGE(TAG, "Authentication failed - returning to provisioning");
+
+        // Disable auto-reconnect before dispatching to prevent reconnect attempts with bad credentials
+        CalaosNet::instance().webSocketClient().setAutoReconnect(false);
+
         AppDispatcher::getInstance().dispatch(
             AppEvent(AppEventType::WebSocketAuthFailed,
                     WebSocketAuthFailedData{reason})
@@ -336,6 +347,29 @@ void CalaosWebSocketManager::onClose(int code, const std::string& reason)
 void CalaosWebSocketManager::onError(NetworkResult error, const std::string& message)
 {
     ESP_LOGE(TAG, "WebSocket error: %d - %s", static_cast<int>(error), message.c_str());
+
+    // Track consecutive handshake errors - they often indicate auth failures
+    // (e.g., server rejecting connection due to invalid HMAC)
+    if (isHandshakeError(message))
+    {
+        consecutiveHandshakeErrors_++;
+        ESP_LOGW(TAG, "Handshake error count: %d", consecutiveHandshakeErrors_);
+
+        // After 3 consecutive handshake failures, assume auth failure
+        if (consecutiveHandshakeErrors_ >= 3)
+        {
+            ESP_LOGE(TAG, "Too many handshake failures - assuming authentication failure");
+
+            // Disable auto-reconnect before dispatching to prevent further attempts
+            CalaosNet::instance().webSocketClient().setAutoReconnect(false);
+
+            AppDispatcher::getInstance().dispatch(
+                AppEvent(AppEventType::WebSocketAuthFailed,
+                        WebSocketAuthFailedData{"Multiple handshake failures - credentials may be invalid"})
+            );
+            return;
+        }
+    }
 
     AppDispatcher::getInstance().dispatch(
         AppEvent(AppEventType::WebSocketError,
@@ -628,5 +662,15 @@ bool CalaosWebSocketManager::isAuthenticationError(int closeCode, const std::str
     return lowerReason.find("auth") != std::string::npos ||
            lowerReason.find("unauthorized") != std::string::npos ||
            lowerReason.find("forbidden") != std::string::npos ||
-           lowerReason.find("invalid") != std::string::npos;
+           lowerReason.find("invalid") != std::string::npos ||
+           lowerReason.find("hmac") != std::string::npos ||
+           lowerReason.find("signature") != std::string::npos ||
+           lowerReason.find("token") != std::string::npos;
+}
+
+bool CalaosWebSocketManager::isHandshakeError(const std::string& message)
+{
+    std::string lowerMessage = message;
+    std::transform(lowerMessage.begin(), lowerMessage.end(), lowerMessage.begin(), ::tolower);
+    return lowerMessage.find("handshake") != std::string::npos;
 }

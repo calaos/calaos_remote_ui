@@ -87,11 +87,6 @@ std::string LinuxHalSystem::getDeviceInfo() const
     return info;
 }
 
-std::string LinuxHalSystem::getFirmwareVersion() const
-{
-    return "Calaos Remote UI Linux v1.0.0";
-}
-
 HalResult LinuxHalSystem::saveConfig(const std::string& key, const std::string& value)
 {
     std::string filePath = getConfigFilePath(key);

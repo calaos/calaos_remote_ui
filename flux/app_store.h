@@ -54,6 +54,7 @@ struct CalaosServerState
 enum class ProvisioningStatus
 {
     NotProvisioned,    // Device needs provisioning
+    Verifying,         // Verifying existing credentials
     ShowingCode,       // Displaying provisioning code
     Provisioned        // Device is provisioned and ready
 };
@@ -70,6 +71,11 @@ struct ProvisioningState
     bool isProvisioned() const
     {
         return status == ProvisioningStatus::Provisioned;
+    }
+
+    bool isVerifying() const
+    {
+        return status == ProvisioningStatus::Verifying;
     }
 
     bool needsCodeDisplay() const

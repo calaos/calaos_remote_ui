@@ -40,6 +40,12 @@ public:
     using ReconnectConfigCallback = std::function<WebSocketConfig()>;
     void setReconnectConfigCallback(ReconnectConfigCallback callback);
 
+    /**
+     * @brief Enable or disable auto-reconnect at runtime
+     * @param enabled true to enable auto-reconnect, false to disable
+     */
+    void setAutoReconnect(bool enabled);
+
 public:
     static void websocketEventHandler(struct mg_connection* c, int ev, void* ev_data, void* fn_data);
 

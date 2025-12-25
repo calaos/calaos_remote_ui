@@ -304,6 +304,36 @@ void StartupPage::hideProvisioningUI()
     }
 }
 
+void StartupPage::showVerifyingUI()
+{
+    ESP_LOGI(TAG, "Showing verifying UI");
+
+    // Update network status label text
+    if (networkStatusLabel)
+    {
+        networkStatusLabel->setText("Verifying...");
+        lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_white, LV_PART_MAIN);
+        lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_clear_flag(networkStatusLabel->get(), LV_OBJ_FLAG_HIDDEN);
+    }
+
+    // Show the spinner
+    if (networkSpinner)
+    {
+        lv_obj_clear_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+    }
+
+    // Stop pulsing animation
+    networkStatusAnimation.cancel();
+}
+
+void StartupPage::hideVerifyingUI()
+{
+    ESP_LOGI(TAG, "Hiding verifying UI");
+    // Nothing specific to hide - networkSpinner and networkStatusLabel
+    // will be managed by other state transitions
+}
+
 void StartupPage::render()
 {
     // Update logo animation
@@ -448,6 +478,59 @@ void StartupPage::onStateChanged(const AppState& state)
 
             ESP_LOGI(TAG, "Calaos server found, checking provisioning status");
 
+            // If in verifying state, perform verification
+            if (state.provisioning.isVerifying())
+            {
+                ESP_LOGI(TAG, "Scheduling provisioning verification to server: %s",
+                        state.calaosServer.selectedServer.c_str());
+
+                std::string serverIp = state.calaosServer.selectedServer;
+
+                // Perform verification in a deferred callback (after display unlock)
+                LvglTimer::createOneShot([this, serverIp]()
+                {
+                    ESP_LOGI(TAG, "Performing provisioning verification (deferred)");
+                    VerifyResult result = getProvisioningManager().verifyProvisioningWithServer(serverIp);
+
+                    switch (result)
+                    {
+                        case VerifyResult::Verified:
+                        {
+                            ESP_LOGI(TAG, "Provisioning verification successful");
+                            ProvisioningCompletedData data;
+                            data.deviceId = getProvisioningManager().getDeviceId();
+                            data.serverUrl = getProvisioningManager().getServerUrl();
+                            AppDispatcher::getInstance().dispatch(
+                                AppEvent(AppEventType::ProvisioningCompleted, data));
+                            break;
+                        }
+                        case VerifyResult::InvalidCredentials:
+                        {
+                            ESP_LOGW(TAG, "Provisioning verification failed - invalid credentials");
+                            // Reset provisioning and regenerate code
+                            getProvisioningManager().resetProvisioning();
+                            ProvisioningVerifyFailedData failData;
+                            failData.errorMessage = "Invalid credentials";
+                            failData.isNetworkError = false;
+                            AppDispatcher::getInstance().dispatch(
+                                AppEvent(AppEventType::ProvisioningVerifyFailed, failData));
+                            break;
+                        }
+                        case VerifyResult::NetworkError:
+                        {
+                            ESP_LOGE(TAG, "Provisioning verification failed - network error");
+                            // Reset provisioning and regenerate code
+                            getProvisioningManager().resetProvisioning();
+                            ProvisioningVerifyFailedData failData;
+                            failData.errorMessage = "Network error";
+                            failData.isNetworkError = true;
+                            AppDispatcher::getInstance().dispatch(
+                                AppEvent(AppEventType::ProvisioningVerifyFailed, failData));
+                            break;
+                        }
+                    }
+                }, 100);  // 100ms delay
+            }
             // If showing provisioning code, start provisioning requests
             // Use a deferred callback to avoid holding display lock during HTTP client init
             if (state.provisioning.needsCodeDisplay() && !state.provisioning.provisioningCode.empty())
@@ -490,8 +573,70 @@ void StartupPage::onStateChanged(const AppState& state)
     {
         switch (state.provisioning.status)
         {
+            case ProvisioningStatus::Verifying:
+            {
+                // Show verifying UI
+                showVerifyingUI();
+
+                // If server already found, perform verification
+                if (state.calaosServer.hasServers())
+                {
+                    ESP_LOGI(TAG, "Server found, starting provisioning verification");
+                    std::string serverIp = state.calaosServer.selectedServer;
+
+                    // Perform verification in a deferred callback (after display unlock)
+                    LvglTimer::createOneShot([this, serverIp]()
+                    {
+                        ESP_LOGI(TAG, "Performing provisioning verification (deferred)");
+                        VerifyResult result = getProvisioningManager().verifyProvisioningWithServer(serverIp);
+
+                        switch (result)
+                        {
+                            case VerifyResult::Verified:
+                            {
+                                ESP_LOGI(TAG, "Provisioning verification successful");
+                                ProvisioningCompletedData data;
+                                data.deviceId = getProvisioningManager().getDeviceId();
+                                data.serverUrl = getProvisioningManager().getServerUrl();
+                                AppDispatcher::getInstance().dispatch(
+                                    AppEvent(AppEventType::ProvisioningCompleted, data));
+                                break;
+                            }
+                            case VerifyResult::InvalidCredentials:
+                            {
+                                ESP_LOGW(TAG, "Provisioning verification failed - invalid credentials");
+                                // Reset provisioning and regenerate code
+                                getProvisioningManager().resetProvisioning();
+                                ProvisioningVerifyFailedData failData;
+                                failData.errorMessage = "Invalid credentials";
+                                failData.isNetworkError = false;
+                                AppDispatcher::getInstance().dispatch(
+                                    AppEvent(AppEventType::ProvisioningVerifyFailed, failData));
+                                break;
+                            }
+                            case VerifyResult::NetworkError:
+                            {
+                                ESP_LOGE(TAG, "Provisioning verification failed - network error");
+                                // Reset provisioning and regenerate code
+                                getProvisioningManager().resetProvisioning();
+                                ProvisioningVerifyFailedData failData;
+                                failData.errorMessage = "Network error";
+                                failData.isNetworkError = true;
+                                AppDispatcher::getInstance().dispatch(
+                                    AppEvent(AppEventType::ProvisioningVerifyFailed, failData));
+                                break;
+                            }
+                        }
+                    }, 100);  // 100ms delay
+                }
+                break;
+            }
+
             case ProvisioningStatus::ShowingCode:
             {
+                // Hide verifying UI first if it was shown
+                hideVerifyingUI();
+
                 // Show provisioning code UI with animations
                 if (!state.provisioning.provisioningCode.empty())
                 {
@@ -531,7 +676,8 @@ void StartupPage::onStateChanged(const AppState& state)
                     provisioningRequester->stopRequesting();
                 }
 
-                // Hide provisioning UI and continue normal flow
+                // Hide verifying and provisioning UI and continue normal flow
+                hideVerifyingUI();
                 hideProvisioningUI();
 
                 // Connect WebSocket if not already connected
@@ -624,18 +770,28 @@ void StartupPage::onStateChanged(const AppState& state)
             calaosWebSocketManager.reset();
         }
 
-        // Reset provisioning
+        // Reset provisioning and show new code
         LvglTimer::createOneShot([this]()
         {
             ProvisioningManager& provMgr = getProvisioningManager();
             provMgr.resetProvisioning();
 
-            // Show error message
-            networkStatusLabel->setText("Authentication failed - please reprovision");
-            lv_obj_clear_flag(networkStatusLabel->get(), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+            // Dispatch event to update provisioning state and trigger UI update
+            std::string newCode = provMgr.getProvisioningCode();
+            ProvisioningCodeGeneratedData data;
+            data.provisioningCode = newCode;
+            data.macAddress = provMgr.getMacAddress();
+            AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::ProvisioningCodeGenerated, data));
 
-            // Restart discovery after a delay
+            // Show error message briefly before showing provisioning code
+            networkStatusLabel->setText("Authentication failed\nPlease re-provision the device");
+            lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_red, LV_PART_MAIN);
+            lv_obj_clear_flag(networkStatusLabel->get(), LV_OBJ_FLAG_HIDDEN);
+
+            // Hide spinner during error message
+            lv_obj_add_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+
+            // Restart discovery after a delay to find server and show provisioning code
             LvglTimer::createOneShot([this]()
             {
                 ESP_LOGI(TAG, "Restarting discovery after auth failure");

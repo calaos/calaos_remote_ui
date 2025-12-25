@@ -21,6 +21,8 @@ enum class AppEventType
     ProvisioningCodeGenerated,
     ProvisioningCompleted,
     ProvisioningFailed,
+    ProvisioningVerifyStarted,
+    ProvisioningVerifyFailed,
 
     WebSocketConnecting,
     WebSocketConnected,
@@ -79,6 +81,12 @@ struct ProvisioningFailedData
     std::string errorMessage;
 };
 
+struct ProvisioningVerifyFailedData
+{
+    std::string errorMessage;
+    bool isNetworkError;  // true if network error, false if invalid credentials
+};
+
 struct WebSocketDisconnectedData
 {
     std::string reason;
@@ -118,6 +126,7 @@ using AppEventData = std::variant<
     ProvisioningCodeGeneratedData,
     ProvisioningCompletedData,
     ProvisioningFailedData,
+    ProvisioningVerifyFailedData,
     WebSocketDisconnectedData,
     WebSocketAuthFailedData,
     WebSocketErrorData,
