@@ -64,8 +64,8 @@ std::string HMACAuthenticator::computeHmacSha256(const std::string& key, const s
 
 std::string HMACAuthenticator::generateNonce()
 {
-    // Generate 16 random bytes (32 hex characters)
-    unsigned char nonce[16];
+    // Generate 32 random bytes (64 hex characters)
+    unsigned char nonce[32];
 
 #ifdef ESP_PLATFORM
     // ESP32: Use hardware RNG

@@ -24,7 +24,7 @@ public:
 
     /**
      * @brief Generate random nonce for authentication
-     * @return Hex-encoded random nonce (32 characters)
+     * @return Hex-encoded random nonce (64 characters)
      */
     static std::string generateNonce();
 
