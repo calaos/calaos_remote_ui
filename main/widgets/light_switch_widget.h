@@ -1,7 +1,12 @@
 #pragma once
 
 #include "../calaos_widget.h"
-#include "smooth_ui_toolkit.h"
+#include "../calaos_protocol.h"
+#include "lvgl.h"
+#include <memory>
+
+// Forward declaration
+class ImageSequenceAnimator;
 
 /**
  * @brief Light switch widget (1x1 grid size)
@@ -50,8 +55,9 @@ private:
     void onClicked();
 
     // UI elements
-    lv_obj_t* iconLabel;    // ON/OFF icon
+    lv_obj_t* iconImage;    // Animated icon image
     lv_obj_t* nameLabel;    // IO name
+    std::unique_ptr<ImageSequenceAnimator> lightAnimator;
 
     bool updatingFromServer = false;  // Prevent feedback loop
 };

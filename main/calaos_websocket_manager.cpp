@@ -42,10 +42,33 @@ static WebSocketAuthErrorType parseAuthErrorType(const std::string& errorString)
     return WebSocketAuthErrorType::Unknown;
 }
 
+// Helper function to quickly check if a string looks like JSON
+// This avoids expensive JSON parsing for obvious non-JSON strings
+static bool looksLikeJson(const std::string& str)
+{
+    if (str.empty())
+        return false;
+
+    // Find first non-whitespace character
+    size_t pos = str.find_first_not_of(" \t\n\r");
+    if (pos == std::string::npos)
+        return false;
+
+    // JSON objects start with { and JSON arrays start with [
+    char first = str[pos];
+    return first == '{' || first == '[';
+}
+
 // Helper function to parse JSON error response body
 // Returns true if successfully parsed, false otherwise
 static bool parseAuthErrorResponse(const std::string& responseBody, std::string& errorString, std::string& status)
 {
+    // Quick check to avoid expensive JSON parsing for obvious non-JSON strings
+    if (!looksLikeJson(responseBody))
+    {
+        return false;
+    }
+
     try
     {
         json j = json::parse(responseBody);

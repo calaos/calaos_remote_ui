@@ -1,6 +1,8 @@
 #include "light_switch_widget.h"
 #include "../theme.h"
 #include "logging.h"
+#include "../image_sequence_animator.h"
+#include "images_generated.h"
 
 static const char* TAG = "widget.light_switch";
 
@@ -8,8 +10,9 @@ LightSwitchWidget::LightSwitchWidget(lv_obj_t* parent,
                                    const CalaosProtocol::WidgetConfig& config,
                                    const GridLayoutInfo& gridInfo):
     CalaosWidget(parent, config, gridInfo),
-    iconLabel(nullptr),
+    iconImage(nullptr),
     nameLabel(nullptr),
+    lightAnimator(nullptr),
     updatingFromServer(false)
 {
     ESP_LOGI(TAG, "Creating light switch widget: %s", config.io_id.c_str());
@@ -30,7 +33,7 @@ void LightSwitchWidget::createUI()
     // Container styling
     setBgColor(lv_color_make(0x30, 0x30, 0x30));  // Dark gray by default
     setBgOpa(LV_OPA_COVER);
-    setRadius(10);
+    setRadius(20);
     setBorderWidth(2);
     setBorderColor(theme_color_blue);
     setPadding(16, 16, 16, 16);
@@ -39,11 +42,29 @@ void LightSwitchWidget::createUI()
     lv_obj_add_flag(get(), LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(get(), clickEventCb, LV_EVENT_CLICKED, this);
 
-    // Icon (centered top-middle)
-    iconLabel = lv_label_create(get());
-    lv_label_set_text(iconLabel, LV_SYMBOL_POWER);
-    lv_obj_set_style_text_font(iconLabel, &lv_font_montserrat_48, 0);
-    lv_obj_align(iconLabel, LV_ALIGN_TOP_MID, 0, 20);
+    // Icon (centered top-middle) - using animated image sequence
+    iconImage = lv_image_create(get());
+    lv_obj_align(iconImage, LV_ALIGN_TOP_MID, 0, 20);
+
+    // Create animation configuration for light switch
+    std::vector<const lv_image_dsc_t*> lightOnFrames = {
+        &light_on_00, &light_on_01, &light_on_02, &light_on_03,
+        &light_on_04, &light_on_05, &light_on_06, &light_on_07, &light_on_08
+    };
+
+    auto animConfig = ImageSequenceAnimator::createOneShot(
+        lightOnFrames, nullptr, 40  // 40ms per frame, no static image
+    );
+
+    // Create the animator
+    lightAnimator = std::make_unique<ImageSequenceAnimator>(
+        iconImage, animConfig
+    );
+
+    // Set up completion callback
+    lightAnimator->onComplete([this]() {
+        ESP_LOGI(TAG, "Light animation completed");
+    });
 
     // Name label (centered bottom)
     nameLabel = lv_label_create(get());
@@ -55,7 +76,7 @@ void LightSwitchWidget::createUI()
 
     lv_label_set_text(nameLabel, displayName);
     lv_obj_set_style_text_font(nameLabel, &lv_font_montserrat_24, 0);
-    lv_obj_set_style_text_color(nameLabel, theme_color_white, 0);
+    lv_obj_set_style_text_color(nameLabel, theme_color_blue, 0);
     lv_obj_set_style_text_align(nameLabel, LV_TEXT_ALIGN_CENTER, 0);
 
     // Enable text scrolling for long names
@@ -69,17 +90,29 @@ void LightSwitchWidget::updateVisualState(bool isOn)
 {
     if (isOn)
     {
-        // ON state: Blue background with opacity, yellow icon
-        setBgColor(theme_color_blue);
+        // ON state: Blue background with opacity, animated icon
+        setBgColor(lv_color_make(0x0f, 0x1f, 0x2a));
+        setBorderColor(theme_color_blue);
         setBgOpa(LV_OPA_30);  // 30% opacity
-        lv_obj_set_style_text_color(iconLabel, theme_color_yellow, 0);  // Yellow/orange icon when ON
+
+        // Start light animation sequence (will end on light_on_08)
+        if (lightAnimator) {
+            lightAnimator->play();
+        }
     }
     else
     {
-        // OFF state: Dark gray background, gray icon
-        setBgColor(lv_color_make(0x30, 0x30, 0x30));
+        // OFF state: Dark gray background, static off icon
+        setBgColor(lv_color_make(0x1a, 0x1a, 0x1a));
+        setBorderColor(lv_color_make(0x2a, 0x2a, 0x2a));
         setBgOpa(LV_OPA_COVER);
-        lv_obj_set_style_text_color(iconLabel, lv_color_make(0x66, 0x66, 0x66), 0);  // Gray icon when OFF
+
+        // Stop animation and directly show light_off image
+        if (lightAnimator) {
+            lightAnimator->stop();
+        }
+        // Directly set the OFF image
+        lv_image_set_src(iconImage, &light_off);
     }
 }
 

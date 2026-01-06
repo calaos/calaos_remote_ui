@@ -23,6 +23,7 @@ set(MAIN_SOURCES
     main/calaos_protocol.cpp
     main/calaos_widget.cpp
     main/widget_factory.cpp
+    main/image_sequence_animator.cpp
     main/widgets/widget_error.cpp
     main/widgets/light_switch_widget.cpp
 )
