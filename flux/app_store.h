@@ -91,6 +91,41 @@ struct CalaosWebSocketState
     bool hasError = false;
     bool authFailed = false;
     std::string errorMessage;
+
+    // Detailed auth error info (from WebSocketAuthFailedData)
+    WebSocketAuthErrorType authErrorType = WebSocketAuthErrorType::Unknown;
+    int authHttpCode = 0;
+    std::string authErrorString;
+
+    // Helper to check if auth error requires re-provisioning
+    bool requiresReProvisioning() const
+    {
+        if (!authFailed)
+            return false;
+        return authErrorType == WebSocketAuthErrorType::InvalidToken ||
+               authErrorType == WebSocketAuthErrorType::InvalidHmac ||
+               authErrorType == WebSocketAuthErrorType::HandshakeFailure;
+    }
+
+    // Helper to check if auth error is retryable
+    bool isRetryableError() const
+    {
+        if (!authFailed)
+            return false;
+        return authErrorType == WebSocketAuthErrorType::InvalidTimestamp ||
+               authErrorType == WebSocketAuthErrorType::InvalidNonce ||
+               authErrorType == WebSocketAuthErrorType::MissingHeaders ||
+               authErrorType == WebSocketAuthErrorType::RateLimited ||
+               authErrorType == WebSocketAuthErrorType::NetworkError;
+    }
+
+    // Get suggested retry delay in milliseconds
+    int getRetryDelayMs() const
+    {
+        if (authErrorType == WebSocketAuthErrorType::RateLimited)
+            return 60000;  // 60 seconds for rate limiting
+        return 5000;  // 5 seconds for other retryable errors
+    }
 };
 
 struct AppState

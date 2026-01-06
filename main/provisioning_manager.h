@@ -69,9 +69,10 @@ public:
                              const std::string& deviceSecret,
                              const std::string& serverUrl);
 
-    // Verify existing provisioning credentials with server
-    // Returns VerifyResult enum (Verified, InvalidCredentials, NetworkError)
-    VerifyResult verifyProvisioningWithServer(const std::string& serverIp);
+    // Note: verifyProvisioningWithServer has been removed.
+    // Credential verification is now done via WebSocket connection.
+    // WebSocket HMAC authentication during handshake serves as verification.
+    // Auth errors are returned as HTTP responses with JSON body.
 
     // Get provisioned credentials
     std::string getDeviceId() const { return config_.deviceId; }

@@ -252,8 +252,15 @@ void AppStore::handleEvent(const AppEvent& event)
                     state_.websocket.authFailed = true;
                     state_.websocket.hasError = true;
                     state_.websocket.errorMessage = data->message;
+                    state_.websocket.authErrorType = data->errorType;
+                    state_.websocket.authHttpCode = data->httpCode;
+                    state_.websocket.authErrorString = data->errorString;
                     stateChanged = true;
-                    ESP_LOGD(TAG, "WebSocket auth failed: %s", data->message.c_str());
+                    ESP_LOGD(TAG, "WebSocket auth failed: %s (type=%d, http=%d, error=%s)",
+                             data->message.c_str(),
+                             static_cast<int>(data->errorType),
+                             data->httpCode,
+                             data->errorString.c_str());
                 }
                 break;
             }

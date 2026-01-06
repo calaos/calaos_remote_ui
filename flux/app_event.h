@@ -93,9 +93,52 @@ struct WebSocketDisconnectedData
     int code;
 };
 
+// WebSocket authentication error types based on server response
+enum class WebSocketAuthErrorType
+{
+    Unknown,           // Unknown error
+    InvalidToken,      // Token unknown/deleted on server - requires re-provisioning
+    InvalidHmac,       // HMAC mismatch (wrong secret) - requires re-provisioning
+    InvalidTimestamp,  // Clock out of sync (>30s drift) - retry after NTP sync
+    InvalidNonce,      // Nonce reused or wrong format - retry with new nonce
+    MissingHeaders,    // Required auth headers not provided - code issue, retry
+    RateLimited,       // Too many attempts - wait and retry
+    NetworkError,      // Network/connection error - retry with backoff
+    HandshakeFailure   // Multiple handshake failures - may require re-provisioning
+};
+
 struct WebSocketAuthFailedData
 {
     std::string message;
+    WebSocketAuthErrorType errorType = WebSocketAuthErrorType::Unknown;
+    int httpCode = 0;  // HTTP error code if available (401, 403, 429, etc.)
+    std::string errorString;  // Raw error string from server (e.g., "invalid_token")
+
+    // Helper to check if this error requires re-provisioning
+    bool requiresReProvisioning() const
+    {
+        return errorType == WebSocketAuthErrorType::InvalidToken ||
+               errorType == WebSocketAuthErrorType::InvalidHmac ||
+               errorType == WebSocketAuthErrorType::HandshakeFailure;
+    }
+
+    // Helper to check if this error is retryable
+    bool isRetryable() const
+    {
+        return errorType == WebSocketAuthErrorType::InvalidTimestamp ||
+               errorType == WebSocketAuthErrorType::InvalidNonce ||
+               errorType == WebSocketAuthErrorType::MissingHeaders ||
+               errorType == WebSocketAuthErrorType::RateLimited ||
+               errorType == WebSocketAuthErrorType::NetworkError;
+    }
+
+    // Get suggested retry delay in milliseconds (for rate limiting)
+    int getRetryDelayMs() const
+    {
+        if (errorType == WebSocketAuthErrorType::RateLimited)
+            return 60000;  // 60 seconds for rate limiting
+        return 5000;  // 5 seconds for other retryable errors
+    }
 };
 
 struct WebSocketErrorData

@@ -478,58 +478,40 @@ void StartupPage::onStateChanged(const AppState& state)
 
             ESP_LOGI(TAG, "Calaos server found, checking provisioning status");
 
-            // If in verifying state, perform verification
+            // If in verifying state, use WebSocket connection as verification
+            // WebSocket HMAC authentication during handshake serves as credential verification
             if (state.provisioning.isVerifying())
             {
-                ESP_LOGI(TAG, "Scheduling provisioning verification to server: %s",
+                ESP_LOGI(TAG, "Starting WebSocket connection for credential verification to server: %s",
                         state.calaosServer.selectedServer.c_str());
 
-                std::string serverIp = state.calaosServer.selectedServer;
-
-                // Perform verification in a deferred callback (after display unlock)
-                LvglTimer::createOneShot([this, serverIp]()
+                // Create WebSocket manager and connect - auth happens during handshake
+                // WebSocket connection success = verification successful
+                // WebSocket auth failure = credentials invalid (will trigger WebSocketAuthFailed event)
+                if (!calaosWebSocketManager)
                 {
-                    ESP_LOGI(TAG, "Performing provisioning verification (deferred)");
-                    VerifyResult result = getProvisioningManager().verifyProvisioningWithServer(serverIp);
-
-                    switch (result)
+                    LvglTimer::createOneShot([this]()
                     {
-                        case VerifyResult::Verified:
+                        ESP_LOGI(TAG, "Creating WebSocket manager for verification");
+                        calaosWebSocketManager = std::make_unique<CalaosWebSocketManager>();
+                        g_wsManager = calaosWebSocketManager.get();
+                        if (calaosWebSocketManager->connect())
                         {
-                            ESP_LOGI(TAG, "Provisioning verification successful");
-                            ProvisioningCompletedData data;
-                            data.deviceId = getProvisioningManager().getDeviceId();
-                            data.serverUrl = getProvisioningManager().getServerUrl();
-                            AppDispatcher::getInstance().dispatch(
-                                AppEvent(AppEventType::ProvisioningCompleted, data));
-                            break;
+                            ESP_LOGI(TAG, "WebSocket connection initiated for verification");
+                            // Connection success will dispatch ProvisioningCompleted via WebSocketConnected handler
                         }
-                        case VerifyResult::InvalidCredentials:
+                        else
                         {
-                            ESP_LOGW(TAG, "Provisioning verification failed - invalid credentials");
-                            // Reset provisioning and regenerate code
-                            getProvisioningManager().resetProvisioning();
+                            ESP_LOGE(TAG, "Failed to initiate WebSocket connection for verification");
+                            // Dispatch network error - will trigger retry
                             ProvisioningVerifyFailedData failData;
-                            failData.errorMessage = "Invalid credentials";
-                            failData.isNetworkError = false;
-                            AppDispatcher::getInstance().dispatch(
-                                AppEvent(AppEventType::ProvisioningVerifyFailed, failData));
-                            break;
-                        }
-                        case VerifyResult::NetworkError:
-                        {
-                            ESP_LOGE(TAG, "Provisioning verification failed - network error");
-                            // Reset provisioning and regenerate code
-                            getProvisioningManager().resetProvisioning();
-                            ProvisioningVerifyFailedData failData;
-                            failData.errorMessage = "Network error";
+                            failData.errorMessage = "Failed to connect";
                             failData.isNetworkError = true;
                             AppDispatcher::getInstance().dispatch(
                                 AppEvent(AppEventType::ProvisioningVerifyFailed, failData));
-                            break;
                         }
-                    }
-                }, 100);  // 100ms delay
+                    }, 100);  // 100ms delay
+                }
             }
             // If showing provisioning code, start provisioning requests
             // Use a deferred callback to avoid holding display lock during HTTP client init
@@ -578,56 +560,35 @@ void StartupPage::onStateChanged(const AppState& state)
                 // Show verifying UI
                 showVerifyingUI();
 
-                // If server already found, perform verification
+                // If server already found, use WebSocket connection as verification
+                // WebSocket HMAC authentication during handshake serves as credential verification
                 if (state.calaosServer.hasServers())
                 {
-                    ESP_LOGI(TAG, "Server found, starting provisioning verification");
-                    std::string serverIp = state.calaosServer.selectedServer;
+                    ESP_LOGI(TAG, "Server found, starting WebSocket connection for verification");
 
-                    // Perform verification in a deferred callback (after display unlock)
-                    LvglTimer::createOneShot([this, serverIp]()
+                    // Create WebSocket manager and connect - auth happens during handshake
+                    if (!calaosWebSocketManager)
                     {
-                        ESP_LOGI(TAG, "Performing provisioning verification (deferred)");
-                        VerifyResult result = getProvisioningManager().verifyProvisioningWithServer(serverIp);
-
-                        switch (result)
+                        LvglTimer::createOneShot([this]()
                         {
-                            case VerifyResult::Verified:
+                            ESP_LOGI(TAG, "Creating WebSocket manager for verification (from state change)");
+                            calaosWebSocketManager = std::make_unique<CalaosWebSocketManager>();
+                            g_wsManager = calaosWebSocketManager.get();
+                            if (calaosWebSocketManager->connect())
                             {
-                                ESP_LOGI(TAG, "Provisioning verification successful");
-                                ProvisioningCompletedData data;
-                                data.deviceId = getProvisioningManager().getDeviceId();
-                                data.serverUrl = getProvisioningManager().getServerUrl();
-                                AppDispatcher::getInstance().dispatch(
-                                    AppEvent(AppEventType::ProvisioningCompleted, data));
-                                break;
+                                ESP_LOGI(TAG, "WebSocket connection initiated for verification");
                             }
-                            case VerifyResult::InvalidCredentials:
+                            else
                             {
-                                ESP_LOGW(TAG, "Provisioning verification failed - invalid credentials");
-                                // Reset provisioning and regenerate code
-                                getProvisioningManager().resetProvisioning();
+                                ESP_LOGE(TAG, "Failed to initiate WebSocket connection for verification");
                                 ProvisioningVerifyFailedData failData;
-                                failData.errorMessage = "Invalid credentials";
-                                failData.isNetworkError = false;
-                                AppDispatcher::getInstance().dispatch(
-                                    AppEvent(AppEventType::ProvisioningVerifyFailed, failData));
-                                break;
-                            }
-                            case VerifyResult::NetworkError:
-                            {
-                                ESP_LOGE(TAG, "Provisioning verification failed - network error");
-                                // Reset provisioning and regenerate code
-                                getProvisioningManager().resetProvisioning();
-                                ProvisioningVerifyFailedData failData;
-                                failData.errorMessage = "Network error";
+                                failData.errorMessage = "Failed to connect";
                                 failData.isNetworkError = true;
                                 AppDispatcher::getInstance().dispatch(
                                     AppEvent(AppEventType::ProvisioningVerifyFailed, failData));
-                                break;
                             }
-                        }
-                    }, 100);  // 100ms delay
+                        }, 100);  // 100ms delay
+                    }
                 }
                 break;
             }
@@ -681,9 +642,11 @@ void StartupPage::onStateChanged(const AppState& state)
                 hideProvisioningUI();
 
                 // Connect WebSocket if not already connected
+                // Note: If we came from Verifying state, WebSocket is already connected
+                // (WebSocket connection success is how we verify credentials now)
                 if (!calaosWebSocketManager)
                 {
-                    ESP_LOGI(TAG, "Creating WebSocket manager");
+                    ESP_LOGI(TAG, "Creating WebSocket manager (not from verification flow)");
                     LvglTimer::createOneShot([this]()
                     {
                         calaosWebSocketManager = std::make_unique<CalaosWebSocketManager>();
@@ -731,6 +694,19 @@ void StartupPage::onStateChanged(const AppState& state)
         if (state.websocket.isConnected)
         {
             ESP_LOGI(TAG, "WebSocket connected successfully");
+
+            // If we were in Verifying state, WebSocket connection success means verification passed
+            // Dispatch ProvisioningCompleted to transition to Provisioned state
+            if (state.provisioning.isVerifying())
+            {
+                ESP_LOGI(TAG, "WebSocket connected during verification - credentials verified successfully");
+                ProvisioningCompletedData completedData;
+                completedData.deviceId = getProvisioningManager().getDeviceId();
+                completedData.serverUrl = getProvisioningManager().getServerUrl();
+                AppDispatcher::getInstance().dispatch(
+                    AppEvent(AppEventType::ProvisioningCompleted, completedData));
+            }
+
             networkStatusLabel->setText("Connected to Calaos!");
 
             // Hide spinner after connection
@@ -757,47 +733,107 @@ void StartupPage::onStateChanged(const AppState& state)
         }
     }
 
-    // Handle WebSocket authentication failure - return to provisioning
+    // Handle WebSocket authentication failure - check if retryable or requires re-provisioning
     if (state.websocket.authFailed && !lastWebSocketState.authFailed)
     {
-        ESP_LOGE(TAG, "WebSocket authentication failed - resetting provisioning");
+        ESP_LOGE(TAG, "WebSocket authentication failed - errorType=%d, httpCode=%d, error=%s",
+                static_cast<int>(state.websocket.authErrorType),
+                state.websocket.authHttpCode,
+                state.websocket.authErrorString.c_str());
 
         // Disconnect WebSocket
         if (calaosWebSocketManager)
         {
             calaosWebSocketManager->disconnect();
-            g_wsManager = nullptr;  // Unset global pointer
+            g_wsManager = nullptr;
             calaosWebSocketManager.reset();
         }
 
-        // Reset provisioning and show new code
-        LvglTimer::createOneShot([this]()
+        // Check if error is retryable or requires re-provisioning
+        if (state.websocket.isRetryableError())
         {
-            ProvisioningManager& provMgr = getProvisioningManager();
-            provMgr.resetProvisioning();
+            // Retryable error (rate_limited, invalid_timestamp, invalid_nonce, etc.)
+            int retryDelayMs = state.websocket.getRetryDelayMs();
 
-            // Dispatch event to update provisioning state and trigger UI update
-            std::string newCode = provMgr.getProvisioningCode();
-            ProvisioningCodeGeneratedData data;
-            data.provisioningCode = newCode;
-            data.macAddress = provMgr.getMacAddress();
-            AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::ProvisioningCodeGenerated, data));
+            ESP_LOGI(TAG, "Auth error is retryable, will retry in %d ms", retryDelayMs);
 
-            // Show error message briefly before showing provisioning code
-            networkStatusLabel->setText("Authentication failed\nPlease re-provision the device");
-            lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_red, LV_PART_MAIN);
-            lv_obj_clear_flag(networkStatusLabel->get(), LV_OBJ_FLAG_HIDDEN);
+            // Show appropriate message based on error type
+            std::string errorMsg;
+            if (state.websocket.authErrorType == WebSocketAuthErrorType::RateLimited)
+            {
+                errorMsg = "Rate limited\nPlease wait 1 minute...";
+            }
+            else if (state.websocket.authErrorType == WebSocketAuthErrorType::InvalidTimestamp)
+            {
+                errorMsg = "Clock sync error\nRetrying...";
+            }
+            else
+            {
+                errorMsg = "Connection error\nRetrying...";
+            }
 
-            // Hide spinner during error message
-            lv_obj_add_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+            LvglTimer::createOneShot([this, errorMsg]()
+            {
+                networkStatusLabel->setText(errorMsg.c_str());
+                lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_red, LV_PART_MAIN);
+                lv_obj_clear_flag(networkStatusLabel->get(), LV_OBJ_FLAG_HIDDEN);
+                lv_obj_clear_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+            }, 10);
 
-            // Restart discovery after a delay to find server and show provisioning code
+            // Retry WebSocket connection after delay
             LvglTimer::createOneShot([this]()
             {
-                ESP_LOGI(TAG, "Restarting discovery after auth failure");
-                calaosDiscovery->startDiscovery();
-            }, 3000);
-        }, 100);
+                ESP_LOGI(TAG, "Retrying WebSocket connection after auth error");
+
+                // Clear auth failed state before retry
+                // Note: This will be set again if retry fails
+                AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::WebSocketConnecting));
+
+                if (!calaosWebSocketManager)
+                {
+                    calaosWebSocketManager = std::make_unique<CalaosWebSocketManager>();
+                    g_wsManager = calaosWebSocketManager.get();
+                }
+                if (!calaosWebSocketManager->connect())
+                {
+                    ESP_LOGE(TAG, "Failed to initiate WebSocket reconnection");
+                }
+            }, retryDelayMs);
+        }
+        else
+        {
+            // Fatal auth error (invalid_token, invalid_hmac, handshake_failure)
+            // Requires re-provisioning
+            ESP_LOGE(TAG, "Auth error requires re-provisioning");
+
+            LvglTimer::createOneShot([this]()
+            {
+                ProvisioningManager& provMgr = getProvisioningManager();
+                provMgr.resetProvisioning();
+
+                // Dispatch event to update provisioning state and trigger UI update
+                std::string newCode = provMgr.getProvisioningCode();
+                ProvisioningCodeGeneratedData data;
+                data.provisioningCode = newCode;
+                data.macAddress = provMgr.getMacAddress();
+                AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::ProvisioningCodeGenerated, data));
+
+                // Show error message briefly before showing provisioning code
+                networkStatusLabel->setText("Authentication failed\nPlease re-provision the device");
+                lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_red, LV_PART_MAIN);
+                lv_obj_clear_flag(networkStatusLabel->get(), LV_OBJ_FLAG_HIDDEN);
+
+                // Hide spinner during error message
+                lv_obj_add_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+
+                // Restart discovery after a delay to find server and show provisioning code
+                LvglTimer::createOneShot([this]()
+                {
+                    ESP_LOGI(TAG, "Restarting discovery after auth failure");
+                    calaosDiscovery->startDiscovery();
+                }, 3000);
+            }, 100);
+        }
     }
 
     // Update cached states

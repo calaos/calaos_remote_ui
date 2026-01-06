@@ -13,9 +13,52 @@ static const char* TAG = "ws.mgr";
 // Global WebSocket manager instance
 CalaosWebSocketManager* g_wsManager = nullptr;
 
-// WebSocket close codes for authentication failures
+// HTTP status codes for authentication failures
+static const int HTTP_BAD_REQUEST = 400;
+static const int HTTP_UNAUTHORIZED = 401;
+static const int HTTP_FORBIDDEN = 403;
+static const int HTTP_TOO_MANY_REQUESTS = 429;
+
+// WebSocket close codes for authentication failures (custom codes from server)
 static const int WS_CLOSE_UNAUTHORIZED = 4001;
 static const int WS_CLOSE_FORBIDDEN = 4003;
+
+// Helper function to parse authentication error from JSON response
+// Server returns: {"error": "invalid_token", "status": "authentication_failed"}
+static WebSocketAuthErrorType parseAuthErrorType(const std::string& errorString)
+{
+    if (errorString == "invalid_token")
+        return WebSocketAuthErrorType::InvalidToken;
+    if (errorString == "invalid_hmac")
+        return WebSocketAuthErrorType::InvalidHmac;
+    if (errorString == "invalid_timestamp")
+        return WebSocketAuthErrorType::InvalidTimestamp;
+    if (errorString == "invalid_nonce")
+        return WebSocketAuthErrorType::InvalidNonce;
+    if (errorString == "missing_headers")
+        return WebSocketAuthErrorType::MissingHeaders;
+    if (errorString == "rate_limited")
+        return WebSocketAuthErrorType::RateLimited;
+    return WebSocketAuthErrorType::Unknown;
+}
+
+// Helper function to parse JSON error response body
+// Returns true if successfully parsed, false otherwise
+static bool parseAuthErrorResponse(const std::string& responseBody, std::string& errorString, std::string& status)
+{
+    try
+    {
+        json j = json::parse(responseBody);
+        errorString = j.value("error", "");
+        status = j.value("status", "");
+        return !errorString.empty();
+    }
+    catch (const std::exception& e)
+    {
+        ESP_LOGD(TAG, "Failed to parse error response as JSON: %s", e.what());
+        return false;
+    }
+}
 
 CalaosWebSocketManager::CalaosWebSocketManager():
     currentState_(WebSocketState::DISCONNECTED),
@@ -322,17 +365,77 @@ void CalaosWebSocketManager::onClose(int code, const std::string& reason)
     isConnecting_ = false;
     currentState_ = WebSocketState::DISCONNECTED;
 
-    // Check if this is an authentication failure
-    if (isAuthenticationError(code, reason))
+    // Try to parse JSON error response from reason (server sends JSON body on auth errors)
+    std::string errorString;
+    std::string status;
+    bool hasJsonError = parseAuthErrorResponse(reason, errorString, status);
+
+    // Determine if this is an authentication failure based on:
+    // 1. Parsed JSON error response
+    // 2. Close code (4001 = unauthorized, 4003 = forbidden)
+    // 3. Keywords in reason string
+    WebSocketAuthErrorType errorType = WebSocketAuthErrorType::Unknown;
+    int httpCode = 0;
+
+    if (hasJsonError)
     {
-        ESP_LOGE(TAG, "Authentication failed - returning to provisioning");
+        errorType = parseAuthErrorType(errorString);
+        ESP_LOGI(TAG, "Parsed auth error: type=%d, error=%s, status=%s",
+                static_cast<int>(errorType), errorString.c_str(), status.c_str());
+
+        // Map error type to HTTP code for logging/debugging
+        if (errorType == WebSocketAuthErrorType::InvalidToken ||
+            errorType == WebSocketAuthErrorType::InvalidTimestamp ||
+            errorType == WebSocketAuthErrorType::InvalidNonce)
+        {
+            httpCode = HTTP_UNAUTHORIZED;
+        }
+        else if (errorType == WebSocketAuthErrorType::InvalidHmac)
+        {
+            httpCode = HTTP_FORBIDDEN;
+        }
+        else if (errorType == WebSocketAuthErrorType::RateLimited)
+        {
+            httpCode = HTTP_TOO_MANY_REQUESTS;
+        }
+        else if (errorType == WebSocketAuthErrorType::MissingHeaders)
+        {
+            httpCode = HTTP_BAD_REQUEST;
+        }
+    }
+    else if (code == WS_CLOSE_UNAUTHORIZED)
+    {
+        errorType = WebSocketAuthErrorType::InvalidToken;
+        httpCode = HTTP_UNAUTHORIZED;
+    }
+    else if (code == WS_CLOSE_FORBIDDEN)
+    {
+        errorType = WebSocketAuthErrorType::InvalidHmac;
+        httpCode = HTTP_FORBIDDEN;
+    }
+    else if (isAuthenticationError(code, reason))
+    {
+        // Fallback to keyword-based detection
+        errorType = WebSocketAuthErrorType::Unknown;
+    }
+
+    // Handle auth failure
+    if (errorType != WebSocketAuthErrorType::Unknown || isAuthenticationError(code, reason))
+    {
+        ESP_LOGE(TAG, "Authentication failed - errorType=%d, httpCode=%d",
+                static_cast<int>(errorType), httpCode);
 
         // Disable auto-reconnect before dispatching to prevent reconnect attempts with bad credentials
         CalaosNet::instance().webSocketClient().setAutoReconnect(false);
 
+        WebSocketAuthFailedData authData;
+        authData.message = reason;
+        authData.errorType = errorType;
+        authData.httpCode = httpCode;
+        authData.errorString = errorString;
+
         AppDispatcher::getInstance().dispatch(
-            AppEvent(AppEventType::WebSocketAuthFailed,
-                    WebSocketAuthFailedData{reason})
+            AppEvent(AppEventType::WebSocketAuthFailed, authData)
         );
     }
     else
@@ -347,6 +450,53 @@ void CalaosWebSocketManager::onClose(int code, const std::string& reason)
 void CalaosWebSocketManager::onError(NetworkResult error, const std::string& message)
 {
     ESP_LOGE(TAG, "WebSocket error: %d - %s", static_cast<int>(error), message.c_str());
+
+    // Try to parse JSON error response from message
+    std::string errorString;
+    std::string status;
+    bool hasJsonError = parseAuthErrorResponse(message, errorString, status);
+
+    if (hasJsonError)
+    {
+        WebSocketAuthErrorType errorType = parseAuthErrorType(errorString);
+        ESP_LOGI(TAG, "Parsed auth error from error callback: type=%d, error=%s",
+                static_cast<int>(errorType), errorString.c_str());
+
+        // Determine HTTP code
+        int httpCode = 0;
+        if (errorType == WebSocketAuthErrorType::InvalidToken ||
+            errorType == WebSocketAuthErrorType::InvalidTimestamp ||
+            errorType == WebSocketAuthErrorType::InvalidNonce)
+        {
+            httpCode = HTTP_UNAUTHORIZED;
+        }
+        else if (errorType == WebSocketAuthErrorType::InvalidHmac)
+        {
+            httpCode = HTTP_FORBIDDEN;
+        }
+        else if (errorType == WebSocketAuthErrorType::RateLimited)
+        {
+            httpCode = HTTP_TOO_MANY_REQUESTS;
+        }
+        else if (errorType == WebSocketAuthErrorType::MissingHeaders)
+        {
+            httpCode = HTTP_BAD_REQUEST;
+        }
+
+        // Disable auto-reconnect for auth failures
+        CalaosNet::instance().webSocketClient().setAutoReconnect(false);
+
+        WebSocketAuthFailedData authData;
+        authData.message = message;
+        authData.errorType = errorType;
+        authData.httpCode = httpCode;
+        authData.errorString = errorString;
+
+        AppDispatcher::getInstance().dispatch(
+            AppEvent(AppEventType::WebSocketAuthFailed, authData)
+        );
+        return;
+    }
 
     // Track consecutive handshake errors - they often indicate auth failures
     // (e.g., server rejecting connection due to invalid HMAC)
@@ -363,9 +513,14 @@ void CalaosWebSocketManager::onError(NetworkResult error, const std::string& mes
             // Disable auto-reconnect before dispatching to prevent further attempts
             CalaosNet::instance().webSocketClient().setAutoReconnect(false);
 
+            WebSocketAuthFailedData authData;
+            authData.message = "Multiple handshake failures - credentials may be invalid";
+            authData.errorType = WebSocketAuthErrorType::HandshakeFailure;
+            authData.httpCode = 0;
+            authData.errorString = "handshake_failure";
+
             AppDispatcher::getInstance().dispatch(
-                AppEvent(AppEventType::WebSocketAuthFailed,
-                        WebSocketAuthFailedData{"Multiple handshake failures - credentials may be invalid"})
+                AppEvent(AppEventType::WebSocketAuthFailed, authData)
             );
             return;
         }

@@ -236,21 +236,9 @@ bool ProvisioningManager::completeProvisioning(const std::string& deviceId,
     return true;
 }
 
-VerifyResult ProvisioningManager::verifyProvisioningWithServer(const std::string& serverIp)
-{
-    ESP_LOGI(TAG, "Verifying provisioning with server: %s", serverIp.c_str());
-
-    if (!isProvisioned())
-    {
-        ESP_LOGW(TAG, "Cannot verify - device is not provisioned");
-        return VerifyResult::InvalidCredentials;
-    }
-
-    // Create a temporary requester for verification
-    // Use stored credentials (device_id + auth_token) for secure verification
-    ProvisioningRequester requester;
-    return requester.verifyProvisioning(serverIp, config_.deviceId, config_.authToken);
-}
+// Note: verifyProvisioningWithServer has been removed.
+// Credential verification is now done via WebSocket connection.
+// WebSocket HMAC authentication during handshake serves as verification.
 
 std::string ProvisioningManager::generateNewCode()
 {
