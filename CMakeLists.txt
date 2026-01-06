@@ -185,10 +185,9 @@ if(DETECTED_PLATFORM STREQUAL "LINUX")
 
     # Add LVGL
     add_compile_definitions(LV_CONF_INCLUDE_SIMPLE=1)
-    set (LV_CONF_BUILD_DISABLE_EXAMPLES ON)
-    set (LV_CONF_BUILD_DISABLE_DEMOS ON)
-    set (LV_CONF_BUILD_DISABLE_THORVG_INTERNAL ON)
-    set (LV_BUILD_CONF_PATH ${CMAKE_SOURCE_DIR}/main/lv_conf.h)
+    set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
+    set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(LV_BUILD_CONF_PATH ${CMAKE_SOURCE_DIR}/main/lv_conf.h CACHE PATH "Path to lv_conf.h" FORCE)
     add_subdirectory(components/lvgl)
 
     # Add mongoose
