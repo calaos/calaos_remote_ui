@@ -58,9 +58,9 @@ void LightSwitchWidget::createUI()
     lv_obj_set_style_text_color(nameLabel, theme_color_white, 0);
     lv_obj_set_style_text_align(nameLabel, LV_TEXT_ALIGN_CENTER, 0);
 
-    // Enable text wrapping for long names
-    lv_label_set_long_mode(nameLabel, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(nameLabel, lv_obj_get_width(get()) - 20);
+    // Enable text scrolling for long names
+    lv_label_set_long_mode(nameLabel, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_obj_set_width(nameLabel, LV_PCT(100));
 
     lv_obj_align(nameLabel, LV_ALIGN_BOTTOM_MID, 0, -10);
 }

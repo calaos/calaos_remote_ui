@@ -285,7 +285,22 @@ void AppStore::handleEvent(const AppEvent& event)
                     bool actuallyChanged = (it == state_.ioStates.end() ||
                                           it->second.state != data->ioState.state);
 
-                    state_.ioStates[data->ioState.id] = data->ioState;
+                    // Merge state: preserve existing fields if new fields are empty
+                    if (it != state_.ioStates.end())
+                    {
+                        CalaosProtocol::IoState& existing = it->second;
+                        existing.state = data->ioState.state;
+                        if (!data->ioState.name.empty())
+                            existing.name = data->ioState.name;
+                        if (!data->ioState.type.empty())
+                            existing.type = data->ioState.type;
+                        if (!data->ioState.gui_type.empty())
+                            existing.gui_type = data->ioState.gui_type;
+                    }
+                    else
+                    {
+                        state_.ioStates[data->ioState.id] = data->ioState;
+                    }
 
                     if (actuallyChanged)
                     {
@@ -302,7 +317,25 @@ void AppStore::handleEvent(const AppEvent& event)
                 if (auto* data = event.getData<IoStatesReceivedData>())
                 {
                     for (const auto& [id, ioState] : data->ioStates)
-                        state_.ioStates[id] = ioState;
+                    {
+                        auto it = state_.ioStates.find(id);
+                        // Merge state: preserve existing fields if new fields are empty
+                        if (it != state_.ioStates.end())
+                        {
+                            CalaosProtocol::IoState& existing = it->second;
+                            existing.state = ioState.state;
+                            if (!ioState.name.empty())
+                                existing.name = ioState.name;
+                            if (!ioState.type.empty())
+                                existing.type = ioState.type;
+                            if (!ioState.gui_type.empty())
+                                existing.gui_type = ioState.gui_type;
+                        }
+                        else
+                        {
+                            state_.ioStates[id] = ioState;
+                        }
+                    }
 
                     stateChanged = true;
                     ESP_LOGD(TAG, "IO states received: %zu states", data->ioStates.size());
