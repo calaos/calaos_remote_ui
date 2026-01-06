@@ -13,6 +13,11 @@ enum class AppEventType
     NetworkDisconnected,
     NetworkTimeout,
 
+    // NTP time synchronization events
+    NtpSyncStarted,
+    NtpTimeSynced,
+    NtpSyncFailed,
+
     CalaosDiscoveryStarted,
     CalaosServerFound,
     CalaosDiscoveryTimeout,

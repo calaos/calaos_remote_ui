@@ -115,6 +115,36 @@ void AppStore::handleEvent(const AppEvent& event)
                 break;
             }
 
+            // NTP time synchronization events
+            case AppEventType::NtpSyncStarted:
+            {
+                state_.ntp.isSyncing = true;
+                state_.ntp.hasFailed = false;
+                stateChanged = true;
+                ESP_LOGD(TAG, "NTP sync started");
+                break;
+            }
+
+            case AppEventType::NtpTimeSynced:
+            {
+                state_.ntp.isSyncing = false;
+                state_.ntp.isSynced = true;
+                state_.ntp.hasFailed = false;
+                stateChanged = true;
+                ESP_LOGI(TAG, "NTP time synchronized");
+                break;
+            }
+
+            case AppEventType::NtpSyncFailed:
+            {
+                state_.ntp.isSyncing = false;
+                state_.ntp.hasFailed = true;
+                // Note: isSynced stays false until successful sync
+                stateChanged = true;
+                ESP_LOGW(TAG, "NTP sync failed");
+                break;
+            }
+
             case AppEventType::CalaosDiscoveryStarted:
             {
                 state_.calaosServer.isDiscovering = true;

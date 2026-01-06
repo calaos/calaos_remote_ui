@@ -58,6 +58,7 @@ private:
     void onStateChanged(const AppState& state);
 
     NetworkState lastNetworkState;
+    NtpState lastNtpState;
     CalaosServerState lastCalaosServerState;
     ProvisioningState lastProvisioningState;
     CalaosWebSocketState lastWebSocketState;

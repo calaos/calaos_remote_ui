@@ -385,6 +385,11 @@ void StartupPage::onStateChanged(const AppState& state)
                                state.network.ipAddress != lastNetworkState.ipAddress ||
                                state.network.connectionType != lastNetworkState.connectionType);
 
+    // Check if NTP state has changed
+    bool ntpStateChanged = (state.ntp.isSyncing != lastNtpState.isSyncing ||
+                           state.ntp.isSynced != lastNtpState.isSynced ||
+                           state.ntp.hasFailed != lastNtpState.hasFailed);
+
     // Check if Calaos server state has changed
     bool calaosStateChanged = (state.calaosServer.isDiscovering != lastCalaosServerState.isDiscovering ||
                               state.calaosServer.hasTimeout != lastCalaosServerState.hasTimeout ||
@@ -399,21 +404,16 @@ void StartupPage::onStateChanged(const AppState& state)
     {
         if (state.network.isReady && !lastNetworkState.isReady)
         {
-            // Network just became ready
-            // Initialize provisioning manager now that network is available
-            ESP_LOGI(TAG, "Network ready, initializing provisioning manager");
-            if (!getProvisioningManager().init())
-            {
-                ESP_LOGE(TAG, "Failed to initialize provisioning manager");
-            }
+            // Network just became ready - wait for NTP sync before proceeding
+            // NTP sync will be triggered automatically by the network handler
+            ESP_LOGI(TAG, "Network ready, waiting for NTP time sync");
+            networkStatusLabel->setText("Synchronizing clock...");
+            lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_white, LV_PART_MAIN);
+            lv_obj_clear_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
 
-            // Start discovery to find Calaos server
-            ESP_LOGI(TAG, "Waiting 1 seconds before starting Calaos discovery");
-            discoveryDelayTimer = LvglTimer::createOneShot([this]()
-            {
-                ESP_LOGI(TAG, "Starting Calaos discovery after 1-second delay");
-                calaosDiscovery->startDiscovery();
-            }, 1000);
+            // Restart pulsing animation
+            if (networkStatusAnimation.currentPlayingState() != animate_state::playing)
+                networkStatusAnimation.play();
         }
         else if (state.network.hasTimeout)
         {
@@ -437,6 +437,62 @@ void StartupPage::onStateChanged(const AppState& state)
 
             // Show the spinner
             lv_obj_clear_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
+    // Handle NTP state changes
+    if (ntpStateChanged)
+    {
+        if (state.ntp.isSyncing && !lastNtpState.isSyncing)
+        {
+            // NTP sync started (or retrying)
+            ESP_LOGI(TAG, "NTP sync started/retrying");
+            networkStatusLabel->setText("Synchronizing clock...");
+            lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_white, LV_PART_MAIN);
+            lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);
+            lv_obj_clear_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+
+            // Restart pulsing animation
+            if (networkStatusAnimation.currentPlayingState() != animate_state::playing)
+                networkStatusAnimation.play();
+        }
+        else if (state.ntp.isSynced && !lastNtpState.isSynced)
+        {
+            // NTP sync successful - now we can proceed
+            ESP_LOGI(TAG, "NTP time synchronized, initializing provisioning manager");
+
+            // Brief success message
+            networkStatusLabel->setText("Clock synchronized");
+            lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_white, LV_PART_MAIN);
+            lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);
+
+            // Initialize provisioning manager now that time is synchronized
+            if (!getProvisioningManager().init())
+            {
+                ESP_LOGE(TAG, "Failed to initialize provisioning manager");
+            }
+
+            // Start discovery to find Calaos server after brief delay
+            ESP_LOGI(TAG, "Waiting 1 second before starting Calaos discovery");
+            discoveryDelayTimer = LvglTimer::createOneShot([this]()
+            {
+                ESP_LOGI(TAG, "Starting Calaos discovery after NTP sync");
+                calaosDiscovery->startDiscovery();
+            }, 1000);
+        }
+        else if (state.ntp.hasFailed && !lastNtpState.hasFailed)
+        {
+            // NTP sync failed - show error but keep trying
+            ESP_LOGW(TAG, "NTP sync failed, will retry");
+            networkStatusLabel->setText("Clock sync failed\nRetrying...");
+            lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_red, LV_PART_MAIN);
+            lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);
+
+            // Keep spinner visible for retry indication
+            lv_obj_clear_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+
+            // Stop pulsing animation during error display
+            networkStatusAnimation.cancel();
         }
     }
 
@@ -838,6 +894,7 @@ void StartupPage::onStateChanged(const AppState& state)
 
     // Update cached states
     lastNetworkState = state.network;
+    lastNtpState = state.ntp;
     lastCalaosServerState = state.calaosServer;
     lastProvisioningState = state.provisioning;
     lastWebSocketState = state.websocket;

@@ -3,6 +3,7 @@
 #include "provisioning_manager.h"
 #include "app_dispatcher.h"
 #include "logging.h"
+#include "../hal/hal.h"
 #include <nlohmann/json.hpp>
 #include <sstream>
 
@@ -100,6 +101,13 @@ bool CalaosWebSocketManager::connect()
     if (isConnected() || isConnecting_)
     {
         ESP_LOGW(TAG, "Already connected or connecting");
+        return false;
+    }
+
+    // Check if NTP time is synchronized (required for HMAC authentication)
+    if (!HAL::getInstance().getSystem().isTimeSynced())
+    {
+        ESP_LOGW(TAG, "Cannot connect: NTP time not synchronized (HMAC timestamps will be invalid)");
         return false;
     }
 
@@ -805,11 +813,26 @@ void CalaosWebSocketManager::handleEvent(const json& data)
                 return;
             }
 
-            ESP_LOGI(TAG, "Event io_changed: %s = %s", ioId.c_str(), state.c_str());
-
             CalaosProtocol::IoState ioState;
             ioState.id = ioId;
-            ioState.state = state;
+
+            // Parse state: could be "true"/"false" for boolean IOs
+            // or a numeric value (0-100) for light_dimmer
+            try
+            {
+                // Try to parse as integer for light_dimmer
+                int numericValue = std::stoi(state);
+                ioState.brightness = numericValue;
+                // For light_dimmer, state is "true" if brightness > 0
+                ioState.state = (numericValue > 0) ? "true" : "false";
+                ESP_LOGI(TAG, "Event io_changed: %s = %d (brightness)", ioId.c_str(), numericValue);
+            }
+            catch (const std::exception&)
+            {
+                // Not a number, treat as boolean state
+                ioState.state = state;
+                ESP_LOGI(TAG, "Event io_changed: %s = %s", ioId.c_str(), state.c_str());
+            }
 
             AppDispatcher::getInstance().dispatch(
                 AppEvent(AppEventType::IoStateReceived,

@@ -201,3 +201,38 @@ HalResult LinuxHalSystem::ensureConfigDir()
 
     return HalResult::OK;
 }
+
+// ============================================================================
+// NTP Time Synchronization (no-op on Linux - system handles NTP)
+// ============================================================================
+
+HalResult LinuxHalSystem::initNtp()
+{
+    // Linux system typically has NTP handled by systemd-timesyncd or ntpd
+    ESP_LOGI(TAG, "NTP init (no-op on Linux - system handles time sync)");
+    return HalResult::OK;
+}
+
+HalResult LinuxHalSystem::waitForTimeSync(uint32_t timeoutMs)
+{
+    // Linux system time is assumed to be already synchronized
+    (void)timeoutMs;
+    ESP_LOGI(TAG, "NTP wait (no-op on Linux - time assumed synced)");
+    return HalResult::OK;
+}
+
+bool LinuxHalSystem::isTimeSynced() const
+{
+    // Always return true on Linux - system handles time sync
+    return true;
+}
+
+void LinuxHalSystem::startNtpRetryTimer()
+{
+    // No-op on Linux
+}
+
+void LinuxHalSystem::stopNtpRetryTimer()
+{
+    // No-op on Linux
+}

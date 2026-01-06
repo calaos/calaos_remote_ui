@@ -1,4 +1,5 @@
 #include "esp32_hal_network.h"
+#include "esp32_hal_system.h"
 #include "logging.h"
 #include "esp_netif.h"
 #include "esp_wifi_default.h"
@@ -9,12 +10,16 @@
 #include "esp_eth.h"
 #include "esp_hosted.h"
 #include "flux.h"
+#include "../hal.h"
 
 static const char* TAG = "hal.network";
 
 // Static members initialization
 QueueHandle_t Esp32HalNetwork::timeoutQueue = nullptr;
 TaskHandle_t Esp32HalNetwork::timeoutTaskHandle = nullptr;
+
+// Forward declaration for NTP sync task
+static void ntpSyncTask(void* arg);
 
 static void got_ip_event_handler(void *arg, esp_event_base_t event_base,
                                  int32_t event_id, void *event_data)
@@ -59,6 +64,49 @@ static void got_ip_event_handler(void *arg, esp_event_base_t event_base,
     Esp32HalNetwork* networkHal = static_cast<Esp32HalNetwork*>(arg);
     if (networkHal)
         networkHal->onNetworkConnected();
+
+    // Start NTP sync in a separate task (blocking operation)
+    xTaskCreate(ntpSyncTask, "ntp_sync", 4096, nullptr, 5, nullptr);
+}
+
+// NTP synchronization task - runs blocking NTP sync after network connection
+static void ntpSyncTask(void* arg)
+{
+    (void)arg;
+
+    ESP_LOGI(TAG, "Starting NTP time synchronization");
+
+    // Dispatch NtpSyncStarted event
+    AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NtpSyncStarted));
+
+    // Initialize and wait for NTP sync
+    HalSystem& system = HAL::getInstance().getSystem();
+
+    HalResult initResult = system.initNtp();
+    if (initResult != HalResult::OK)
+    {
+        ESP_LOGE(TAG, "Failed to initialize NTP");
+        AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NtpSyncFailed));
+        system.startNtpRetryTimer();
+        vTaskDelete(nullptr);
+        return;
+    }
+
+    // Wait for sync with 15 second timeout
+    HalResult syncResult = system.waitForTimeSync(15000);
+    if (syncResult == HalResult::OK)
+    {
+        ESP_LOGI(TAG, "NTP time synchronization successful");
+        // NtpTimeSynced event is dispatched by onNtpSyncComplete() callback
+    }
+    else
+    {
+        ESP_LOGW(TAG, "NTP time synchronization failed, starting retry timer");
+        AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NtpSyncFailed));
+        system.startNtpRetryTimer();
+    }
+
+    vTaskDelete(nullptr);
 }
 
 HalResult Esp32HalNetwork::init()
@@ -452,6 +500,13 @@ void Esp32HalNetwork::wifiEventHandler(void* arg, esp_event_base_t eventBase,
 
         if (self->wifiCallback)
             self->wifiCallback(self->wifiStatus);
+
+        // Start NTP sync in a separate task (blocking operation)
+        // Only if not already synced (ethernet might have already synced)
+        if (!HAL::getInstance().getSystem().isTimeSynced())
+        {
+            xTaskCreate(ntpSyncTask, "ntp_sync", 4096, nullptr, 5, nullptr);
+        }
     }
 }
 

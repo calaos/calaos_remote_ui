@@ -9,22 +9,22 @@ namespace CalaosProtocol
 {
 
 // Protocol message types
-static const char* MSG_IO_STATES = "remote_ui_io_states";
-static const char* MSG_IO_STATE = "io_state";
-static const char* MSG_CONFIG_UPDATE = "remote_ui_config_update";
-static const char* MSG_SET_STATE = "set_state";
-static const char* MSG_GET_CONFIG = "remote_ui_get_config";
-static const char* MSG_EVENT = "event";
+inline constexpr const char* MSG_IO_STATES = "remote_ui_io_states";
+inline constexpr const char* MSG_IO_STATE = "io_state";
+inline constexpr const char* MSG_CONFIG_UPDATE = "remote_ui_config_update";
+inline constexpr const char* MSG_SET_STATE = "set_state";
+inline constexpr const char* MSG_GET_CONFIG = "remote_ui_get_config";
+inline constexpr const char* MSG_EVENT = "event";
 
 // WebSocket endpoint
-static const char* WS_ENDPOINT = "/api/v3/remote_ui/ws";
-static const int WS_PORT = 5454;
+inline constexpr const char* WS_ENDPOINT = "/api/v3/remote_ui/ws";
+inline constexpr int WS_PORT = 5454;
 
 // Authentication headers
-static const char* AUTH_HEADER_TOKEN = "Authorization";
-static const char* AUTH_HEADER_TIMESTAMP = "X-Auth-Timestamp";
-static const char* AUTH_HEADER_NONCE = "X-Auth-Nonce";
-static const char* AUTH_HEADER_HMAC = "X-Auth-HMAC";
+inline constexpr const char* AUTH_HEADER_TOKEN = "Authorization";
+inline constexpr const char* AUTH_HEADER_TIMESTAMP = "X-Auth-Timestamp";
+inline constexpr const char* AUTH_HEADER_NONCE = "X-Auth-Nonce";
+inline constexpr const char* AUTH_HEADER_HMAC = "X-Auth-HMAC";
 
 /**
  * @brief Structure representing a widget configuration in the grid
@@ -85,9 +85,10 @@ struct IoState
 {
     std::string id;         // IO unique identifier
     std::string type;       // IO type (light, temp, switch, etc.)
-    std::string state;      // Current state value
+    std::string state;      // Current state value (for booleans: "true"/"false")
     std::string gui_type;   // GUI widget type
     std::string name;       // Display name
+    int brightness = -1;    // Brightness value (0-100) for light_dimmer, -1 if not applicable
     bool visible = true;    // Visibility flag
     bool enabled = true;    // Enabled/disabled flag
 

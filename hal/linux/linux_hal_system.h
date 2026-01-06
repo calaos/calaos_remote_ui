@@ -17,6 +17,13 @@ public:
     HalResult loadConfig(const std::string& key, std::string& value) override;
     HalResult eraseConfig(const std::string& key) override;
 
+    // NTP time synchronization (no-op on Linux - system handles NTP)
+    HalResult initNtp() override;
+    HalResult waitForTimeSync(uint32_t timeoutMs = 15000) override;
+    bool isTimeSynced() const override;
+    void startNtpRetryTimer() override;
+    void stopNtpRetryTimer() override;
+
 private:
     std::string getConfigDirPath() const;
     std::string sanitizeFilename(const std::string& filename) const;

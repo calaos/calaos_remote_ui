@@ -23,6 +23,13 @@ struct NetworkState
     int rssi = 0;
 };
 
+struct NtpState
+{
+    bool isSyncing = false;    // NTP sync in progress
+    bool isSynced = false;     // Time has been synchronized
+    bool hasFailed = false;    // Last sync attempt failed (will retry)
+};
+
 struct CalaosServerState
 {
     bool isDiscovering = false;
@@ -131,6 +138,7 @@ struct CalaosWebSocketState
 struct AppState
 {
     NetworkState network;
+    NtpState ntp;
     CalaosServerState calaosServer;
     ProvisioningState provisioning;
     CalaosWebSocketState websocket;
@@ -146,6 +154,9 @@ struct AppState
                network.ipAddress == other.network.ipAddress &&
                network.ssid == other.network.ssid &&
                network.rssi == other.network.rssi &&
+               ntp.isSyncing == other.ntp.isSyncing &&
+               ntp.isSynced == other.ntp.isSynced &&
+               ntp.hasFailed == other.ntp.hasFailed &&
                calaosServer.isDiscovering == other.calaosServer.isDiscovering &&
                calaosServer.hasTimeout == other.calaosServer.hasTimeout &&
                calaosServer.discoveredServers == other.calaosServer.discoveredServers &&
