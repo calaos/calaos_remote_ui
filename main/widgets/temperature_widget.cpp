@@ -98,6 +98,20 @@ std::string TemperatureWidget::formatTemperature(const std::string& tempStr)
 
     // Format with maximum 2 decimal places
     std::ostringstream oss;
-    oss << std::fixed << std::setprecision(2) << tempValue << "°C";
-    return oss.str();
+    oss << std::fixed << std::setprecision(2) << tempValue;
+    std::string formatted = oss.str();
+
+    // Remove trailing zeros
+    while (!formatted.empty() && formatted.back() == '0')
+    {
+        formatted.pop_back();
+    }
+
+    // Remove decimal point if it's the last character
+    if (!formatted.empty() && formatted.back() == '.')
+    {
+        formatted.pop_back();
+    }
+
+    return formatted + "°C";
 }
