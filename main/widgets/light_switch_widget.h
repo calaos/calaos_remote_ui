@@ -39,6 +39,14 @@ private:
     void createUI();
 
     /**
+     * @brief Parse state string to determine if light is ON
+     * Handles both boolean ("true"/"false") and numeric (0-100) values
+     * @param stateStr State string from server
+     * @return true if light should be ON
+     */
+    bool parseIsOn(const std::string& stateStr) const;
+
+    /**
      * @brief Update visual state (colors, icon)
      * @param isOn true if light is ON
      */

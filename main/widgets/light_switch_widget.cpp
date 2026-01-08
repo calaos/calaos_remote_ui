@@ -19,7 +19,7 @@ LightSwitchWidget::LightSwitchWidget(lv_obj_t* parent,
     createUI();
 
     // Set initial visual state
-    bool isOn = (currentState.state == "true" || currentState.state == "1");
+    bool isOn = parseIsOn(currentState.state);
     updateVisualState(isOn);
 }
 
@@ -31,11 +31,10 @@ LightSwitchWidget::~LightSwitchWidget()
 void LightSwitchWidget::createUI()
 {
     // Container styling
-    setBgColor(lv_color_make(0x30, 0x30, 0x30));  // Dark gray by default
-    setBgOpa(LV_OPA_COVER);
+    setBgColor(theme_color_widget_bg_off);
+    setBorderColor(theme_color_widget_border_off);
     setRadius(20);
     setBorderWidth(2);
-    setBorderColor(theme_color_blue);
     setPadding(16, 16, 16, 16);
 
     // Make clickable
@@ -91,9 +90,8 @@ void LightSwitchWidget::updateVisualState(bool isOn)
     if (isOn)
     {
         // ON state: Blue background with opacity, animated icon
-        setBgColor(lv_color_make(0x0f, 0x1f, 0x2a));
-        setBorderColor(theme_color_blue);
-        setBgOpa(LV_OPA_30);  // 30% opacity
+        setBgColor(theme_color_widget_bg_on);
+        setBorderColor(theme_color_widget_border_on);
 
         // Start light animation sequence (will end on light_on_08)
         if (lightAnimator) {
@@ -103,9 +101,8 @@ void LightSwitchWidget::updateVisualState(bool isOn)
     else
     {
         // OFF state: Dark gray background, static off icon
-        setBgColor(lv_color_make(0x1a, 0x1a, 0x1a));
-        setBorderColor(lv_color_make(0x2a, 0x2a, 0x2a));
-        setBgOpa(LV_OPA_COVER);
+        setBgColor(theme_color_widget_bg_off);
+        setBorderColor(theme_color_widget_border_off);
 
         // Stop animation and directly show light_off image
         if (lightAnimator) {
@@ -133,8 +130,8 @@ void LightSwitchWidget::onClicked()
         return;
     }
 
-    // Toggle state
-    bool currentOn = (currentState.state == "true" || currentState.state == "1");
+    // Toggle state using parseIsOn to handle both light and light_dimmer
+    bool currentOn = parseIsOn(currentState.state);
     bool newState = !currentOn;
 
     ESP_LOGI(TAG, "Light switch clicked: %s -> %s",
@@ -159,8 +156,29 @@ void LightSwitchWidget::onStateUpdate(const CalaosProtocol::IoState& state)
     }
 
     // Update visual state
-    bool isOn = (state.state == "true" || state.state == "1");
+    bool isOn = parseIsOn(state.state);
     updateVisualState(isOn);
 
     updatingFromServer = false;
+}
+
+bool LightSwitchWidget::parseIsOn(const std::string& stateStr) const
+{
+    // Parse based on gui_type
+    if (currentState.gui_type == "light_dimmer")
+    {
+        // light_dimmer: integer percentage (0-100), ON if > 0
+        try
+        {
+            int value = std::stoi(stateStr);
+            return value > 0;
+        }
+        catch (const std::exception&)
+        {
+            return false;
+        }
+    }
+
+    // gui_type="light" or others: boolean "true"/"false"
+    return (stateStr == "true");
 }

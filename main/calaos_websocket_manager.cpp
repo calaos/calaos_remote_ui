@@ -815,24 +815,9 @@ void CalaosWebSocketManager::handleEvent(const json& data)
 
             CalaosProtocol::IoState ioState;
             ioState.id = ioId;
+            ioState.state = state;
 
-            // Parse state: could be "true"/"false" for boolean IOs
-            // or a numeric value (0-100) for light_dimmer
-            try
-            {
-                // Try to parse as integer for light_dimmer
-                int numericValue = std::stoi(state);
-                ioState.brightness = numericValue;
-                // For light_dimmer, state is "true" if brightness > 0
-                ioState.state = (numericValue > 0) ? "true" : "false";
-                ESP_LOGI(TAG, "Event io_changed: %s = %d (brightness)", ioId.c_str(), numericValue);
-            }
-            catch (const std::exception&)
-            {
-                // Not a number, treat as boolean state
-                ioState.state = state;
-                ESP_LOGI(TAG, "Event io_changed: %s = %s", ioId.c_str(), state.c_str());
-            }
+            ESP_LOGI(TAG, "Event io_changed: %s = %s", ioId.c_str(), state.c_str());
 
             AppDispatcher::getInstance().dispatch(
                 AppEvent(AppEventType::IoStateReceived,
