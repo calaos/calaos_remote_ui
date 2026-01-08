@@ -2,6 +2,7 @@
 #include "widgets/widget_error.h"
 #include "widgets/light_switch_widget.h"
 #include "widgets/temperature_widget.h"
+#include "widgets/scenario_widget.h"
 #include "logging.h"
 #include <sstream>
 
@@ -81,6 +82,13 @@ void WidgetFactory::registerBuiltinWidgets()
     registerWidget("Temperature", 1, 1,
         [](lv_obj_t* parent, const auto& config, const auto& gridInfo) {
             return std::make_unique<TemperatureWidget>(parent, config, gridInfo);
+        }
+    );
+
+    // Register Scenario 1x1
+    registerWidget("Scenario", 1, 1,
+        [](lv_obj_t* parent, const auto& config, const auto& gridInfo) {
+            return std::make_unique<ScenarioWidget>(parent, config, gridInfo);
         }
     );
 

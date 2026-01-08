@@ -27,6 +27,7 @@ set(MAIN_SOURCES
     main/widgets/widget_error.cpp
     main/widgets/light_switch_widget.cpp
     main/widgets/temperature_widget.cpp
+    main/widgets/scenario_widget.cpp
 )
 
 # Flux architecture sources

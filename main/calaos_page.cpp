@@ -64,7 +64,19 @@ CalaosPage::~CalaosPage()
 
 void CalaosPage::render()
 {
-    // Currently no animations, but this is where they would be updated
+    // Update animations for all widgets on current tab
+    if (tabview)
+    {
+        uint32_t currentTab = lv_tabview_get_tab_active(tabview);
+        if (currentTab < pageWidgets.size())
+        {
+            for (auto& widget : pageWidgets[currentTab])
+            {
+                if (widget)
+                    widget->render();
+            }
+        }
+    }
 }
 
 void CalaosPage::createTabView()
@@ -101,7 +113,7 @@ void CalaosPage::createPageIndicator(int numPages)
     int containerWidth = numPages * 30 + 20;  // Dynamic width based on number of pages
     pageIndicatorContainer = lv_obj_create(get());
     lv_obj_set_size(pageIndicatorContainer, containerWidth, 20);
-    lv_obj_align(pageIndicatorContainer, LV_ALIGN_BOTTOM_MID, 0, -20);
+    lv_obj_align(pageIndicatorContainer, LV_ALIGN_BOTTOM_MID, 0, -10);
     lv_obj_set_style_bg_opa(pageIndicatorContainer, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(pageIndicatorContainer, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(pageIndicatorContainer, 0, LV_PART_MAIN);

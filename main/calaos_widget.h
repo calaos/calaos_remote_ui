@@ -56,6 +56,12 @@ public:
      */
     const std::string& getIoId() const { return config.io_id; }
 
+    /**
+     * @brief Called from page render loop to update animations
+     * Child classes override this to update their animations
+     */
+    virtual void render() {}
+
 protected:
     /**
      * @brief Send state change to server (called by child classes)
