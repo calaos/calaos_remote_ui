@@ -1,4 +1,5 @@
 # Include shared source definitions
+include(${CMAKE_CURRENT_SOURCE_DIR}/../main/fonts/fonts.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/sources.cmake)
 
 # For ESP-IDF, we need to adjust paths since we're in the main/ subdirectory
@@ -59,7 +60,7 @@ endif()
 
 idf_component_register(
     SRCS ${SRCS_FILES} ${CONVERTED_IMAGE_FILES}
-    INCLUDE_DIRS ${COMPONENT_ADD_INCLUDEDIRS}
+    INCLUDE_DIRS "." ${COMPONENT_ADD_INCLUDEDIRS}
     LDFRAGMENTS "linker.lf"
 )
 

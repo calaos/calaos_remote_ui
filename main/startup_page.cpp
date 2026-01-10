@@ -38,7 +38,7 @@ StartupPage::StartupPage(lv_obj_t *parent):
     networkStatusLabel = std::make_unique<lvgl_cpp::Label>(*this);
     networkStatusLabel->setText("Initializing network...");
     networkStatusLabel->align(LV_ALIGN_BOTTOM_MID, 0, -120);
-    networkStatusLabel->setTextFont(&lv_font_montserrat_26);
+    networkStatusLabel->setTextFont(&roboto_light_26);
 
     lv_obj_set_style_text_color(networkStatusLabel->get(), lv_color_white(), LV_PART_MAIN);
 
@@ -133,7 +133,7 @@ void StartupPage::createProvisioningUI()
     provisioningCodeLabel->setText("------");
     lv_obj_align(provisioningCodeLabel->get(), LV_ALIGN_CENTER, 0, -50);
     lv_obj_set_style_text_color(provisioningCodeLabel->get(), theme_color_white, LV_PART_MAIN);
-    lv_obj_set_style_text_font(provisioningCodeLabel->get(), &lv_font_montserrat_48, LV_PART_MAIN);
+    lv_obj_set_style_text_font(provisioningCodeLabel->get(), &roboto_bold_50, LV_PART_MAIN);
     lv_obj_set_style_text_align(provisioningCodeLabel->get(), LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_add_flag(provisioningCodeLabel->get(), LV_OBJ_FLAG_HIDDEN); // Initially hidden
 
@@ -142,7 +142,7 @@ void StartupPage::createProvisioningUI()
     provisioningInstructionLabel->setText("Add this code in\nCalaos Installer");
     lv_obj_align(provisioningInstructionLabel->get(), LV_ALIGN_CENTER, 0, 150);
     lv_obj_set_style_text_color(provisioningInstructionLabel->get(), theme_color_white, LV_PART_MAIN);
-    lv_obj_set_style_text_font(provisioningInstructionLabel->get(), &lv_font_montserrat_24, LV_PART_MAIN);
+    lv_obj_set_style_text_font(provisioningInstructionLabel->get(), &roboto_medium_24, LV_PART_MAIN);
     lv_obj_set_style_text_align(provisioningInstructionLabel->get(), LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_add_flag(provisioningInstructionLabel->get(), LV_OBJ_FLAG_HIDDEN); // Initially hidden
 }
@@ -421,7 +421,7 @@ void StartupPage::onStateChanged(const AppState& state)
             networkStatusLabel->setText("Network connection failed\nPlease connect WiFi or Ethernet\nand restart the device");
             lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_red, LV_PART_MAIN);
             lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);
-            networkStatusLabel->setTextFont(&lv_font_montserrat_26);
+            networkStatusLabel->setTextFont(&roboto_regular_26);
 
             // Hide the spinner on timeout
             lv_obj_add_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);

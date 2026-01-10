@@ -211,6 +211,7 @@ if(DETECTED_PLATFORM STREQUAL "LINUX")
     add_executable(${PROJECT_NAME})
 
     # Include shared source definitions
+    include(${CMAKE_SOURCE_DIR}/main/fonts/fonts.cmake)
     include(${CMAKE_SOURCE_DIR}/cmake/sources.cmake)
 
     # For Linux, we can use the source lists directly since paths are relative to project root

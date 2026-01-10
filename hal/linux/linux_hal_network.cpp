@@ -1,6 +1,7 @@
 #include "linux_hal_network.h"
 #include "logging.h"
 #include "flux.h"
+#include "hal.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -273,6 +274,10 @@ void LinuxHalNetwork::statusMonitorThread() {
                 .rssi = 0
             };
             AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NetworkIpAssigned, ipData));
+
+            // Simulate NTP sync like ESP32 does after network connection
+            AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NtpSyncStarted));
+            HAL::getInstance().getSystem().initNtp();
         }
 
         if (current_status != last_status)

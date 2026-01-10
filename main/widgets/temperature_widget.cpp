@@ -47,7 +47,7 @@ void TemperatureWidget::createUI()
     // Temperature label (yellow color)
     tempLabel = lv_label_create(get());
     lv_label_set_text(tempLabel, "-- °C");
-    lv_obj_set_style_text_font(tempLabel, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_font(tempLabel, &roboto_light_48, 0);
     lv_obj_set_style_text_color(tempLabel, theme_color_yellow, 0);
 
     // Name label at bottom (blue color)
@@ -56,7 +56,7 @@ void TemperatureWidget::createUI()
                              config.io_id.c_str() :
                              currentState.name.c_str();
     lv_label_set_text(nameLabel, displayName);
-    lv_obj_set_style_text_font(nameLabel, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(nameLabel, &roboto_regular_24, 0);
     lv_obj_set_style_text_color(nameLabel, theme_color_blue, 0);
     lv_label_set_long_mode(nameLabel, LV_LABEL_LONG_SCROLL_CIRCULAR);
     lv_obj_set_width(nameLabel, lv_pct(90));

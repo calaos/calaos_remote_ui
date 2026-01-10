@@ -9,6 +9,7 @@
 #include <sys/utsname.h>
 #include <filesystem>
 #include <sys/stat.h>
+#include "flux.h"
 
 static const char* TAG = "hal.system";
 
@@ -203,13 +204,22 @@ HalResult LinuxHalSystem::ensureConfigDir()
 }
 
 // ============================================================================
-// NTP Time Synchronization (no-op on Linux - system handles NTP)
+// NTP Time Synchronization (simulated on Linux - system handles NTP)
 // ============================================================================
 
 HalResult LinuxHalSystem::initNtp()
 {
     // Linux system typically has NTP handled by systemd-timesyncd or ntpd
-    ESP_LOGI(TAG, "NTP init (no-op on Linux - system handles time sync)");
+    ESP_LOGI(TAG, "NTP init (simulated on Linux - system handles time sync)");
+
+    // Simulate async NTP sync like ESP32: spawn thread that fires event after short delay
+    std::thread([]()
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        ESP_LOGI(TAG, "NTP time synchronized (simulated)");
+        AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NtpTimeSynced));
+    }).detach();
+
     return HalResult::OK;
 }
 

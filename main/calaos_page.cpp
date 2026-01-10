@@ -223,7 +223,7 @@ void CalaosPage::createPagesFromConfig(const CalaosProtocol::PagesConfig& config
         lv_obj_t* label = lv_label_create(tab);
         lv_label_set_text(label, "No pages configured");
         lv_obj_set_style_text_color(label, theme_color_white, 0);
-        lv_obj_set_style_text_font(label, &lv_font_montserrat_24, 0);
+        lv_obj_set_style_text_font(label, &roboto_medium_24, 0);
         lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
 
         tabContent.push_back(tab);

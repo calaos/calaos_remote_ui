@@ -66,7 +66,7 @@ void ScenarioWidget::createUI()
                              currentState.name.c_str();
 
     lv_label_set_text(nameLabel, displayName);
-    lv_obj_set_style_text_font(nameLabel, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(nameLabel, &roboto_regular_24, 0);
     lv_obj_set_style_text_color(nameLabel, theme_color_blue, 0);
     lv_obj_set_style_text_align(nameLabel, LV_TEXT_ALIGN_CENTER, 0);
 
