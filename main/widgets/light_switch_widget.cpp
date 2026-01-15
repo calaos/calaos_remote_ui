@@ -13,7 +13,8 @@ LightSwitchWidget::LightSwitchWidget(lv_obj_t* parent,
     iconImage(nullptr),
     nameLabel(nullptr),
     lightAnimator(nullptr),
-    updatingFromServer(false)
+    updatingFromServer(false),
+    wasOn(false)
 {
     ESP_LOGI(TAG, "Creating light switch widget: %s", config.io_id.c_str());
     createUI();
@@ -21,6 +22,7 @@ LightSwitchWidget::LightSwitchWidget(lv_obj_t* parent,
     // Set initial visual state
     bool isOn = parseIsOn(currentState.state);
     updateVisualState(isOn);
+    wasOn = isOn;
 }
 
 LightSwitchWidget::~LightSwitchWidget()
@@ -93,10 +95,9 @@ void LightSwitchWidget::updateVisualState(bool isOn)
         setBgColor(theme_color_widget_bg_on);
         setBorderColor(theme_color_widget_border_on);
 
-        // Start light animation sequence (will end on light_on_08)
-        if (lightAnimator) {
+        // Only play animation when transitioning from OFF to ON
+        if (!wasOn && lightAnimator)
             lightAnimator->play();
-        }
     }
     else
     {
@@ -105,12 +106,14 @@ void LightSwitchWidget::updateVisualState(bool isOn)
         setBorderColor(theme_color_widget_border_off);
 
         // Stop animation and directly show light_off image
-        if (lightAnimator) {
+        if (lightAnimator)
             lightAnimator->stop();
-        }
+
         // Directly set the OFF image
         lv_image_set_src(iconImage, &light_off);
     }
+
+    wasOn = isOn;
 }
 
 void LightSwitchWidget::clickEventCb(lv_event_t* e)

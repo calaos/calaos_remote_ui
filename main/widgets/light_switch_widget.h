@@ -68,4 +68,5 @@ private:
     std::unique_ptr<ImageSequenceAnimator> lightAnimator;
 
     bool updatingFromServer = false;  // Prevent feedback loop
+    bool wasOn = false;               // Track previous ON state for animation
 };

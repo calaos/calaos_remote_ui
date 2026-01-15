@@ -1,6 +1,7 @@
 #include "widget_factory.h"
 #include "widgets/widget_error.h"
 #include "widgets/light_switch_widget.h"
+#include "widgets/light_switch_wide_widget.h"
 #include "widgets/temperature_widget.h"
 #include "widgets/scenario_widget.h"
 #include "logging.h"
@@ -75,6 +76,23 @@ void WidgetFactory::registerBuiltinWidgets()
     registerWidget("LightSwitch", 1, 1,
         [](lv_obj_t* parent, const auto& config, const auto& gridInfo) {
             return std::make_unique<LightSwitchWidget>(parent, config, gridInfo);
+        }
+    );
+
+    // Register LightSwitch 2x1, 3x1, 4x1 (wide horizontal layouts)
+    registerWidget("LightSwitch", 2, 1,
+        [](lv_obj_t* parent, const auto& config, const auto& gridInfo) {
+            return std::make_unique<LightSwitchWideWidget>(parent, config, gridInfo);
+        }
+    );
+    registerWidget("LightSwitch", 3, 1,
+        [](lv_obj_t* parent, const auto& config, const auto& gridInfo) {
+            return std::make_unique<LightSwitchWideWidget>(parent, config, gridInfo);
+        }
+    );
+    registerWidget("LightSwitch", 4, 1,
+        [](lv_obj_t* parent, const auto& config, const auto& gridInfo) {
+            return std::make_unique<LightSwitchWideWidget>(parent, config, gridInfo);
         }
     );
 
