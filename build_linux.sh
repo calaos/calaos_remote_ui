@@ -41,9 +41,11 @@ if [ $? -eq 0 ]; then
     echo "  ./calaos-remote-ui"
     echo "  ./calaos-remote-ui --display-backend sdl"
     echo "  ./calaos-remote-ui --input-backend libinput"
+    echo "  ./calaos-remote-ui --server-ip 192.168.1.100"
     echo "  ./calaos-remote-ui --display-backend x11 --input-backend evdev"
     echo "  CALAOS_DISPLAY_BACKEND=x11 ./calaos-remote-ui"
     echo "  CALAOS_INPUT_BACKEND=libinput ./calaos-remote-ui"
+    echo "  CALAOS_SERVER_IP=192.168.1.100 ./calaos-remote-ui"
 else
     echo -e "${RED}Build failed!${NC}"
     exit 1

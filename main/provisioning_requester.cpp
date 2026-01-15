@@ -218,9 +218,16 @@ void ProvisioningRequester::onHttpResponse(const HttpResponse& response)
                                 response.body.size);
 
         ESP_LOGI(TAG, "Provisioning successful!");
-        ESP_LOGD(TAG, "Response body: %s", responseBody.c_str());
+        ESP_LOGI(TAG, "Response body: %s", responseBody.c_str());
 
         json j = json::parse(responseBody);
+
+        // Debug: log all keys in the response
+        ESP_LOGI(TAG, "JSON keys in response:");
+        for (auto& [key, value] : j.items())
+        {
+            ESP_LOGI(TAG, "  - %s: %s", key.c_str(), value.dump().c_str());
+        }
 
         // Extract provisioning data
         std::string status = j.value("status", "");

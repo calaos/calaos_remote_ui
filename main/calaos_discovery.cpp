@@ -26,6 +26,37 @@ void CalaosDiscovery::startDiscovery()
         return;
     }
 
+    // Check for forced server IP from environment variable
+    const char* forcedIp = std::getenv("CALAOS_SERVER_IP");
+    if (forcedIp && strlen(forcedIp) > 0)
+    {
+        ESP_LOGI(TAG, "Using forced server IP from CALAOS_SERVER_IP: %s", forcedIp);
+
+        // Initialize CalaosNet for HTTP requests (provisioning, websocket, etc.)
+        if (!CalaosNet::instance().isInitialized())
+        {
+            NetworkResult result = CalaosNet::instance().init();
+            if (result != NetworkResult::OK)
+            {
+                ESP_LOGE(TAG, "Failed to initialize CalaosNet");
+                AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::CalaosDiscoveryTimeout));
+                return;
+            }
+        }
+
+        // Dispatch discovery started event
+        AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::CalaosDiscoveryStarted));
+
+        // Dispatch server found event with forced IP
+        CalaosServerFoundData serverData;
+        serverData.serverIp = forcedIp;
+        AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::CalaosServerFound, serverData));
+
+        // Dispatch discovery stopped event
+        AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::CalaosDiscoveryStopped));
+        return;
+    }
+
     ESP_LOGI(TAG, "Starting Calaos server discovery");
 
     // Initialize CalaosNet if not already done

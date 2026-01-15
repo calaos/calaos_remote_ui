@@ -36,6 +36,7 @@ struct CalaosServerState
     bool hasTimeout = false;
     std::vector<std::string> discoveredServers;
     std::string selectedServer;
+    std::string forcedServerIp;  // Set via CALAOS_SERVER_IP env var to skip discovery
 
     bool hasServers() const
     {

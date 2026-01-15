@@ -41,6 +41,7 @@ void printUsage(const char* progName)
     std::cout << "Options:\n";
     std::cout << "  --display-backend <backend>  Force specific display backend\n";
     std::cout << "  --input-backend <backend>    Force specific input backend\n";
+    std::cout << "  --server-ip <ip>            Force Calaos server IP (skip discovery)\n";
     std::cout << "  --list-backends             List available backends\n";
     std::cout << "  --help                      Show this help message\n";
     std::cout << "\nSupported display backends: fbdev, drm, sdl, x11, gles\n";
@@ -48,6 +49,7 @@ void printUsage(const char* progName)
     std::cout << "\nEnvironment variables:\n";
     std::cout << "  CALAOS_DISPLAY_BACKEND      Override display backend\n";
     std::cout << "  CALAOS_INPUT_BACKEND        Override input backend\n";
+    std::cout << "  CALAOS_SERVER_IP            Force Calaos server IP (skip discovery)\n";
     std::cout << "  LV_LINUX_FBDEV_DEVICE       Override framebuffer device path\n";
     std::cout << "  LV_LINUX_DRM_CARD           Override DRM card path\n";
     std::cout << "  LV_LINUX_EVDEV_POINTER_DEVICE Override evdev input device path\n";
@@ -104,6 +106,18 @@ int main(int argc, char* argv[])
             else
             {
                 std::cerr << "Error: --input-backend requires a backend name\n";
+                return 1;
+            }
+        }
+        else if (strcmp(argv[i], "--server-ip") == 0)
+        {
+            if (i + 1 < argc)
+            {
+                setenv("CALAOS_SERVER_IP", argv[++i], 1);
+            }
+            else
+            {
+                std::cerr << "Error: --server-ip requires an IP address\n";
                 return 1;
             }
         }
