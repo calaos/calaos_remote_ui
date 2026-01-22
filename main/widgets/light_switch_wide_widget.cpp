@@ -126,21 +126,26 @@ void LightSwitchWideWidget::createUI()
     {
         slider = lv_slider_create(get());
         lv_obj_set_width(slider, LV_PCT(100));
-        lv_obj_set_height(slider, 30);
+        lv_obj_set_height(slider, 14);
         lv_slider_set_range(slider, 0, 100);
         lv_slider_set_value(slider, 0, LV_ANIM_OFF);
+        // Allow knob to overflow the thin track
+        lv_obj_add_flag(slider, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
 
         // Style the slider
         // Main track (background)
         lv_obj_set_style_bg_color(slider, theme_color_widget_bg_off, LV_PART_MAIN);
         lv_obj_set_style_bg_opa(slider, LV_OPA_COVER, LV_PART_MAIN);
-        lv_obj_set_style_radius(slider, 15, LV_PART_MAIN);
+        lv_obj_set_style_radius(slider, 7, LV_PART_MAIN);
         lv_obj_set_style_border_width(slider, 1, LV_PART_MAIN);
         lv_obj_set_style_border_color(slider, theme_color_widget_border_off, LV_PART_MAIN);
+        // Add horizontal padding so knob doesn't overflow parent
+        lv_obj_set_style_pad_left(slider, 15, LV_PART_MAIN);
+        lv_obj_set_style_pad_right(slider, 15, LV_PART_MAIN);
 
         // Indicator (filled part)
         lv_obj_set_style_bg_color(slider, theme_color_blue, LV_PART_INDICATOR);
-        lv_obj_set_style_radius(slider, 15, LV_PART_INDICATOR);
+        lv_obj_set_style_radius(slider, 7, LV_PART_INDICATOR);
 
         // Knob
         lv_obj_set_style_bg_color(slider, theme_color_white, LV_PART_KNOB);
