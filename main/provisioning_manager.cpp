@@ -91,11 +91,14 @@ bool ProvisioningManager::init()
 
     ESP_LOGI(TAG, "Device MAC address: %s", macAddress.c_str());
 
+    // Set MAC address before any code generation
+    config_.macAddress = macAddress;
+
     // Load existing configuration
     if (!loadConfig())
     {
         ESP_LOGW(TAG, "No existing provisioning config found, will generate new one");
-        resetProvisioning();
+        resetProvisioning(macAddress);
     }
 
     // Always ensure MAC address is set correctly (loadConfig might have overwritten it)
@@ -184,7 +187,7 @@ bool ProvisioningManager::saveConfig()
     return true;
 }
 
-void ProvisioningManager::resetProvisioning()
+void ProvisioningManager::resetProvisioning(const std::string& macAddress)
 {
     ESP_LOGI(TAG, "Resetting provisioning");
 
@@ -195,6 +198,9 @@ void ProvisioningManager::resetProvisioning()
     config_.authToken.clear();
     config_.deviceSecret.clear();
     config_.serverUrl.clear();
+
+    // Set MAC address before generating code
+    config_.macAddress = macAddress;
 
     // Generate new salt and code
     config_.salt = ProvisioningCrypto::generateRandomSalt(4);
@@ -242,6 +248,12 @@ bool ProvisioningManager::completeProvisioning(const std::string& deviceId,
 
 std::string ProvisioningManager::generateNewCode()
 {
+    if (config_.macAddress.empty())
+    {
+        ESP_LOGE(TAG, "Cannot generate code: MAC address is not set");
+        return "ERROR0";
+    }
+
     if (config_.salt.empty())
     {
         config_.salt = ProvisioningCrypto::generateRandomSalt(4);

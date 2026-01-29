@@ -58,7 +58,8 @@ public:
     bool saveConfig();
 
     // Reset provisioning (for testing/factory reset)
-    void resetProvisioning();
+    // macAddress must be provided to generate new provisioning code
+    void resetProvisioning(const std::string& macAddress);
 
     // Get device info for provisioning request
     std::string getDeviceInfo() const;

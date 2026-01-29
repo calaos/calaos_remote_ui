@@ -103,7 +103,7 @@ std::string ProvisioningCrypto::encodeBase32(const std::vector<uint8_t>& data, s
     std::string result;
     result.reserve((data.size() * 8 + 4) / 5); // Base32 expansion ratio
 
-    uint32_t buffer = 0;
+    uint64_t buffer = 0;  // Use 64-bit to avoid overflow when accumulating bytes
     int bitsLeft = 0;
 
     for (uint8_t byte : data)
@@ -170,10 +170,10 @@ std::string ProvisioningCrypto::generateProvisioningCode(const std::string& macA
         return "ERROR2";
     }
 
-    // Take first 4 bytes and encode to base32 
+    // Take first 4 bytes and encode to base32
     std::vector<uint8_t> codeBytes(hash.begin(), hash.begin() + 4);
     std::string code = encodeBase32(codeBytes, 10); // Get more than needed first
-    
+
     // Ensure we have exactly 6 characters
     if (code.length() >= 6)
     {

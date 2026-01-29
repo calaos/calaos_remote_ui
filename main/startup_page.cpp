@@ -865,7 +865,7 @@ void StartupPage::onStateChanged(const AppState& state)
             LvglTimer::createOneShot([this]()
             {
                 ProvisioningManager& provMgr = getProvisioningManager();
-                provMgr.resetProvisioning();
+                provMgr.resetProvisioning(provMgr.getMacAddress());
 
                 // Dispatch event to update provisioning state and trigger UI update
                 std::string newCode = provMgr.getProvisioningCode();
