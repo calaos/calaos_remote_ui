@@ -48,7 +48,7 @@ bool AppMain::init()
     }
 
     hal->getDisplay().backlightOn();
-    hal->getDisplay().setBacklight(50);
+    hal->getDisplay().setBacklight(100);
 
 #ifdef ESP_PLATFORM
     // Configure smooth_ui_toolkit HAL for ESP32
