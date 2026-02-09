@@ -198,6 +198,10 @@ void ProvisioningRequester::onHttpResponse(const HttpResponse& response)
 
     if (!response.isSuccess())
     {
+        std::string body;
+        if (response.body.size > 0)
+            body = std::string(reinterpret_cast<const char*>(response.body.data.data()), response.body.size);
+
         if (response.status_code == HttpStatus::NOT_FOUND)
         {
             ESP_LOGI(TAG, "Provisioning code not yet recognized by server, will retry...");
@@ -208,6 +212,10 @@ void ProvisioningRequester::onHttpResponse(const HttpResponse& response)
                     static_cast<int>(response.status_code),
                     response.error_message.c_str());
         }
+
+        if (!body.empty())
+            ESP_LOGW(TAG, "Response body: %s", body.c_str());
+
         return;
     }
 
@@ -302,47 +310,36 @@ std::string ProvisioningRequester::buildProvisioningRequestBody() const
     j["code"] = provisioning_code_;
 
     // Add device info
-    json deviceInfo = {
-        {"type", "display"},
-        {"manufacturer", "calaos"},
-        {"model", HAL::getInstance().getSystem().getDeviceInfo()},
-        {"version", APP_VERSION},
-        {"mac_address", getProvisioningManager().getMacAddress()}
-    };
+    json deviceInfo = buildDeviceInfo();
 
     // Add capabilities
-    deviceInfo["capabilities"] = json::parse(buildDeviceCapabilities());
+    deviceInfo["capabilities"] = buildDeviceCapabilities();
 
     j["device_info"] = deviceInfo;
 
     return j.dump(0);
 }
 
-std::string ProvisioningRequester::buildDeviceCapabilities() const
+nlohmann::json ProvisioningRequester::buildDeviceCapabilities() const
 {
-    json capabilities;
+    nlohmann::json capabilities;
 
     // Screen capabilities
     capabilities["screen"] = {
-        {"width", 720},
-        {"height", 720},
-        {"touch", true},
-        {"color_depth", 16}
+        {"width", HAL::getInstance().getDisplay().getWidth()},
+        {"height", HAL::getInstance().getDisplay().getHeight()},
+        {"prefered_grid_width", HAL::getInstance().getDisplay().getPreferedGridWidth()},
+        {"prefered_grid_height", HAL::getInstance().getDisplay().getPreferedGridHeight()}
     };
 
     // Network capabilities
     capabilities["network"] = {
-        {"wifi", true},
-        {"ethernet", true}
+        {"touchscreen", HAL::getInstance().getSystem().hasTouchscreen() ? "true" : "false"},
+        {"wifi", HAL::getInstance().getSystem().hasWifi() ? "true" : "false"},
+        {"ethernet", HAL::getInstance().getSystem().hasEthernet() ? "true" : "false"}
     };
 
-    // Memory capabilities
-    capabilities["memory"] = {
-        {"ram", 33554432},      // 32MB
-        {"storage", 16777216}   // 16MB
-    };
-
-    return capabilities.dump(0);
+    return capabilities;
 }
 
 VerifyResult ProvisioningRequester::verifyProvisioning(const std::string& serverIp,
@@ -368,14 +365,7 @@ VerifyResult ProvisioningRequester::verifyProvisioning(const std::string& server
     j["auth_token"] = authToken;
 
     // Add device info for logging/analytics (no sensitive data)
-    json deviceInfo = {
-        {"type", "display"},
-        {"manufacturer", "calaos"},
-        {"model", HAL::getInstance().getSystem().getDeviceInfo()},
-        {"version", APP_VERSION},
-        {"mac_address", getProvisioningManager().getMacAddress()}
-    };
-    j["device_info"] = deviceInfo;
+    j["device_info"] = buildDeviceInfo();
 
     std::string body = j.dump(0);
 
@@ -471,4 +461,18 @@ VerifyResult ProvisioningRequester::verifyProvisioning(const std::string& server
 
     ESP_LOGE(TAG, "Provisioning verification failed after %d retries", VERIFY_MAX_RETRIES);
     return VerifyResult::NetworkError;
+}
+
+nlohmann::json ProvisioningRequester::buildDeviceInfo() const
+{
+    nlohmann::json deviceInfo = {
+        {"platform", HAL::getInstance().getSystem().getPlatform()},
+        {"manufacturer", HAL::getInstance().getSystem().getManufacturer()},
+        {"type", HAL::getInstance().getSystem().getHardwareId()},
+        {"hardware_id", HAL::getInstance().getSystem().getHardwareId()},
+        {"version", APP_VERSION},
+        {"mac_address", getProvisioningManager().getMacAddress()}
+    };
+
+    return deviceInfo;
 }

@@ -8,6 +8,7 @@
 #include <atomic>
 #include <mutex>
 #include <chrono>
+#include <nlohmann/json.hpp>
 
 /**
  * @brief Result of provisioning verification request
@@ -69,7 +70,8 @@ private:
     void sendProvisioningRequest();
     void onHttpResponse(const HttpResponse& response);
     std::string buildProvisioningRequestBody() const;
-    std::string buildDeviceCapabilities() const;
+    nlohmann::json buildDeviceCapabilities() const;
+    nlohmann::json buildDeviceInfo() const;
 
     std::atomic<bool> running_;
     std::atomic<bool> requesting_;

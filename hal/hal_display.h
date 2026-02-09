@@ -2,6 +2,7 @@
 
 #include "hal_types.h"
 #include "lvgl.h"
+#include "board_config.h"
 
 class HalDisplay
 {
@@ -19,4 +20,10 @@ public:
     virtual void unlock() = 0;
 
     virtual lv_display_t* getLvglDisplay() = 0;
+
+    int getWidth() const { return getDisplayInfo().width; }
+    int getHeight() const { return getDisplayInfo().height; }
+    int getColorDepth() const { return getDisplayInfo().colorDepth; }
+    int getPreferedGridWidth() const { return BOARD_PREFERED_GRID_WIDTH; }
+    int getPreferedGridHeight() const { return BOARD_PREFERED_GRID_HEIGHT; }
 };

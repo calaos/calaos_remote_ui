@@ -5,6 +5,7 @@
 #include "nlohmann/json.hpp"
 #include <sstream>
 #include "version.h"
+#include "board_config.h"
 
 using json = nlohmann::json;
 
@@ -209,11 +210,6 @@ void ProvisioningManager::resetProvisioning(const std::string& macAddress)
     saveConfig();
 }
 
-std::string ProvisioningManager::getDeviceInfo() const
-{
-    return generateDeviceInfoJson();
-}
-
 bool ProvisioningManager::completeProvisioning(const std::string& deviceId,
                                               const std::string& authToken,
                                               const std::string& deviceSecret,
@@ -262,17 +258,6 @@ std::string ProvisioningManager::generateNewCode()
     ESP_LOGD(TAG, "generateNewCode with mac address: %s", config_.macAddress.c_str());
 
     return ProvisioningCrypto::generateProvisioningCode(config_.macAddress, config_.salt);
-}
-
-std::string ProvisioningManager::generateDeviceInfoJson() const
-{
-    json j = {
-        {"model", HAL::getInstance().getSystem().getDeviceInfo()},
-        {"version", APP_VERSION},
-        {"mac_address", config_.macAddress},
-    };
-
-    return j.dump(2);
 }
 
 // Singleton instance

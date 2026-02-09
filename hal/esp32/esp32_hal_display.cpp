@@ -1,5 +1,6 @@
 #include "esp32_hal_display.h"
 #include "logging.h"
+#include "board_config.h"
 #include "bsp_board_extra.h"
 #include "bsp/display.h"
 
@@ -29,8 +30,8 @@ HalResult Esp32HalDisplay::init()
 
     // lv_display_set_rotation(display, LV_DISP_ROTATION_90);
 
-    displayInfo.width = 720;
-    displayInfo.height = 720;
+    displayInfo.width = BOARD_DISPLAY_WIDTH;
+    displayInfo.height = BOARD_DISPLAY_HEIGHT;
     displayInfo.colorDepth = lv_display_get_dpi(display);
 
     ESP_LOGI(TAG, "Display initialized: %dx%d, %d-bit",

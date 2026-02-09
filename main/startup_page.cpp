@@ -5,6 +5,7 @@
 #include "app_main.h"
 #include "logging.h"
 #include "../hal/hal.h"
+#include "../hal/hal_ota.h"
 #include "provisioning_manager.h"
 #include "../flux/app_dispatcher.h"
 
@@ -460,7 +461,16 @@ void StartupPage::onStateChanged(const AppState& state)
         {
             // NTP sync successful - now we can proceed
             ESP_LOGI(TAG, "NTP time synchronized, initializing provisioning manager");
-
+            // Mark firmware as valid now that we have successfully booted
+            // with display, network and NTP working
+            auto ota = createOta();
+            if (ota && ota->isSupported())
+            {
+                if (ota->markFirmwareValid() == HalResult::OK)
+                {
+                    ESP_LOGI(TAG, "Firmware marked as valid (rollback disabled)");
+                }
+            }
             // Brief success message
             networkStatusLabel->setText("Clock synchronized");
             lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_white, LV_PART_MAIN);
@@ -773,8 +783,27 @@ void StartupPage::onStateChanged(const AppState& state)
                 if (networkStatusLabel)
                     lv_obj_add_flag(networkStatusLabel->get(), LV_OBJ_FLAG_HIDDEN);
 
+                // Check if OTA is in progress or pending - don't push CalaosPage during OTA
+                OtaStatus otaStatus;
+                bool otaUpdateAvailable;
+                {
+                    const AppState& currentState = AppStore::getInstance().getState();
+                    otaStatus = currentState.ota.status;
+                    otaUpdateAvailable = currentState.ota.updateAvailable;
+                }
+                if (otaStatus == OtaStatus::Available ||
+                    otaStatus == OtaStatus::Downloading ||
+                    otaStatus == OtaStatus::Installing ||
+                    otaStatus == OtaStatus::Rebooting ||
+                    otaUpdateAvailable)
+                {
+                    ESP_LOGI(TAG, "OTA in progress or pending (status=%d, available=%d), not pushing CalaosPage yet",
+                             static_cast<int>(otaStatus), otaUpdateAvailable);
+                    return;
+                }
+
                 // Push CalaosPage after successful connection
-                if (g_appMain && g_appMain->getStackView())
+                if (g_appMain && g_appMain->getStackView() && g_appMain->getStackView()->size() <= 1)
                 {
                     ESP_LOGI(TAG, "Pushing CalaosPage");
                     auto calaosPage = std::make_unique<CalaosPage>(lv_screen_active());
@@ -892,12 +921,46 @@ void StartupPage::onStateChanged(const AppState& state)
         }
     }
 
+    // Handle OTA state changes - if OTA failed or was cancelled and we're already connected,
+    // push CalaosPage now
+    bool otaStateChanged = (state.ota.status != lastOtaState.status);
+    if (otaStateChanged)
+    {
+        ESP_LOGI(TAG, "OTA state changed: %d -> %d", static_cast<int>(lastOtaState.status), static_cast<int>(state.ota.status));
+
+        // If OTA failed/cancelled and WebSocket is connected, we should push CalaosPage
+        if ((state.ota.status == OtaStatus::Error || state.ota.status == OtaStatus::Idle) &&
+            (lastOtaState.status == OtaStatus::Downloading ||
+             lastOtaState.status == OtaStatus::Installing))
+        {
+            if (state.websocket.isConnected)
+            {
+                ESP_LOGI(TAG, "OTA failed/cancelled, WebSocket connected - pushing CalaosPage");
+                LvglTimer::createOneShot([this]()
+                {
+                    if (g_appMain && g_appMain->getStackView() && g_appMain->getStackView()->size() <= 1)
+                    {
+                        ESP_LOGI(TAG, "Pushing CalaosPage after OTA failure");
+                        auto calaosPage = std::make_unique<CalaosPage>(lv_screen_active());
+                        g_appMain->getStackView()->push(std::move(calaosPage),
+                                                       stack_animation_type::SlideVertical);
+                    }
+                    else
+                    {
+                        ESP_LOGI(TAG, "CalaosPage already pushed, skipping");
+                    }
+                }, 500);
+            }
+        }
+    }
+
     // Update cached states
     lastNetworkState = state.network;
     lastNtpState = state.ntp;
     lastCalaosServerState = state.calaosServer;
     lastProvisioningState = state.provisioning;
     lastWebSocketState = state.websocket;
+    lastOtaState = state.ota;
 
     // Unlock LVGL display
     HAL::getInstance().getDisplay().unlock();

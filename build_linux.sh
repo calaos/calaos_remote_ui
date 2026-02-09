@@ -10,7 +10,11 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Board selection - default to linux-dev
+BOARD="${1:-linux-dev}"
+
 echo -e "${BLUE}Building Calaos Remote UI for Linux${NC}"
+echo -e "${BLUE}Board: ${BOARD}${NC}"
 
 # Create build directory
 BUILD_DIR="build_linux"
@@ -20,9 +24,9 @@ fi
 
 cd "$BUILD_DIR"
 
-# Configure with CMake - force Linux target
-echo -e "${YELLOW}Configuring with CMake (Linux target)...${NC}"
-cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_LINUX=ON ..
+# Configure with CMake - force Linux target with board selection
+echo -e "${YELLOW}Configuring with CMake (Linux target, board: ${BOARD})...${NC}"
+cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_LINUX=ON -DBOARD="${BOARD}" ..
 
 # Build
 echo -e "${YELLOW}Building...${NC}"

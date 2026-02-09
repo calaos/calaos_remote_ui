@@ -1,6 +1,7 @@
 #include "linux_hal_display.h"
 #include "logging.h"
 #include "lv_conf_platform.h"
+#include "board_config.h"
 #include <iostream>
 
 // Include headers based on enabled backends
@@ -200,8 +201,8 @@ HalResult LinuxHalDisplay::initFbdevBackend()
         return HalResult::ERROR;
     }
 
-    displayInfo.width = 720;  // Fixed size for now
-    displayInfo.height = 720;
+    displayInfo.width = BOARD_DISPLAY_WIDTH;
+    displayInfo.height = BOARD_DISPLAY_HEIGHT;
     displayInfo.colorDepth = 16;
 
     display = lv_linux_fbdev_create();
@@ -238,8 +239,8 @@ HalResult LinuxHalDisplay::initDrmBackend()
 
     lv_linux_drm_set_file(display, drmCard, -1);
 
-    displayInfo.width = 720;  // Will be updated by DRM driver
-    displayInfo.height = 720;
+    displayInfo.width = BOARD_DISPLAY_WIDTH;
+    displayInfo.height = BOARD_DISPLAY_HEIGHT;
     displayInfo.colorDepth = 16;
 
     return HalResult::OK;
@@ -254,15 +255,15 @@ HalResult LinuxHalDisplay::initSdlBackend()
 #if LV_USE_SDL
     ESP_LOGI(TAG, "Initializing SDL backend");
 
-    display = lv_sdl_window_create(720, 720);
+    display = lv_sdl_window_create(BOARD_DISPLAY_WIDTH, BOARD_DISPLAY_HEIGHT);
     if (!display)
     {
         ESP_LOGE(TAG, "Failed to create SDL window");
         return HalResult::ERROR;
     }
 
-    displayInfo.width = 720;
-    displayInfo.height = 720;
+    displayInfo.width = BOARD_DISPLAY_WIDTH;
+    displayInfo.height = BOARD_DISPLAY_HEIGHT;
     displayInfo.colorDepth = 32;  // SDL usually uses 32-bit
 
     lv_indev_t *mouse = lv_sdl_mouse_create();
@@ -287,15 +288,15 @@ HalResult LinuxHalDisplay::initX11Backend()
 #if LV_USE_X11
     ESP_LOGI(TAG, "Initializing X11 backend");
 
-    display = lv_x11_window_create("Calaos Remote UI", 720, 720);
+    display = lv_x11_window_create("Calaos Remote UI", BOARD_DISPLAY_WIDTH, BOARD_DISPLAY_HEIGHT);
     if (!display)
     {
         ESP_LOGE(TAG, "Failed to create X11 window");
         return HalResult::ERROR;
     }
 
-    displayInfo.width = 720;
-    displayInfo.height = 720;
+    displayInfo.width = BOARD_DISPLAY_WIDTH;
+    displayInfo.height = BOARD_DISPLAY_HEIGHT;
     displayInfo.colorDepth = 32;  // X11 usually uses 32-bit
 
     // add default x11 input device
@@ -318,8 +319,8 @@ HalResult LinuxHalDisplay::initGlfw3Backend()
     lv_display_t *disp_texture;
     uint32_t disp_texture_id;
 
-    displayInfo.width = 720;
-    displayInfo.height = 720;
+    displayInfo.width = BOARD_DISPLAY_WIDTH;
+    displayInfo.height = BOARD_DISPLAY_HEIGHT;
     displayInfo.colorDepth = 32;
 
     lv_glfw_window_t *window = lv_glfw_window_create(

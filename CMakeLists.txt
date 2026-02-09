@@ -28,11 +28,57 @@ else()
     endif()
 endif()
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# BOARD CONFIGURATION - Must be loaded before ESP-IDF project.cmake
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Board selection - default based on platform
+if(NOT DEFINED BOARD)
+    if(DEFINED ENV{BOARD})
+        set(BOARD "$ENV{BOARD}")
+    else()
+        # Default to linux-dev for Linux, require explicit board for ESP32
+        if(DETECTED_PLATFORM STREQUAL "LINUX")
+            set(BOARD "linux-dev")
+        else()
+            message(FATAL_ERROR "ESP32 build requires explicit board selection. Use -DBOARD=<board-name>")
+        endif()
+    endif()
+endif()
+
+# Load board configuration
+set(BOARD_CONFIG_FILE "${CMAKE_SOURCE_DIR}/boards/${BOARD}.cmake")
+if(EXISTS "${BOARD_CONFIG_FILE}")
+    include("${BOARD_CONFIG_FILE}")
+    message(STATUS "Loaded board configuration: ${BOARD}")
+else()
+    message(FATAL_ERROR "Board configuration not found: ${BOARD_CONFIG_FILE}\n"
+                        "Available boards: waveshare-86-panel, luckfox-86-panel, linux-dev")
+endif()
+
+# Validate board platform matches detected platform
+if(NOT BOARD_PLATFORM STREQUAL DETECTED_PLATFORM)
+    message(FATAL_ERROR "Board '${BOARD}' requires ${BOARD_PLATFORM} platform but ${DETECTED_PLATFORM} was detected")
+endif()
+
 # ESP-IDF setup (only if targeting ESP32)
 if(DETECTED_PLATFORM STREQUAL "ESP32")
     if(NOT DEFINED ENV{IDF_PATH})
         message(FATAL_ERROR "ESP32 target selected but IDF_PATH environment variable not found")
     endif()
+
+    # Apply board-specific ESP-IDF settings BEFORE project.cmake
+    if(DEFINED BOARD_SDKCONFIG_DEFAULTS)
+        set(SDKCONFIG_DEFAULTS "${BOARD_SDKCONFIG_DEFAULTS}")
+        message(STATUS "Using board sdkconfig defaults: ${SDKCONFIG_DEFAULTS}")
+    endif()
+
+    # Apply board-specific partition table BEFORE project.cmake
+    if(DEFINED BOARD_PARTITION_TABLE)
+        set(PARTITION_TABLE_CUSTOM_FILENAME "${BOARD_PARTITION_TABLE}")
+        message(STATUS "Using board partition table: ${BOARD_PARTITION_TABLE}")
+    endif()
+
     # ESP-IDF build - must include project.cmake before project()
     include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
@@ -48,6 +94,15 @@ endif()
 
 # Define the project (works for both ESP-IDF and Linux)
 project(calaos-remote-ui)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GENERATE BOARD CONFIG HEADER
+# ═══════════════════════════════════════════════════════════════════════════════
+configure_file(
+    ${CMAKE_SOURCE_DIR}/cmake/board_config.h.in
+    ${CMAKE_BINARY_DIR}/generated/board_config.h
+    @ONLY
+)
 
 # Application version - can be overridden via environment variable or CMake variable
 # Default is defined in version.h as "git" for development builds
@@ -254,6 +309,7 @@ if(DETECTED_PLATFORM STREQUAL "LINUX")
     # Include directories
     target_include_directories(${PROJECT_NAME} PRIVATE
         ${COMMON_INCLUDE_DIRS}
+        ${CMAKE_BINARY_DIR}/generated
         ${CMAKE_BINARY_DIR}/hal/linux
         ${CMAKE_BINARY_DIR}/images_build
         components/lvgl

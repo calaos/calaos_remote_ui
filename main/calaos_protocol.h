@@ -4,6 +4,7 @@
 #include <map>
 #include <vector>
 #include <memory>
+#include "hal.h"
 
 namespace CalaosProtocol
 {
@@ -15,6 +16,7 @@ inline constexpr const char* MSG_CONFIG_UPDATE = "remote_ui_config_update";
 inline constexpr const char* MSG_SET_STATE = "set_state";
 inline constexpr const char* MSG_GET_CONFIG = "remote_ui_get_config";
 inline constexpr const char* MSG_EVENT = "event";
+inline constexpr const char* MSG_FW_UPDATE_AVAILABLE = "remote_ui_fw_update_available";
 
 // WebSocket endpoint
 inline constexpr const char* WS_ENDPOINT = "/api/v3/remote_ui/ws";
@@ -25,6 +27,10 @@ inline constexpr const char* AUTH_HEADER_TOKEN = "Authorization";
 inline constexpr const char* AUTH_HEADER_TIMESTAMP = "X-Auth-Timestamp";
 inline constexpr const char* AUTH_HEADER_NONCE = "X-Auth-Nonce";
 inline constexpr const char* AUTH_HEADER_HMAC = "X-Auth-HMAC";
+
+// Firmware info headers
+inline constexpr const char* FW_HEADER_VERSION = "X-Device-Version";
+inline constexpr const char* FW_HEADER_HARDWARE_ID = "X-Device-Hardware-Id";
 
 /**
  * @brief Structure representing a widget configuration in the grid
@@ -68,8 +74,8 @@ struct PageConfig
  */
 struct PagesConfig
 {
-    int grid_width = 3;     // Default 3x3 grid
-    int grid_height = 3;
+    int grid_width = HAL::getInstance().getDisplay().getPreferedGridWidth();
+    int grid_height = HAL::getInstance().getDisplay().getPreferedGridHeight();
     std::vector<PageConfig> pages;
 
     PagesConfig() = default;

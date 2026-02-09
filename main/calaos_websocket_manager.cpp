@@ -3,6 +3,8 @@
 #include "provisioning_manager.h"
 #include "app_dispatcher.h"
 #include "logging.h"
+#include "board_config.h"
+#include "version.h"
 #include "../hal/hal.h"
 #include <nlohmann/json.hpp>
 #include <sstream>
@@ -322,6 +324,8 @@ std::map<std::string, std::string> CalaosWebSocketManager::buildAuthHeaders()
     headers[CalaosProtocol::AUTH_HEADER_TIMESTAMP] = std::to_string(timestamp);
     headers[CalaosProtocol::AUTH_HEADER_NONCE] = nonce;
     headers[CalaosProtocol::AUTH_HEADER_HMAC] = hmac;
+    headers[CalaosProtocol::FW_HEADER_VERSION] = APP_VERSION;
+    headers[CalaosProtocol::FW_HEADER_HARDWARE_ID] = HAL::getInstance().getSystem().getHardwareId();
 
     return headers;
 }
@@ -350,6 +354,8 @@ void CalaosWebSocketManager::onMessage(const WebSocketMessage& message)
             handleConfigUpdate(j.value("data", json::object()));
         else if (msgType == CalaosProtocol::MSG_EVENT)
             handleEvent(j.value("data", json::object()));
+        else if (msgType == CalaosProtocol::MSG_FW_UPDATE_AVAILABLE)
+            handleFirmwareUpdateAvailable(j.value("data", json::object()));
         else
             ESP_LOGW(TAG, "Unknown message type: %s", msgType.c_str());
     }
@@ -832,6 +838,66 @@ void CalaosWebSocketManager::handleEvent(const json& data)
     catch (const std::exception& e)
     {
         ESP_LOGE(TAG, "Error parsing event: %s", e.what());
+    }
+}
+
+void CalaosWebSocketManager::handleFirmwareUpdateAvailable(const json& data)
+{
+    try
+    {
+        OtaUpdateAvailableData otaData;
+        otaData.hardwareId = data.value("hardware_id", "");
+        otaData.version = data.value("version", "");
+        otaData.checksumSha256 = data.value("checksum_sha256", "");
+        std::string downloadPath = data.value("download_url", "");
+        otaData.releaseNotes = data.value("release_notes", "");
+        otaData.name = data.value("name", "");
+
+        if (otaData.version.empty() || downloadPath.empty())
+        {
+            ESP_LOGW(TAG, "Firmware update available but missing required fields");
+            return;
+        }
+
+        // Verify hardware_id matches this device
+        if (otaData.hardwareId != BOARD_HARDWARE_ID)
+        {
+            ESP_LOGW(TAG, "Firmware update hardware_id mismatch: received '%s', expected '%s'",
+                     otaData.hardwareId.c_str(), BOARD_HARDWARE_ID);
+            return;
+        }
+
+        // Build absolute URL from relative path
+        // The server uses HTTP on the API port (5000 by default)
+        ProvisioningManager& provMgr = getProvisioningManager();
+        std::string serverHost = provMgr.getServerUrl();
+        if (serverHost.empty())
+        {
+            ESP_LOGE(TAG, "Cannot build download URL: server URL not configured");
+            return;
+        }
+
+        // Construct the full URL: http://server:5454/api/v3/...
+        std::ostringstream urlBuilder;
+        urlBuilder << "http://" << serverHost << ":5454" << downloadPath;
+        otaData.downloadUrl = urlBuilder.str();
+
+        ESP_LOGI(TAG, "Firmware update available: v%s for %s",
+                 otaData.version.c_str(), otaData.hardwareId.c_str());
+        ESP_LOGI(TAG, "Download URL: %s", otaData.downloadUrl.c_str());
+
+        if (!otaData.releaseNotes.empty())
+        {
+            ESP_LOGI(TAG, "Release notes: %s", otaData.releaseNotes.c_str());
+        }
+
+        AppDispatcher::getInstance().dispatch(
+            AppEvent(AppEventType::OtaUpdateAvailable, otaData)
+        );
+    }
+    catch (const std::exception& e)
+    {
+        ESP_LOGE(TAG, "Error parsing firmware update available: %s", e.what());
     }
 }
 

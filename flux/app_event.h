@@ -38,6 +38,15 @@ enum class AppEventType
     IoStateReceived,
     IoStatesReceived,
     ConfigUpdateReceived,
+
+    // OTA update events
+    OtaUpdateAvailable,
+    OtaDownloadStarted,
+    OtaProgress,
+    OtaInstalling,
+    OtaComplete,
+    OtaError,
+    OtaReset,  // Reset OTA state after error to allow normal operation
 };
 
 enum class NetworkConnectionType
@@ -166,6 +175,30 @@ struct ConfigUpdateReceivedData
     CalaosProtocol::RemoteUIConfig config;
 };
 
+// OTA update data structures
+struct OtaUpdateAvailableData
+{
+    std::string hardwareId;
+    std::string version;
+    std::string checksumSha256;
+    std::string downloadUrl;
+    std::string releaseNotes;
+    std::string name;
+};
+
+struct OtaProgressData
+{
+    int percent;          // 0-100
+    size_t bytesDownloaded;
+    size_t totalBytes;
+    std::string status;   // "downloading", "installing", "rebooting"
+};
+
+struct OtaErrorData
+{
+    std::string errorMessage;
+};
+
 using AppEventData = std::variant<
     std::monostate,  // For events without data
     NetworkStatusChangedData,
@@ -180,7 +213,10 @@ using AppEventData = std::variant<
     WebSocketErrorData,
     IoStateReceivedData,
     IoStatesReceivedData,
-    ConfigUpdateReceivedData
+    ConfigUpdateReceivedData,
+    OtaUpdateAvailableData,
+    OtaProgressData,
+    OtaErrorData
 >;
 
 class AppEvent

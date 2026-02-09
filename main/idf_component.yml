@@ -1,6 +1,6 @@
 ## IDF Component Manager Manifest File
 dependencies:
-  espressif/esp_wifi_remote: ^0.16.1
-  espressif/esp_hosted: ^2.3.0
-  espressif/ethernet_init: ^0.6.1
+  espressif/esp_wifi_remote: ^1.3.2
+  espressif/esp_hosted: ^2.11.5
+  espressif/ethernet_init: ^1.3.0
   cesanta/mongoose: ^7.8.2

@@ -196,6 +196,7 @@ void HttpClient::cancelAllRequests()
         pending_requests_.pop();
     }
 
+    size_t cancelled_active = active_requests_.size();
     for (auto& [conn, request] : active_requests_)
     {
         if (request->callback && !request->completed)
@@ -204,15 +205,18 @@ void HttpClient::cancelAllRequests()
             request->callback(*request->response);
             request->completed = true;
         }
+        request->timeout_triggered = true;  // Prevent further callbacks
         if (conn)
         {
+            // Mark connection for closing, but do NOT clear active_requests_
+            // The MG_EV_CLOSE handler will clean up to avoid use-after-free
             conn->is_closing = 1;
         }
     }
-    active_requests_.clear();
+    // Do NOT call active_requests_.clear() here - let MG_EV_CLOSE clean up
 
     ESP_LOGI(TAG, "Cancelled %zu pending HTTP requests and %zu active requests",
-             cancelled_pending, active_requests_.size());
+             cancelled_pending, cancelled_active);
 }
 
 size_t HttpClient::getPendingRequestCount() const
@@ -299,25 +303,24 @@ void HttpClient::serviceThread()
             std::lock_guard<std::mutex> lock(requests_mutex_);
             uint64_t now = mg_millis();
 
-            for (auto it = active_requests_.begin(); it != active_requests_.end();)
+            for (auto it = active_requests_.begin(); it != active_requests_.end(); ++it)
             {
                 auto& req = it->second;
                 if (req->timeout_time > 0 && now > req->timeout_time &&
+                    !req->timeout_triggered &&
                     (it->first->is_connecting || it->first->is_resolving))
                 {
                     ESP_LOGW(TAG, "Request ID %u timed out", req->request_id);
                     req->response->error_message = "Request timeout";
+                    req->timeout_triggered = true;
                     if (req->callback && !req->completed)
                     {
                         req->callback(*req->response);
                         req->completed = true;
                     }
+                    // Mark connection for closing, but do NOT erase from active_requests_
+                    // The MG_EV_CLOSE handler will clean up to avoid use-after-free
                     it->first->is_closing = 1;
-                    it = active_requests_.erase(it);
-                }
-                else
-                {
-                    ++it;
                 }
             }
         }
@@ -340,15 +343,37 @@ void HttpClient::serviceThread()
 
 void HttpClient::eventHandler(struct mg_connection* c, int ev, void* ev_data, void* fn_data)
 {
-    HttpRequestInternal* request = static_cast<HttpRequestInternal*>(fn_data);
-
-    if (!request)
+    if (!c || !c->mgr || !c->mgr->userdata)
     {
-        ESP_LOGW(TAG, "Request is null in event handler");
+        ESP_LOGW(TAG, "Invalid connection or manager in event handler");
         return;
     }
 
     HttpClient* client = static_cast<HttpClient*>(c->mgr->userdata);
+
+    // Validate the request is still tracked in active_requests_ to avoid use-after-free
+    // The fn_data pointer may be dangling if the request was removed from active_requests_
+    std::shared_ptr<HttpRequestInternal> request_ptr;
+    {
+        std::lock_guard<std::mutex> lock(client->requests_mutex_);
+        auto it = client->active_requests_.find(c);
+        if (it != client->active_requests_.end())
+        {
+            request_ptr = it->second;
+        }
+    }
+
+    HttpRequestInternal* request = request_ptr.get();
+    if (!request)
+    {
+        // Request was already removed (e.g., during shutdown)
+        // This is expected for some events, just ignore
+        if (ev != MG_EV_CLOSE && ev != MG_EV_POLL)
+        {
+            ESP_LOGW(TAG, "Request not found for connection in event handler (ev=%d)", ev);
+        }
+        return;
+    }
 
     switch (ev)
     {
@@ -458,20 +483,14 @@ void HttpClient::eventHandler(struct mg_connection* c, int ev, void* ev_data, vo
                 request->response->headers[name] = value;
             }
 
-            // Call callback
-            if (request->callback && !request->completed)
+            // Call callback if not already triggered by timeout
+            if (request->callback && !request->completed && !request->timeout_triggered)
             {
                 request->callback(*request->response);
                 request->completed = true;
             }
 
-            // Remove from active requests
-            if (client)
-            {
-                std::lock_guard<std::mutex> lock(client->requests_mutex_);
-                client->active_requests_.erase(c);
-            }
-
+            // Do NOT remove from active_requests_ here - let MG_EV_CLOSE handle cleanup
             c->is_closing = 1;
             break;
         }
@@ -483,18 +502,14 @@ void HttpClient::eventHandler(struct mg_connection* c, int ev, void* ev_data, vo
 
             request->response->error_message = error_msg;
 
-            if (request->callback && !request->completed)
+            // Call callback if not already triggered by timeout
+            if (request->callback && !request->completed && !request->timeout_triggered)
             {
                 request->callback(*request->response);
                 request->completed = true;
             }
 
-            // Remove from active requests
-            if (client)
-            {
-                std::lock_guard<std::mutex> lock(client->requests_mutex_);
-                client->active_requests_.erase(c);
-            }
+            // Do NOT remove from active_requests_ here - let MG_EV_CLOSE handle cleanup
             break;
         }
 
@@ -502,8 +517,8 @@ void HttpClient::eventHandler(struct mg_connection* c, int ev, void* ev_data, vo
         {
             ESP_LOGD(TAG, "Connection closed for request ID: %u", request->request_id);
 
-            // If not completed yet, it's an unexpected close
-            if (!request->completed)
+            // If not completed yet and not already handled by timeout, it's an unexpected close
+            if (!request->completed && !request->timeout_triggered)
             {
                 request->response->error_message = "Connection closed unexpectedly";
                 if (request->callback)
@@ -513,8 +528,8 @@ void HttpClient::eventHandler(struct mg_connection* c, int ev, void* ev_data, vo
                 }
             }
 
-            // Remove from active requests
-            if (client)
+            // MG_EV_CLOSE is the ONLY place where we remove from active_requests_
+            // This ensures mongoose has finished with the connection before we free the request
             {
                 std::lock_guard<std::mutex> lock(client->requests_mutex_);
                 client->active_requests_.erase(c);

@@ -383,6 +383,90 @@ void AppStore::handleEvent(const AppEvent& event)
                 }
                 break;
             }
+
+            // OTA update events
+            case AppEventType::OtaUpdateAvailable:
+            {
+                if (auto* data = event.getData<OtaUpdateAvailableData>())
+                {
+                    state_.ota.status = OtaStatus::Available;
+                    state_.ota.updateAvailable = true;
+                    state_.ota.version = data->version;
+                    state_.ota.releaseNotes = data->releaseNotes;
+                    state_.ota.downloadUrl = data->downloadUrl;
+                    state_.ota.checksumSha256 = data->checksumSha256;
+                    state_.ota.progress = 0;
+                    state_.ota.errorMessage.clear();
+                    stateChanged = true;
+                    ESP_LOGI(TAG, "OTA update available: v%s", data->version.c_str());
+                }
+                break;
+            }
+
+            case AppEventType::OtaDownloadStarted:
+            {
+                state_.ota.status = OtaStatus::Downloading;
+                state_.ota.progress = 0;
+                state_.ota.bytesDownloaded = 0;
+                state_.ota.errorMessage.clear();
+                stateChanged = true;
+                ESP_LOGI(TAG, "OTA download started");
+                break;
+            }
+
+            case AppEventType::OtaProgress:
+            {
+                if (auto* data = event.getData<OtaProgressData>())
+                {
+                    state_.ota.progress = data->percent;
+                    state_.ota.bytesDownloaded = data->bytesDownloaded;
+                    state_.ota.totalBytes = data->totalBytes;
+                    stateChanged = true;
+                    ESP_LOGD(TAG, "OTA progress: %d%%", data->percent);
+                }
+                break;
+            }
+
+            case AppEventType::OtaInstalling:
+            {
+                state_.ota.status = OtaStatus::Installing;
+                state_.ota.progress = 100;
+                stateChanged = true;
+                ESP_LOGI(TAG, "OTA installing");
+                break;
+            }
+
+            case AppEventType::OtaComplete:
+            {
+                state_.ota.status = OtaStatus::Rebooting;
+                stateChanged = true;
+                ESP_LOGI(TAG, "OTA complete, rebooting");
+                break;
+            }
+
+            case AppEventType::OtaError:
+            {
+                if (auto* data = event.getData<OtaErrorData>())
+                {
+                    state_.ota.status = OtaStatus::Error;
+                    state_.ota.errorMessage = data->errorMessage;
+                    stateChanged = true;
+                    ESP_LOGE(TAG, "OTA error: %s", data->errorMessage.c_str());
+                }
+                break;
+            }
+
+            case AppEventType::OtaReset:
+            {
+                // Reset OTA state to Idle after error, allowing normal operation
+                state_.ota.status = OtaStatus::Idle;
+                state_.ota.updateAvailable = false;
+                state_.ota.progress = 0;
+                state_.ota.errorMessage.clear();
+                stateChanged = true;
+                ESP_LOGI(TAG, "OTA state reset to idle");
+                break;
+            }
         }
     }
 

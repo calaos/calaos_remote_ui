@@ -64,6 +64,9 @@ idf_component_register(
     LDFRAGMENTS "linker.lf"
 )
 
+# Add generated board_config.h to include paths
+target_include_directories(${COMPONENT_LIB} PUBLIC ${CMAKE_BINARY_DIR}/generated)
+
 # Add images_build directory to include paths for images_generated.h
 if(NOT CMAKE_BUILD_EARLY_EXPANSION AND CONVERTED_IMAGE_FILES)
     target_include_directories(${COMPONENT_LIB} PUBLIC ${CONVERTED_DIR})

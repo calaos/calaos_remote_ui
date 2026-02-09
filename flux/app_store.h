@@ -136,6 +136,30 @@ struct CalaosWebSocketState
     }
 };
 
+enum class OtaStatus
+{
+    Idle,           // No OTA in progress
+    Available,      // Update available but not started
+    Downloading,    // Downloading firmware
+    Installing,     // Writing firmware to flash
+    Rebooting,      // About to reboot
+    Error           // Error occurred
+};
+
+struct OtaState
+{
+    OtaStatus status = OtaStatus::Idle;
+    bool updateAvailable = false;
+    std::string version;
+    std::string releaseNotes;
+    std::string downloadUrl;
+    std::string checksumSha256;
+    int progress = 0;           // 0-100
+    size_t bytesDownloaded = 0;
+    size_t totalBytes = 0;
+    std::string errorMessage;
+};
+
 struct AppState
 {
     NetworkState network;
@@ -143,6 +167,7 @@ struct AppState
     CalaosServerState calaosServer;
     ProvisioningState provisioning;
     CalaosWebSocketState websocket;
+    OtaState ota;
     std::map<std::string, CalaosProtocol::IoState> ioStates;
     CalaosProtocol::RemoteUIConfig config;
 

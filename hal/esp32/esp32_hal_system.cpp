@@ -10,6 +10,7 @@
 #include "nvs.h"
 #include "esp_sntp.h"
 #include "flux.h"
+#include "board_config.h"
 
 static const char* TAG = "hal.system";
 static const char* NVS_NAMESPACE = "calaos_config";
@@ -75,23 +76,7 @@ void Esp32HalSystem::restart()
 
 std::string Esp32HalSystem::getDeviceInfo() const
 {
-    esp_chip_info_t chipInfo;
-    esp_chip_info(&chipInfo);
-
-    uint32_t flashSize = 0;
-    esp_flash_get_size(esp_flash_default_chip, &flashSize);
-
-    char info[256];
-    snprintf(info, sizeof(info),
-             "ESP32-P4 %dMB %s Flash, %d CPU cores, WiFi%s%s, Rev %d",
-             (int)(flashSize / (1024 * 1024)),
-             (chipInfo.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external",
-             chipInfo.cores,
-             (chipInfo.features & CHIP_FEATURE_WIFI_BGN) ? "/802.11bgn" : "",
-             (chipInfo.features & CHIP_FEATURE_BLE) ? "/BLE" : "",
-             chipInfo.revision);
-
-    return std::string(info);
+    return getManufacturer() + " " + getHardwareId() + " (" + getPlatform() + ")";
 }
 
 HalResult Esp32HalSystem::saveConfig(const std::string& key, const std::string& value)

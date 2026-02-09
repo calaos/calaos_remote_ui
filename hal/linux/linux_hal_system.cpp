@@ -58,34 +58,7 @@ void LinuxHalSystem::restart()
 
 std::string LinuxHalSystem::getDeviceInfo() const
 {
-    struct utsname buffer;
-    if (uname(&buffer) != 0)
-        return "Unknown Linux System";
-
-    std::string info = std::string(buffer.sysname) + " " +
-                      std::string(buffer.release) + " " +
-                      std::string(buffer.machine);
-
-    // Try to get more specific hardware info
-    std::ifstream cpuinfo("/proc/cpuinfo");
-    if (cpuinfo.is_open())
-    {
-        std::string line;
-        while (std::getline(cpuinfo, line))
-        {
-            if (line.find("model name") != std::string::npos)
-            {
-                size_t pos = line.find(":");
-                if (pos != std::string::npos)
-                {
-                    info += " - " + line.substr(pos + 2);
-                    break;
-                }
-            }
-        }
-    }
-
-    return info;
+    return getManufacturer() + " " + getHardwareId() + " (" + getPlatform() + ")";
 }
 
 HalResult LinuxHalSystem::saveConfig(const std::string& key, const std::string& value)

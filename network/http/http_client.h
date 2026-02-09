@@ -17,12 +17,14 @@ struct HttpRequestInternal
     HttpResponseCallback callback;
     std::shared_ptr<HttpResponse> response;
     bool completed;
+    bool timeout_triggered;  // True if timeout handler already fired callback
     uint32_t request_id;
     struct mg_connection* connection;
     uint64_t timeout_time;
 
     HttpRequestInternal():
         completed(false),
+        timeout_triggered(false),
         request_id(0),
         connection(nullptr),
         timeout_time(0)

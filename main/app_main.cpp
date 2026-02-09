@@ -5,6 +5,8 @@
 #include "smooth_ui_toolkit.h"
 #include "../flux/flux.h"
 #include "provisioning_manager.h"
+#include "ota_manager.h"
+#include "ota_update_screen.h"
 
 #ifdef ESP_PLATFORM
 #include "freertos/FreeRTOS.h"
@@ -226,11 +228,32 @@ void AppMain::createBasicUi()
     auto startupPage = std::make_unique<StartupPage>(lv_screen_active());
     stackView->push(std::move(startupPage));
 
+    // Create OTA update screen overlay on top layer (always above everything, hidden by default)
+    otaScreen = std::make_unique<OtaUpdateScreen>(lv_layer_top());
+
     hal->getDisplay().unlock();
+
+    // Initialize OTA manager after UI is ready
+    initOtaManager();
+}
+
+void AppMain::initOtaManager()
+{
+    ESP_LOGI(TAG, "Initializing OTA manager");
+    if (!OtaManager::getInstance().init())
+    {
+        ESP_LOGW(TAG, "OTA manager initialization failed (may not be supported on this platform)");
+    }
 }
 
 void AppMain::renderLoop()
 {
+    // Update OTA screen if there are pending updates (must be called with display lock held)
+    if (otaScreen)
+    {
+        otaScreen->update();
+    }
+
     if (stackView)
         stackView->render();
 }

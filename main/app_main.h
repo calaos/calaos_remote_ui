@@ -5,6 +5,8 @@
 #include "stack_view.h"
 #include <memory>
 
+class OtaUpdateScreen;
+
 class AppMain
 {
 public:
@@ -22,11 +24,12 @@ public:
 
 private:
     void createBasicUi();
+    void initOtaManager();
     void logSystemInfo();
     void renderLoop();
-
     HAL* hal;
     bool initialized;
     bool running;
     std::unique_ptr<StackView> stackView;
+    std::unique_ptr<OtaUpdateScreen> otaScreen;
 };

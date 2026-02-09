@@ -114,6 +114,11 @@ private:
     void handleEvent(const nlohmann::json& data);
 
     /**
+     * @brief Handle remote_ui_fw_update_available message
+     */
+    void handleFirmwareUpdateAvailable(const nlohmann::json& data);
+
+    /**
      * @brief Check if error indicates authentication failure
      */
     bool isAuthenticationError(int closeCode, const std::string& reason);

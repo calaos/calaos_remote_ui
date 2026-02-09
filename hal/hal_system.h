@@ -3,6 +3,7 @@
 #include "hal_types.h"
 #include <string>
 #include <cstdint>
+#include "board_config.h"
 
 class HalSystem
 {
@@ -18,6 +19,13 @@ public:
     virtual HalResult saveConfig(const std::string& key, const std::string& value) = 0;
     virtual HalResult loadConfig(const std::string& key, std::string& value) = 0;
     virtual HalResult eraseConfig(const std::string& key) = 0;
+
+    std::string getPlatform() const { return BOARD_PLATFORM; }
+    std::string getManufacturer() const { return BOARD_MANUFACTURER; }
+    std::string getHardwareId() const { return BOARD_HARDWARE_ID; }
+    bool hasWifi() const { return BOARD_HAS_WIFI; }
+    bool hasEthernet() const { return BOARD_HAS_ETHERNET; }
+    bool hasTouchscreen() const { return BOARD_HAS_TOUCHSCREEN; }
 
     // NTP time synchronization
     // Initialize NTP client with multiple servers

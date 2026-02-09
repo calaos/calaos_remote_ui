@@ -61,9 +61,6 @@ public:
     // macAddress must be provided to generate new provisioning code
     void resetProvisioning(const std::string& macAddress);
 
-    // Get device info for provisioning request
-    std::string getDeviceInfo() const;
-
     // Complete provisioning with server response data
     bool completeProvisioning(const std::string& deviceId,
                              const std::string& authToken,
