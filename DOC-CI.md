@@ -16,8 +16,17 @@ The CI builds firmware for each supported board, packages it into a `.deb`, and 
 | Job | Purpose |
 |---|---|
 | `matrix-setup` | Reads `boards/ci-boards.json` and builds the build matrix |
-| `build` | Builds the firmware for each board inside its Docker container |
+| `build` | Pulls the pre-built Docker image and builds the firmware |
 | `package-and-release` | Packages the `.bin` into a `.deb`, creates a git tag and GitHub Release |
+
+### Workflow: `build-docker-images.yml`
+
+**Triggers:**
+
+- **Push to `main`** with changes in `boards/**/Dockerfile`
+- **Manual dispatch** — Select a specific board image to rebuild (or all)
+
+Builds and pushes Docker images to `ghcr.io`. These images are then pulled by `build-firmware.yml` instead of being built from scratch each time, saving ~10-15 minutes per firmware build.
 
 ## Board Configuration
 
@@ -29,6 +38,7 @@ All CI-enabled boards are declared in `boards/ci-boards.json`:
     "name": "waveshare-86-panel",
     "platform": "ESP32",
     "dockerfile": "boards/waveshare-86-panel/Dockerfile",
+    "docker_image": "ghcr.io/calaos/calaos-build-waveshare-86-panel:latest",
     "build_script": "boards/waveshare-86-panel/build.sh",
     "bin_path": "build/calaos-remote-ui.bin",
     "description": "Waveshare ESP32-P4 86-Panel firmware"
@@ -41,6 +51,7 @@ All CI-enabled boards are declared in `boards/ci-boards.json`:
 | `name` | Board identifier, used for tags, package names, and install paths |
 | `platform` | Informational (ESP32, LINUX, etc.) |
 | `dockerfile` | Path to the Docker build environment for this board |
+| `docker_image` | Pre-built image on ghcr.io (pulled by CI, built by `build-docker-images.yml`) |
 | `build_script` | Path to the board-specific build script (called inside the Docker container) |
 | `bin_path` | Path to the firmware binary produced by the build |
 | `description` | Human-readable description used in release notes |
@@ -81,8 +92,11 @@ All CI-enabled boards are declared in `boards/ci-boards.json`:
    ```
 
 3. **Add an entry in `boards/ci-boards.json`** with the appropriate fields.
+   Set `docker_image` to `ghcr.io/calaos/calaos-build-<board-name>:latest`.
 
-4. **Add the board to the workflow dispatch options** in `.github/workflows/build-firmware.yml`:
+4. **Add the board to the workflow dispatch options** in both:
+   - `.github/workflows/build-firmware.yml` (board selection for releases)
+   - `.github/workflows/build-docker-images.yml` (board selection for image rebuilds)
 
    ```yaml
    workflow_dispatch:
@@ -93,6 +107,24 @@ All CI-enabled boards are declared in `boards/ci-boards.json`:
            - waveshare-86-panel
            - <new-board-name>      # ← add here
    ```
+
+5. **Push the Dockerfile** — The `build-docker-images.yml` workflow will automatically build and push the image to ghcr.io on the first push that includes the new Dockerfile.
+
+## Docker Images
+
+Build environment images are hosted on GitHub Container Registry (`ghcr.io`) to avoid rebuilding them on every firmware build (~10-15 min saved).
+
+### How it works
+
+1. `build-docker-images.yml` triggers when a `boards/**/Dockerfile` changes on `main` (or via manual dispatch)
+2. It builds the image using Docker Buildx with GitHub Actions cache
+3. The image is pushed to `ghcr.io/calaos/calaos-build-<board-name>` with tags `latest` and the commit SHA
+4. `build-firmware.yml` pulls the pre-built image via `docker_image` from `ci-boards.json`
+5. If the pull fails (e.g. first run before any image exists), it falls back to building from the Dockerfile
+
+### Manual rebuild
+
+To force-rebuild a Docker image without changing the Dockerfile, use the manual dispatch on `build-docker-images.yml` and select the board.
 
 ## Versioning
 

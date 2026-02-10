@@ -74,22 +74,18 @@ jobs:
           echo "tag=${{ matrix.name }}-${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Version for ${{ matrix.name }}: ${VERSION} (tag: ${{ matrix.name }}-${VERSION})"
 
-      - name: Build Docker image
+      - name: Pull build image
         run: |
-          docker build -t "calaos-build-${{ matrix.name }}" \
-            -f "${{ matrix.dockerfile }}" .
+          docker pull "${{ matrix.docker_image }}" || \
+            docker build -t "${{ matrix.docker_image }}" -f "${{ matrix.dockerfile }}" .
 
       - name: Build firmware in container
         run: |
           docker run --rm \
             -v "${{ github.workspace }}:/work" \
             -w /work \
-            "calaos-build-${{ matrix.name }}" \
-            bash -c "
-              set -e
-              chmod +x /work/${{ matrix.build_script }}
-              /work/${{ matrix.build_script }} ${{ matrix.name }} ${{ steps.version.outputs.version }}
-            "
+            "${{ matrix.docker_image }}" \
+            bash /work/${{ matrix.build_script }} ${{ matrix.name }} ${{ steps.version.outputs.version }}
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
