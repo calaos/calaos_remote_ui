@@ -16,9 +16,10 @@ echo "=== Building ${BOARD} firmware v${VERSION} (ESP-IDF) ==="
 
 source /opt/esp/idf/export.sh
 
+export BOARD
+export APP_VERSION="${VERSION}"
+
 idf.py -B build set-target esp32p4
-idf.py -B build build \
-    -DBOARD="${BOARD}" \
-    -DAPP_VERSION="${VERSION}"
+idf.py -B build build
 
 echo "=== Build complete: build/calaos-remote-ui.bin ==="
