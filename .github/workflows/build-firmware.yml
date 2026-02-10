@@ -180,7 +180,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update repo cache
-        if: steps.version.outputs.prerelease == 'false'
         uses: distributhor/workflow-webhook@v3
         env:
           webhook_url: ${{ secrets.WEBHOOK_URL }}
