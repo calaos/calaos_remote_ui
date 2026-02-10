@@ -1,0 +1,191 @@
+name: Build and release firmware packages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      board:
+        description: 'Board to release'
+        required: true
+        type: choice
+        options:
+          - all
+          - waveshare-86-panel
+      vincrement:
+        description: 'Version increment'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # Job 1: Read ci-boards.json and build the matrix
+  # ─────────────────────────────────────────────────────────────
+  matrix-setup:
+    name: Setup build matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build matrix from ci-boards.json
+        id: set-matrix
+        run: |
+          SELECTED="${{ github.event.inputs.board || 'all' }}"
+          if [[ "${SELECTED}" == "all" ]]; then
+            MATRIX=$(jq -c '.' boards/ci-boards.json)
+          else
+            MATRIX=$(jq -c --arg b "${SELECTED}" '[.[] | select(.name == $b)]' boards/ci-boards.json)
+          fi
+          echo "matrix={\"include\":${MATRIX}}" >> "$GITHUB_OUTPUT"
+          echo "Matrix: ${MATRIX}"
+
+  # ─────────────────────────────────────────────────────────────
+  # Job 2: Build firmware for each board
+  # ─────────────────────────────────────────────────────────────
+  build:
+    name: Build ${{ matrix.name }}
+    needs: matrix-setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.matrix-setup.outputs.matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          chmod +x scripts/bump-version.sh
+          # On push to main: prerelease. On manual dispatch: user-selected fragment.
+          FRAGMENT="${{ github.event.inputs.vincrement || 'prerelease' }}"
+          VERSION=$(scripts/bump-version.sh "${{ matrix.name }}" "${FRAGMENT}")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${{ matrix.name }}-${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Version for ${{ matrix.name }}: ${VERSION} (tag: ${{ matrix.name }}-${VERSION})"
+
+      - name: Build Docker image
+        run: |
+          docker build -t "calaos-build-${{ matrix.name }}" \
+            -f "${{ matrix.dockerfile }}" .
+
+      - name: Build firmware in container
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/work" \
+            -w /work \
+            "calaos-build-${{ matrix.name }}" \
+            bash -c "
+              set -e
+              chmod +x /work/${{ matrix.build_script }}
+              /work/${{ matrix.build_script }} ${{ matrix.name }} ${{ steps.version.outputs.version }}
+            "
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.name }}
+          path: ${{ matrix.bin_path }}
+          if-no-files-found: error
+
+      - name: Upload version info
+        run: |
+          echo "${{ steps.version.outputs.version }}" > version.txt
+          echo "${{ steps.version.outputs.tag }}" > tag.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: version-${{ matrix.name }}
+          path: |
+            version.txt
+            tag.txt
+
+  # ─────────────────────────────────────────────────────────────
+  # Job 3: Package .deb and create GitHub release
+  # ─────────────────────────────────────────────────────────────
+  package-and-release:
+    name: Package ${{ matrix.name }}
+    needs: [matrix-setup, build]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.matrix-setup.outputs.matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download firmware artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-${{ matrix.name }}
+          path: firmware/
+
+      - name: Download version info
+        uses: actions/download-artifact@v4
+        with:
+          name: version-${{ matrix.name }}
+          path: version-info/
+
+      - name: Read version info
+        id: version
+        run: |
+          VERSION=$(cat version-info/version.txt)
+          TAG=$(cat version-info/tag.txt)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          # Prerelease if version contains -dev.
+          if [[ "${VERSION}" == *"-dev."* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build .deb package
+        run: |
+          chmod +x scripts/build-deb.sh
+          scripts/build-deb.sh \
+            "${{ matrix.name }}" \
+            "${{ steps.version.outputs.version }}" \
+            "firmware/calaos-remote-ui.bin"
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ matrix.name }}
+          path: pkg/*.deb
+
+      - name: Create tag and release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ matrix.name }} v${{ steps.version.outputs.version }}
+          prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
+          generate_release_notes: false
+          body: |
+            Firmware release for **${{ matrix.name }}**
+
+            **Version:** ${{ steps.version.outputs.version }}
+            **Board:** ${{ matrix.name }}
+            **Platform:** ${{ matrix.platform }}
+          files: pkg/*.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update repo cache
+        if: steps.version.outputs.prerelease == 'false'
+        uses: distributhor/workflow-webhook@v3
+        env:
+          webhook_url: ${{ secrets.WEBHOOK_URL }}
+          webhook_secret: ${{ secrets.WEBHOOK_SECRET }}

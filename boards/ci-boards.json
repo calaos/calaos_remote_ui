@@ -1,0 +1,10 @@
+[
+  {
+    "name": "waveshare-86-panel",
+    "platform": "ESP32",
+    "dockerfile": "boards/waveshare-86-panel/Dockerfile",
+    "build_script": "boards/waveshare-86-panel/build.sh",
+    "bin_path": "build/calaos-remote-ui.bin",
+    "description": "Waveshare ESP32-P4 86-Panel firmware"
+  }
+]
