@@ -92,6 +92,30 @@ if(DETECTED_PLATFORM STREQUAL "ESP32")
     message(STATUS "Building for ESP32 platform")
 endif()
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# APPLICATION VERSION
+# Must be resolved BEFORE project() so ESP-IDF components pick up the define.
+# ═══════════════════════════════════════════════════════════════════════════════
+if(DEFINED ENV{APP_VERSION})
+    set(APP_VERSION_VALUE "$ENV{APP_VERSION}")
+    message(STATUS "Using APP_VERSION from environment: ${APP_VERSION_VALUE}")
+elseif(DEFINED APP_VERSION)
+    set(APP_VERSION_VALUE "${APP_VERSION}")
+    message(STATUS "Using APP_VERSION from CMake variable: ${APP_VERSION_VALUE}")
+else()
+    set(APP_VERSION_VALUE "")
+    message(STATUS "Using default APP_VERSION from version.h (git)")
+endif()
+
+if(NOT APP_VERSION_VALUE STREQUAL "")
+    if(DETECTED_PLATFORM STREQUAL "ESP32")
+        # ESP-IDF components only see definitions set via idf_build_set_property
+        idf_build_set_property(COMPILE_OPTIONS "-DAPP_VERSION=\"${APP_VERSION_VALUE}\"" APPEND)
+    else()
+        add_compile_definitions(APP_VERSION="${APP_VERSION_VALUE}")
+    endif()
+endif()
+
 # Define the project (works for both ESP-IDF and Linux)
 project(calaos-remote-ui)
 
@@ -104,18 +128,7 @@ configure_file(
     @ONLY
 )
 
-# Application version - can be overridden via environment variable or CMake variable
-# Default is defined in version.h as "git" for development builds
-if(DEFINED ENV{APP_VERSION})
-    set(APP_VERSION_VALUE "$ENV{APP_VERSION}")
-    message(STATUS "Using APP_VERSION from environment: ${APP_VERSION_VALUE}")
-    add_compile_definitions(APP_VERSION="${APP_VERSION_VALUE}")
-elseif(DEFINED APP_VERSION)
-    message(STATUS "Using APP_VERSION from CMake variable: ${APP_VERSION}")
-    add_compile_definitions(APP_VERSION="${APP_VERSION}")
-else()
-    message(STATUS "Using default APP_VERSION from version.h (git)")
-endif()
+# Application version was already resolved before project() above.
 
 # Linux-specific configuration
 if(DETECTED_PLATFORM STREQUAL "LINUX")
