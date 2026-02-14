@@ -20,6 +20,7 @@ public:
 private:
     std::unique_ptr<smooth_ui_toolkit::lvgl_cpp::Image> logo;
     std::unique_ptr<smooth_ui_toolkit::lvgl_cpp::Label> networkStatusLabel;
+    std::unique_ptr<smooth_ui_toolkit::lvgl_cpp::Label> versionLabel;
     std::unique_ptr<smooth_ui_toolkit::lvgl_cpp::Spinner> networkSpinner;
     smooth_ui_toolkit::Animate logoDropAnimation;
     smooth_ui_toolkit::Animate networkStatusAnimation;

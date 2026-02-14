@@ -5,6 +5,7 @@
 
 #include "ota_manager.h"
 #include "logging.h"
+#include "version.h"
 #include "../flux/app_dispatcher.h"
 #include "provisioning_manager.h"
 #include "hmac_authenticator.h"
@@ -161,6 +162,13 @@ void OtaManager::onStateChanged(const AppState& state)
     // Check if a new OTA update became available
     if (state.ota.status == OtaStatus::Available && state.ota.updateAvailable && !updateInProgress_)
     {
+        // Guard: skip if proposed version matches the currently installed version
+        if (state.ota.version == APP_VERSION)
+        {
+            ESP_LOGW(TAG, "OTA version %s is already installed, ignoring update", state.ota.version.c_str());
+            return;
+        }
+
         ESP_LOGI(TAG, "OTA update available detected, version: %s", state.ota.version.c_str());
 
         // Automatically start the update (as per requirements - no user intervention)

@@ -7,6 +7,7 @@
 
 #include "page_base.h"
 #include "../flux/flux.h"
+#include "version.h"
 #include "smooth_ui_toolkit.h"
 #include "lvgl/smooth_lvgl.h"
 #include <memory>
@@ -65,6 +66,7 @@ private:
     std::unique_ptr<smooth_ui_toolkit::lvgl_cpp::Label> titleLabel;
     std::unique_ptr<smooth_ui_toolkit::lvgl_cpp::Label> versionLabel;
     std::unique_ptr<smooth_ui_toolkit::lvgl_cpp::Label> statusLabel;
+    std::unique_ptr<smooth_ui_toolkit::lvgl_cpp::Label> currentVersionLabel;
     lv_obj_t* progressBar = nullptr;  // Raw LVGL bar - no C++ wrapper available
     std::unique_ptr<smooth_ui_toolkit::lvgl_cpp::Label> percentLabel;
     lv_timer_t* errorTimer = nullptr;

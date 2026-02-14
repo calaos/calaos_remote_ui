@@ -4,6 +4,7 @@
 #include "calaos_page.h"
 #include "app_main.h"
 #include "logging.h"
+#include "version.h"
 #include "../hal/hal.h"
 #include "../hal/hal_ota.h"
 #include "provisioning_manager.h"
@@ -42,6 +43,14 @@ StartupPage::StartupPage(lv_obj_t *parent):
     networkStatusLabel->setTextFont(&roboto_light_26);
 
     lv_obj_set_style_text_color(networkStatusLabel->get(), lv_color_white(), LV_PART_MAIN);
+
+    // Version label at bottom-right corner
+    versionLabel = std::make_unique<lvgl_cpp::Label>(*this);
+    versionLabel->setText(APP_VERSION);
+    lv_obj_align(versionLabel->get(), LV_ALIGN_BOTTOM_RIGHT, -20, -15);
+    lv_obj_set_style_text_color(versionLabel->get(), lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_font(versionLabel->get(), &roboto_light_22, LV_PART_MAIN);
+    lv_obj_set_style_opa(versionLabel->get(), LV_OPA_50, LV_PART_MAIN);
 
     // Provisioning UI elements (initially hidden)
     createProvisioningUI();

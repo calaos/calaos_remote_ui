@@ -867,6 +867,13 @@ void CalaosWebSocketManager::handleFirmwareUpdateAvailable(const json& data)
             return;
         }
 
+        // Skip update if proposed version is already installed
+        if (otaData.version == APP_VERSION)
+        {
+            ESP_LOGI(TAG, "Firmware version %s is already installed, skipping update", otaData.version.c_str());
+            return;
+        }
+
         // Build absolute URL from relative path
         // The server uses HTTP on the API port (5000 by default)
         ProvisioningManager& provMgr = getProvisioningManager();

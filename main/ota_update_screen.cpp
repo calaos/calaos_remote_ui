@@ -122,6 +122,14 @@ void OtaUpdateScreen::createUI()
     lv_obj_align(statusLabel->get(), LV_ALIGN_CENTER, 0, 100);
     lv_obj_set_style_text_color(statusLabel->get(), theme_color_white, LV_PART_MAIN);
     lv_obj_set_style_text_font(statusLabel->get(), &roboto_light_26, LV_PART_MAIN);
+
+    // Current version label at the bottom
+    currentVersionLabel = std::make_unique<lvgl_cpp::Label>(*this);
+    currentVersionLabel->setText("Current: " APP_VERSION);
+    lv_obj_align(currentVersionLabel->get(), LV_ALIGN_BOTTOM_MID, 0, -30);
+    lv_obj_set_style_text_color(currentVersionLabel->get(), theme_color_white, LV_PART_MAIN);
+    lv_obj_set_style_text_font(currentVersionLabel->get(), &roboto_light_26, LV_PART_MAIN);
+    lv_obj_set_style_opa(currentVersionLabel->get(), LV_OPA_50, LV_PART_MAIN);
 }
 
 void OtaUpdateScreen::show(const std::string& version, const std::string& releaseNotes)
