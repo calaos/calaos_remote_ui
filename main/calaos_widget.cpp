@@ -47,6 +47,24 @@ CalaosWidget::CalaosWidget(lv_obj_t* parent,
     }
 }
 
+const std::string& CalaosWidget::getDisplayName() const
+{
+    if (!config.override_name.empty())
+        return config.override_name;
+    if (!currentState.name.empty())
+        return currentState.name;
+    return config.io_id;
+}
+
+const std::string& CalaosWidget::getDisplayName(const CalaosProtocol::IoState& state) const
+{
+    if (!config.override_name.empty())
+        return config.override_name;
+    if (!state.name.empty())
+        return state.name;
+    return config.io_id;
+}
+
 CalaosWidget::~CalaosWidget()
 {
     ESP_LOGI(TAG, "Destroying widget: %s", config.io_id.c_str());

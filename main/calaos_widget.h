@@ -57,6 +57,18 @@ public:
     const std::string& getIoId() const { return config.io_id; }
 
     /**
+     * @brief Get the display name for the widget
+     * Priority: config.override_name > currentState.name > config.io_id
+     */
+    const std::string& getDisplayName() const;
+
+    /**
+     * @brief Get the display name using a specific IO state
+     * Priority: config.override_name > state.name > config.io_id
+     */
+    const std::string& getDisplayName(const CalaosProtocol::IoState& state) const;
+
+    /**
      * @brief Called from page render loop to update animations
      * Child classes override this to update their animations
      */

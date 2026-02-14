@@ -70,12 +70,7 @@ void LightSwitchWidget::createUI()
     // Name label (centered bottom)
     nameLabel = lv_label_create(get());
 
-    // Use IO name from state, or io_id as fallback
-    const char* displayName = currentState.name.empty() ?
-                             config.io_id.c_str() :
-                             currentState.name.c_str();
-
-    lv_label_set_text(nameLabel, displayName);
+    lv_label_set_text(nameLabel, getDisplayName().c_str());
     lv_obj_set_style_text_font(nameLabel, &roboto_regular_24, 0);
     lv_obj_set_style_text_color(nameLabel, theme_color_blue, 0);
     lv_obj_set_style_text_align(nameLabel, LV_TEXT_ALIGN_CENTER, 0);
@@ -152,11 +147,8 @@ void LightSwitchWidget::onStateUpdate(const CalaosProtocol::IoState& state)
     // Update current state
     currentState = state;
 
-    // Update name label if name changed
-    if (!state.name.empty())
-    {
-        lv_label_set_text(nameLabel, state.name.c_str());
-    }
+    // Update name label
+    lv_label_set_text(nameLabel, getDisplayName(state).c_str());
 
     // Update visual state
     bool isOn = parseIsOn(state.state);

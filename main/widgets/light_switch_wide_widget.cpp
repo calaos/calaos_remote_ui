@@ -104,10 +104,7 @@ void LightSwitchWideWidget::createUI()
 
     // Name label
     nameLabel = lv_label_create(textContainer);
-    const char* displayName = currentState.name.empty() ?
-                              config.io_id.c_str() :
-                              currentState.name.c_str();
-    lv_label_set_text(nameLabel, displayName);
+    lv_label_set_text(nameLabel, getDisplayName().c_str());
     lv_obj_set_style_text_font(nameLabel, &roboto_regular_24, 0);
     lv_obj_set_style_text_color(nameLabel, theme_color_blue, 0);
     lv_label_set_long_mode(nameLabel, LV_LABEL_LONG_SCROLL_CIRCULAR);
@@ -299,9 +296,8 @@ void LightSwitchWideWidget::onStateUpdate(const CalaosProtocol::IoState& state)
 
     currentState = state;
 
-    // Update name label if name changed
-    if (!state.name.empty())
-        lv_label_set_text(nameLabel, state.name.c_str());
+    // Update name label
+    lv_label_set_text(nameLabel, getDisplayName(state).c_str());
 
     // Update visual state
     bool isOn = parseIsOn(state.state);

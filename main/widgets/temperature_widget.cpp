@@ -52,10 +52,7 @@ void TemperatureWidget::createUI()
 
     // Name label at bottom (blue color)
     nameLabel = lv_label_create(get());
-    const char* displayName = currentState.name.empty() ?
-                             config.io_id.c_str() :
-                             currentState.name.c_str();
-    lv_label_set_text(nameLabel, displayName);
+    lv_label_set_text(nameLabel, getDisplayName().c_str());
     lv_obj_set_style_text_font(nameLabel, &roboto_regular_24, 0);
     lv_obj_set_style_text_color(nameLabel, theme_color_blue, 0);
     lv_label_set_long_mode(nameLabel, LV_LABEL_LONG_SCROLL_CIRCULAR);
@@ -72,10 +69,7 @@ void TemperatureWidget::onStateUpdate(const CalaosProtocol::IoState& state)
     lv_label_set_text(tempLabel, tempStr.c_str());
 
     // Update name if changed
-    const char* displayName = state.name.empty() ?
-                             config.io_id.c_str() :
-                             state.name.c_str();
-    lv_label_set_text(nameLabel, displayName);
+    lv_label_set_text(nameLabel, getDisplayName(state).c_str());
 }
 
 std::string TemperatureWidget::formatTemperature(const std::string& tempStr)

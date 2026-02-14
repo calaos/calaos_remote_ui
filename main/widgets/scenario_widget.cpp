@@ -60,12 +60,7 @@ void ScenarioWidget::createUI()
     // Name label (blue color)
     nameLabel = lv_label_create(get());
 
-    // Use IO name from state, or io_id as fallback
-    const char* displayName = currentState.name.empty() ?
-                             config.io_id.c_str() :
-                             currentState.name.c_str();
-
-    lv_label_set_text(nameLabel, displayName);
+    lv_label_set_text(nameLabel, getDisplayName().c_str());
     lv_obj_set_style_text_font(nameLabel, &roboto_regular_24, 0);
     lv_obj_set_style_text_color(nameLabel, theme_color_blue, 0);
     lv_obj_set_style_text_align(nameLabel, LV_TEXT_ALIGN_CENTER, 0);
@@ -236,12 +231,12 @@ void ScenarioWidget::render()
 
 void ScenarioWidget::onStateUpdate(const CalaosProtocol::IoState& state)
 {
-    // Scenarios don't receive state updates from server
     // Update name label if name changed
-    if (!state.name.empty() && state.name != currentState.name)
+    std::string prevDisplay = getDisplayName().c_str();
+    currentState = state;
+    if (getDisplayName() != prevDisplay)
     {
-        ESP_LOGI(TAG, "Updating name for %s: %s", config.io_id.c_str(), state.name.c_str());
-        currentState = state;
-        lv_label_set_text(nameLabel, state.name.c_str());
+        ESP_LOGI(TAG, "Updating name for %s: %s", config.io_id.c_str(), getDisplayName().c_str());
+        lv_label_set_text(nameLabel, getDisplayName().c_str());
     }
 }

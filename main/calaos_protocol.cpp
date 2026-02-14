@@ -58,6 +58,9 @@ PagesConfig PagesConfig::fromJson(const std::string& json_str)
                         if (widget_json.contains("type"))
                             widget.type = widget_json["type"].get<std::string>();
 
+                        if (widget_json.contains("name"))
+                            widget.override_name = widget_json["name"].get<std::string>();
+
                         // Parse x, y, w, h (can be int or string)
                         if (widget_json.contains("x"))
                         {
