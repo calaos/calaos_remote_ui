@@ -60,6 +60,7 @@ cat > "${PKG_DIR}/DEBIAN/control" <<EOF
 Package: ${PKG_NAME}
 Version: ${DEB_VERSION}
 Architecture: all
+Depends: curl
 Maintainer: Calaos Team <team@calaos.fr>
 Description: Calaos Remote UI firmware for ${BOARD}
  This package contains the firmware binary and manifest
@@ -68,6 +69,40 @@ Description: Calaos Remote UI firmware for ${BOARD}
 Section: misc
 Priority: optional
 EOF
+
+# Generate DEBIAN/postinst – notify calaos service to rescan firmwares
+cat > "${PKG_DIR}/DEBIAN/postinst" <<'POSTINST'
+#!/bin/sh
+set -e
+
+RESCAN_URL="http://127.0.0.1:5454/api/v3/ota/rescan"
+
+if ! curl --silent --show-error --max-time 5 -X POST "${RESCAN_URL}" > /dev/null 2>&1; then
+    echo "Warning: could not notify calaos service for firmware rescan (is it running?)." >&2
+    echo "A rescan will happen on next service restart." >&2
+fi
+
+exit 0
+POSTINST
+chmod 0755 "${PKG_DIR}/DEBIAN/postinst"
+
+# Generate DEBIAN/postrm – notify calaos service after firmware removal
+cat > "${PKG_DIR}/DEBIAN/postrm" <<'POSTRM'
+#!/bin/sh
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    RESCAN_URL="http://127.0.0.1:5454/api/v3/ota/rescan"
+
+    if ! curl --silent --show-error --max-time 5 -X POST "${RESCAN_URL}" > /dev/null 2>&1; then
+        echo "Warning: could not notify calaos service for firmware rescan (is it running?)." >&2
+        echo "A rescan will happen on next service restart." >&2
+    fi
+fi
+
+exit 0
+POSTRM
+chmod 0755 "${PKG_DIR}/DEBIAN/postrm"
 
 # Build the .deb
 dpkg-deb --root-owner-group --build "${PKG_DIR}"
