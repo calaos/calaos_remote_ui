@@ -182,5 +182,5 @@ jobs:
       - name: Update repo cache
         uses: distributhor/workflow-webhook@v3
         env:
-          webhook_url: ${{ secrets.WEBHOOK_URL }}
-          webhook_secret: ${{ secrets.WEBHOOK_SECRET }}
+          webhook_url: ${{ secrets.DEB_REPO_WEBHOOK_URL }}
+          webhook_secret: ${{ secrets.DEB_REPO_WEBHOOK_SECRET }}
