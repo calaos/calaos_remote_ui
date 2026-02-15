@@ -867,6 +867,13 @@ void CalaosWebSocketManager::handleFirmwareUpdateAvailable(const json& data)
             return;
         }
 
+        // Skip OTA for development builds (version "git")
+        if (std::string(APP_VERSION) == "git")
+        {
+            ESP_LOGI(TAG, "Development build detected (version 'git'), skipping OTA update");
+            return;
+        }
+
         // Skip update if proposed version is already installed
         if (otaData.version == APP_VERSION)
         {
