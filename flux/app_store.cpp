@@ -1,5 +1,6 @@
 #include "app_store.h"
 #include "app_dispatcher.h"
+#include "hal.h"
 #include "logging.h"
 
 static const char* TAG = "AppStore";
@@ -259,6 +260,7 @@ void AppStore::handleEvent(const AppEvent& event)
                 state_.websocket.hasError = false;
                 state_.websocket.authFailed = false;
                 state_.websocket.errorMessage.clear();
+                state_.websocket.lastConnectedTimestamp = HAL::getInstance().getSystem().getTimeMs();
                 stateChanged = true;
                 ESP_LOGD(TAG, "WebSocket connected");
                 break;

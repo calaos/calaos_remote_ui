@@ -5,6 +5,7 @@
 #include "lvgl/smooth_lvgl.h"
 #include "flux.h"
 #include "calaos_widget.h"
+#include "about_page.h"
 #include <memory>
 #include <vector>
 #include <string>
@@ -28,6 +29,9 @@ private:
     // NEW: Widget storage per page
     std::vector<std::vector<std::unique_ptr<CalaosWidget>>> pageWidgets;
 
+    // About page (always last tab)
+    std::unique_ptr<AboutPage> aboutPage_;
+
     // State management
     CalaosWebSocketState lastWebSocketState;
     std::string lastConfigJson;  // NEW: Detect config changes
@@ -44,6 +48,7 @@ private:
                              const CalaosProtocol::PageConfig& pageConfig,
                              const GridLayoutInfo& gridInfo);
 
+    void createAboutTab();
     void onStateChanged(const AppState& state);
     void onTabChanged(uint32_t activeTab);
 

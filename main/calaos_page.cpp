@@ -182,6 +182,9 @@ void CalaosPage::destroyPages()
 {
     ESP_LOGI(TAG, "Destroying existing pages");
 
+    // Clear about page
+    aboutPage_.reset();
+
     // Clear widgets (unique_ptr auto-deletes)
     pageWidgets.clear();
 
@@ -227,6 +230,10 @@ void CalaosPage::createPagesFromConfig(const CalaosProtocol::PagesConfig& config
         lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
 
         tabContent.push_back(tab);
+
+        // Still add About page
+        createAboutTab();
+        createPageIndicator(2);
         return;
     }
 
@@ -262,10 +269,27 @@ void CalaosPage::createPagesFromConfig(const CalaosProtocol::PagesConfig& config
         createWidgetsForPage(i, config.pages[i], gridInfo);
     }
 
-    // Create page indicator (only if > 1 page)
-    createPageIndicator(numPages);
+    // Create About page as last tab
+    createAboutTab();
 
-    ESP_LOGI(TAG, "Created %d page(s) successfully", numPages);
+    // Create page indicator (widgets + about)
+    int totalPages = numPages + 1;
+    createPageIndicator(totalPages);
+
+    ESP_LOGI(TAG, "Created %d page(s) + About successfully", numPages);
+}
+
+void CalaosPage::createAboutTab()
+{
+    lv_obj_t *aboutTab = lv_tabview_add_tab(tabview, "About");
+    lv_obj_set_style_bg_color(aboutTab, theme_color_black, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(aboutTab, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(aboutTab, 0, LV_PART_MAIN);
+
+    tabContent.push_back(aboutTab);
+    aboutPage_ = std::make_unique<AboutPage>(aboutTab);
+
+    ESP_LOGI(TAG, "About tab created");
 }
 
 void CalaosPage::createWidgetsForPage(int pageIndex,

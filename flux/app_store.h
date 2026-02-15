@@ -100,6 +100,9 @@ struct CalaosWebSocketState
     bool authFailed = false;
     std::string errorMessage;
 
+    // Timestamp of last successful connection (ms since boot)
+    uint64_t lastConnectedTimestamp = 0;
+
     // Detailed auth error info (from WebSocketAuthFailedData)
     WebSocketAuthErrorType authErrorType = WebSocketAuthErrorType::Unknown;
     int authHttpCode = 0;
