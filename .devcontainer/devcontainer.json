@@ -51,7 +51,8 @@
 		"--privileged",
 		"-p", "3333:3333",
 		"-p", "3000:3000",
-		"--network=host"
+		"--network=host",
+		"--group-add=18"
 	]
 }
 

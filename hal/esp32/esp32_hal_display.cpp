@@ -50,6 +50,7 @@ HalResult Esp32HalDisplay::init()
         .control_handle = lcdHandles.control,
         .buffer_size = cfg.buffer_size,
         .double_buffer = cfg.double_buffer,
+        .trans_size = 0,
         .hres = BSP_LCD_H_RES,
         .vres = BSP_LCD_V_RES,
         .monochrome = false,
@@ -64,6 +65,8 @@ HalResult Esp32HalDisplay::init()
             .buff_spiram = cfg.flags.buff_spiram,
             .sw_rotate = cfg.flags.sw_rotate,
             .swap_bytes = (BSP_LCD_BIGENDIAN ? true : false),
+            .full_refresh = 0,
+            .direct_mode = 0,
         }
     };
 
@@ -78,21 +81,6 @@ HalResult Esp32HalDisplay::init()
     {
         ESP_LOGE(TAG, "Failed to add LVGL display");
         return HalResult::ERROR;
-    }
-
-    // Initialize touch input
-    esp_lcd_touch_handle_t tp = nullptr;
-    if (bsp_touch_new(nullptr, &tp) != ESP_OK || !tp)
-    {
-        ESP_LOGW(TAG, "Failed to init touch, continuing without it");
-    }
-    else
-    {
-        const lvgl_port_touch_cfg_t touchCfg = {
-            .disp = display,
-            .handle = tp,
-        };
-        lvgl_port_add_touch(&touchCfg);
     }
 
     if (!display)

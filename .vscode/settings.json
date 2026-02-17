@@ -89,5 +89,6 @@
     "future": "cpp",
     "ranges": "cpp",
     "valarray": "cpp"
-  }
+  },
+  "mesonbuild.configureOnOpen": false
 }
