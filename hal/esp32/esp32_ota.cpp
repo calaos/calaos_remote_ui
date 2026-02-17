@@ -391,6 +391,11 @@ void Esp32Ota::otaTask()
 
     updateInProgress = false;
 
+    // Turn off display before reboot to avoid flickering
+    HAL::getInstance().getDisplay().backlightOff();
+    HAL::getInstance().getDisplay().displayOff();
+    HAL::getInstance().getSystem().delay(100);
+
     // Reboot to apply update
     ESP_LOGI(TAG, "Rebooting...");
     esp_restart();

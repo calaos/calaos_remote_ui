@@ -26,6 +26,12 @@ const AppState& AppStore::getState() const
     return state_;
 }
 
+AppState AppStore::getStateCopy() const
+{
+    flux::LockGuard lock(mutex_);
+    return state_;
+}
+
 SubscriptionId AppStore::subscribe(StateChangeCallback callback)
 {
     flux::LockGuard lock(mutex_);
@@ -485,11 +491,20 @@ void AppStore::handleEvent(const AppEvent& event)
 
 void AppStore::notifyStateChange()
 {
-    flux::LockGuard lock(mutex_);
-    if (shuttingDown_)
-        return;
-    for (auto& [id, callback] : subscribers_)
-        callback(state_);
+    // Copy subscribers and state under lock, then notify without holding the lock.
+    // This prevents deadlock when subscriber callbacks try to acquire the display lock
+    // (which may already be held by the main render thread that needs mutex_ for getState()).
+    std::map<SubscriptionId, StateChangeCallback> subscribersCopy;
+    AppState stateCopy;
+    {
+        flux::LockGuard lock(mutex_);
+        if (shuttingDown_)
+            return;
+        subscribersCopy = subscribers_;
+        stateCopy = state_;
+    }
+    for (auto& [id, callback] : subscribersCopy)
+        callback(stateCopy);
 }
 
 void AppStore::clearSubscribers()

@@ -81,7 +81,7 @@ private:
     QueueHandle_t eventQueue_;
     TaskHandle_t workerTaskHandle_;
     std::atomic<bool> shouldStop_;
-    static const int QUEUE_SIZE = 32;
+    static const int QUEUE_SIZE = 64;
     static const int TASK_STACK_SIZE = 8192;
     static const int TASK_PRIORITY = 5;
 #else

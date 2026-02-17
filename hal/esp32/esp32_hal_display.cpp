@@ -3,6 +3,8 @@
 #include "board_config.h"
 #include "bsp_board_extra.h"
 #include "bsp/display.h"
+#include "bsp/touch.h"
+#include "esp_lvgl_port.h"
 
 static const char* TAG = "hal.display";
 
@@ -19,7 +21,80 @@ HalResult Esp32HalDisplay::init()
         }
     };
 
-    display = bsp_display_start_with_config(&cfg);
+    // Initialize LVGL port
+    if (lvgl_port_init(&cfg.lvgl_port_cfg) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to init LVGL port");
+        return HalResult::ERROR;
+    }
+
+    if (bsp_display_brightness_init() != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to init display brightness");
+        return HalResult::ERROR;
+    }
+
+    // Create display and get panel handle
+    bsp_lcd_handles_t lcdHandles = {};
+    if (bsp_display_new_with_handles(nullptr, &lcdHandles) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to create display panel");
+        return HalResult::ERROR;
+    }
+    panelHandle = lcdHandles.panel;
+
+    // Configure LVGL display
+    const lvgl_port_display_cfg_t dispCfg = {
+        .io_handle = lcdHandles.io,
+        .panel_handle = lcdHandles.panel,
+        .control_handle = lcdHandles.control,
+        .buffer_size = cfg.buffer_size,
+        .double_buffer = cfg.double_buffer,
+        .hres = BSP_LCD_H_RES,
+        .vres = BSP_LCD_V_RES,
+        .monochrome = false,
+        .rotation = {
+            .swap_xy = false,
+            .mirror_x = false,
+            .mirror_y = false,
+        },
+        .color_format = LV_COLOR_FORMAT_RGB565,
+        .flags = {
+            .buff_dma = cfg.flags.buff_dma,
+            .buff_spiram = cfg.flags.buff_spiram,
+            .sw_rotate = cfg.flags.sw_rotate,
+            .swap_bytes = (BSP_LCD_BIGENDIAN ? true : false),
+        }
+    };
+
+    const lvgl_port_display_dsi_cfg_t dsiCfg = {
+        .flags = {
+            .avoid_tearing = false,
+        }
+    };
+
+    display = lvgl_port_add_disp_dsi(&dispCfg, &dsiCfg);
+    if (!display)
+    {
+        ESP_LOGE(TAG, "Failed to add LVGL display");
+        return HalResult::ERROR;
+    }
+
+    // Initialize touch input
+    esp_lcd_touch_handle_t tp = nullptr;
+    if (bsp_touch_new(nullptr, &tp) != ESP_OK || !tp)
+    {
+        ESP_LOGW(TAG, "Failed to init touch, continuing without it");
+    }
+    else
+    {
+        const lvgl_port_touch_cfg_t touchCfg = {
+            .disp = display,
+            .handle = tp,
+        };
+        lvgl_port_add_touch(&touchCfg);
+    }
+
     if (!display)
     {
         ESP_LOGE(TAG, "Failed to get LVGL display");
@@ -67,6 +142,20 @@ HalResult Esp32HalDisplay::backlightOff()
 {
     esp_err_t ret = bsp_display_backlight_off();
     return (ret == ESP_OK) ? HalResult::OK : HalResult::ERROR;
+}
+
+HalResult Esp32HalDisplay::displayOff()
+{
+    if (!panelHandle)
+        return HalResult::ERROR;
+
+    esp_err_t ret = esp_lcd_panel_disp_on_off(panelHandle, false);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to turn off display panel: %s", esp_err_to_name(ret));
+        return HalResult::ERROR;
+    }
+    return HalResult::OK;
 }
 
 void Esp32HalDisplay::lock(uint32_t timeoutMs)

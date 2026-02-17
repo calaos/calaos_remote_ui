@@ -3,6 +3,7 @@
 #include "../hal_display.h"
 #include "bsp/esp-bsp.h"
 #include "bsp/display.h"
+#include "esp_lcd_panel_ops.h"
 
 class Esp32HalDisplay : public HalDisplay
 {
@@ -13,6 +14,7 @@ public:
     HalResult setBacklight(uint8_t brightness) override;
     HalResult backlightOn() override;
     HalResult backlightOff() override;
+    HalResult displayOff() override;
     void lock(uint32_t timeoutMs = 0) override;
     bool tryLock(uint32_t timeoutMs) override;
     void unlock() override;
@@ -20,5 +22,6 @@ public:
 
 private:
     lv_display_t* display = nullptr;
+    esp_lcd_panel_handle_t panelHandle = nullptr;
     DisplayInfo displayInfo;
 };

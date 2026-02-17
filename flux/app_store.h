@@ -216,8 +216,11 @@ class AppStore
 public:
     static AppStore& getInstance();
 
-    // Get current state
+    // Get current state (returns reference, caller must not hold display lock)
     const AppState& getState() const;
+
+    // Get a copy of current state (safe to call while holding other locks)
+    AppState getStateCopy() const;
 
     // Subscribe to state changes - returns subscription ID for unsubscribing
     SubscriptionId subscribe(StateChangeCallback callback);

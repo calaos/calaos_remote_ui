@@ -762,8 +762,10 @@ void CalaosWebSocketManager::handleConfigUpdate(const json& data)
                 pagesConfig["pages"].size());
 
         // Handle io_items if present (store IO states)
+        // Batch all IO states into a single event to avoid flooding the event queue
         if (data.contains("io_items") && data["io_items"].is_array())
         {
+            IoStatesReceivedData batchData;
             for (const auto& ioItem : data["io_items"])
             {
                 CalaosProtocol::IoState ioState;
@@ -775,10 +777,14 @@ void CalaosWebSocketManager::handleConfigUpdate(const json& data)
                 ioState.enabled = ioItem.value("rw", "true") == "true";
                 ioState.state = "false";  // Default state
 
-                // Dispatch individual IO state
+                batchData.ioStates[ioState.id] = ioState;
+            }
+
+            if (!batchData.ioStates.empty())
+            {
+                ESP_LOGI(TAG, "Dispatching %zu IO states as batch", batchData.ioStates.size());
                 AppDispatcher::getInstance().dispatch(
-                    AppEvent(AppEventType::IoStateReceived,
-                            IoStateReceivedData{ioState})
+                    AppEvent(AppEventType::IoStatesReceived, batchData)
                 );
             }
         }

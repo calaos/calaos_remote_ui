@@ -106,10 +106,17 @@ void AppDispatcher::processEvents()
 
         if (hasEvent)
         {
+            // Copy subscribers under lock, then invoke callbacks without holding the lock.
+            // This prevents the dispatcher worker thread from being blocked on subscriber
+            // callbacks (which may try to acquire the display lock), avoiding deadlock.
+            std::vector<Subscription> subscribersCopy;
+            {
+                flux::LockGuard lock(subscribersMutex_);
+                subscribersCopy = subscribers_;
+            }
+
 #ifdef ESP_PLATFORM
-            // Process the event by calling all matching subscribers (ESP32 version)
-            flux::LockGuard lock(subscribersMutex_);
-            for (const auto& subscription : subscribers_)
+            for (const auto& subscription : subscribersCopy)
             {
                 if (subscription.listenAllEvents || subscription.eventType == eventPtr->getType())
                     subscription.callback(*eventPtr);
@@ -117,9 +124,7 @@ void AppDispatcher::processEvents()
             // Clean up the dynamically allocated event
             delete eventPtr;
 #else
-            // Process the event by calling all matching subscribers (Linux version)
-            flux::LockGuard lock(subscribersMutex_);
-            for (const auto& subscription : subscribers_)
+            for (const auto& subscription : subscribersCopy)
             {
                 if (subscription.listenAllEvents || subscription.eventType == event.getType())
                     subscription.callback(event);

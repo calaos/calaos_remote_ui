@@ -378,15 +378,13 @@ void StartupPage::onStateChanged(const AppState& state)
              static_cast<int>(state.provisioning.status));
 
     // Lock LVGL display for thread-safe UI updates
-    // Use a timeout loop to avoid deadlock during shutdown
-    while (!HAL::getInstance().getDisplay().tryLock(100))
+    // Use a single tryLock to avoid blocking the dispatcher thread which would
+    // cause event queue buildup and potential deadlock with the main render loop.
+    // If the lock fails, the update is skipped - it will be applied on the next state change.
+    if (!HAL::getInstance().getDisplay().tryLock(100))
     {
-        // Check if we should abort due to shutdown
-        if (AppDispatcher::getInstance().isStopping())
-        {
-            ESP_LOGD(TAG, "Aborting state change - application is shutting down");
-            return;
-        }
+        ESP_LOGW(TAG, "Failed to acquire display lock for state change, skipping update");
+        return;
     }
 
     // Check if network state has changed
@@ -793,13 +791,11 @@ void StartupPage::onStateChanged(const AppState& state)
                     lv_obj_add_flag(networkStatusLabel->get(), LV_OBJ_FLAG_HIDDEN);
 
                 // Check if OTA is in progress or pending - don't push CalaosPage during OTA
-                OtaStatus otaStatus;
-                bool otaUpdateAvailable;
-                {
-                    const AppState& currentState = AppStore::getInstance().getState();
-                    otaStatus = currentState.ota.status;
-                    otaUpdateAvailable = currentState.ota.updateAvailable;
-                }
+                // Use getStateCopy() to avoid holding AppStore::mutex_ while already
+                // under the display lock (prevents lock ordering inversion)
+                AppState currentState = AppStore::getInstance().getStateCopy();
+                OtaStatus otaStatus = currentState.ota.status;
+                bool otaUpdateAvailable = currentState.ota.updateAvailable;
                 if (otaStatus == OtaStatus::Available ||
                     otaStatus == OtaStatus::Downloading ||
                     otaStatus == OtaStatus::Installing ||

@@ -340,17 +340,34 @@ void AboutPage::onStateChanged(const AppState &state)
 void AboutPage::formatDuration(uint64_t ms, char *buf, size_t bufSize)
 {
     uint64_t totalSeconds = ms / 1000;
-    uint64_t days = totalSeconds / 86400;
-    uint64_t hours = (totalSeconds % 86400) / 3600;
-    uint64_t minutes = (totalSeconds % 3600) / 60;
-    uint64_t seconds = totalSeconds % 60;
+    uint64_t years = totalSeconds / (365 * 86400);
+    uint64_t remaining = totalSeconds % (365 * 86400);
+    uint64_t months = remaining / (30 * 86400);
+    remaining = remaining % (30 * 86400);
+    uint64_t weeks = remaining / (7 * 86400);
+    remaining = remaining % (7 * 86400);
+    uint64_t days = remaining / 86400;
+    uint64_t hours = (remaining % 86400) / 3600;
+    uint64_t minutes = (remaining % 3600) / 60;
+    uint64_t seconds = remaining % 60;
 
+    char tmp[128] = "";
+    int pos = 0;
+
+    if (years > 0)
+        pos += snprintf(tmp + pos, sizeof(tmp) - pos, "%lluy ", (unsigned long long)years);
+    if (months > 0)
+        pos += snprintf(tmp + pos, sizeof(tmp) - pos, "%llumo ", (unsigned long long)months);
+    if (weeks > 0)
+        pos += snprintf(tmp + pos, sizeof(tmp) - pos, "%lluw ", (unsigned long long)weeks);
     if (days > 0)
-        snprintf(buf, bufSize, "%llud %lluh %llum %llus", (unsigned long long)days, (unsigned long long)hours, (unsigned long long)minutes, (unsigned long long)seconds);
-    else if (hours > 0)
-        snprintf(buf, bufSize, "%lluh %llum %llus", (unsigned long long)hours, (unsigned long long)minutes, (unsigned long long)seconds);
-    else if (minutes > 0)
-        snprintf(buf, bufSize, "%llum %llus", (unsigned long long)minutes, (unsigned long long)seconds);
-    else
-        snprintf(buf, bufSize, "%llus", (unsigned long long)seconds);
+        pos += snprintf(tmp + pos, sizeof(tmp) - pos, "%llud ", (unsigned long long)days);
+    if (hours > 0)
+        pos += snprintf(tmp + pos, sizeof(tmp) - pos, "%lluh ", (unsigned long long)hours);
+    if (minutes > 0)
+        pos += snprintf(tmp + pos, sizeof(tmp) - pos, "%llum ", (unsigned long long)minutes);
+
+    snprintf(tmp + pos, sizeof(tmp) - pos, "%llus", (unsigned long long)seconds);
+
+    snprintf(buf, bufSize, "%s", tmp);
 }
