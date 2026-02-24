@@ -24,26 +24,34 @@ CalaosWidget::CalaosWidget(lv_obj_t* parent,
     setBgOpa(LV_OPA_COVER);
     setPadding(0, 0, 0, 0);
 
-    // Subscribe to state changes
-    subscribeToStateChanges();
-
-    // Try to get initial state from AppStore
-    const AppState& state = AppStore::getInstance().getState();
-    auto it = state.ioStates.find(config.io_id);
-    if (it != state.ioStates.end())
+    // Only subscribe to IO state changes if io_id is set (non-IO widgets like Clock skip this)
+    if (!config.io_id.empty())
     {
-        currentState = it->second;
-        ESP_LOGI(TAG, "Widget %s found initial state: %s",
-                config.io_id.c_str(), currentState.state.c_str());
+        // Subscribe to state changes
+        subscribeToStateChanges();
+
+        // Try to get initial state from AppStore
+        const AppState& state = AppStore::getInstance().getState();
+        auto it = state.ioStates.find(config.io_id);
+        if (it != state.ioStates.end())
+        {
+            currentState = it->second;
+            ESP_LOGI(TAG, "Widget %s found initial state: %s",
+                    config.io_id.c_str(), currentState.state.c_str());
+        }
+        else
+        {
+            ESP_LOGW(TAG, "Widget %s: IO state not found in AppStore", config.io_id.c_str());
+            // Set default state
+            currentState.id = config.io_id;
+            currentState.type = config.type;
+            currentState.state = "unknown";
+            currentState.name = config.io_id;
+        }
     }
     else
     {
-        ESP_LOGW(TAG, "Widget %s: IO state not found in AppStore", config.io_id.c_str());
-        // Set default state
-        currentState.id = config.io_id;
-        currentState.type = config.type;
-        currentState.state = "unknown";
-        currentState.name = config.io_id;
+        ESP_LOGI(TAG, "Widget type=%s has no io_id, skipping IO state subscription", config.type.c_str());
     }
 }
 
@@ -67,10 +75,11 @@ const std::string& CalaosWidget::getDisplayName(const CalaosProtocol::IoState& s
 
 CalaosWidget::~CalaosWidget()
 {
-    ESP_LOGI(TAG, "Destroying widget: %s", config.io_id.c_str());
+    ESP_LOGI(TAG, "Destroying widget: type=%s io_id=%s", config.type.c_str(), config.io_id.c_str());
 
     // Unsubscribe from AppStore to prevent dangling pointer
-    AppStore::getInstance().unsubscribe(subscriptionId_);
+    if (subscriptionId_ != 0)
+        AppStore::getInstance().unsubscribe(subscriptionId_);
 }
 
 void CalaosWidget::calculateAndApplyPosition()

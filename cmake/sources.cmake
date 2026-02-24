@@ -32,6 +32,7 @@ set(MAIN_SOURCES
     main/widgets/light_switch_wide_widget.cpp
     main/widgets/temperature_widget.cpp
     main/widgets/scenario_widget.cpp
+    main/widgets/clock_widget.cpp
 )
 
 # Flux architecture sources

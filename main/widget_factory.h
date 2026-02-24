@@ -55,11 +55,23 @@ public:
                        WidgetCreator creator);
 
     /**
+     * @brief Register a widget type that accepts any size
+     *
+     * Used for widgets like Clock that dynamically adapt to whatever grid size
+     * is configured. The any-size creator is used as a fallback when no exact
+     * Type_WxH match is found.
+     *
+     * @param typeName Widget type name (e.g., "Clock")
+     * @param creator Function that creates the widget
+     */
+    void registerWidgetAnySize(const std::string& typeName, WidgetCreator creator);
+
+    /**
      * @brief Check if a widget type/size is registered
      * @param typeName Widget type name
      * @param width Widget width in grid units
      * @param height Widget height in grid units
-     * @return true if registered
+     * @return true if registered (exact match or any-size)
      */
     bool isRegistered(const std::string& typeName, int width, int height) const;
 
@@ -86,7 +98,11 @@ private:
      */
     std::string makeKey(const std::string& type, int w, int h) const;
 
-    // Map of widget creators
+    // Map of widget creators for specific sizes
     // Key format: "LightSwitch_1x1", "Temperature_1x1", etc.
     std::map<std::string, WidgetCreator> creators;
+
+    // Map of widget creators that accept any size (fallback when no exact match)
+    // Key: type name (e.g., "Clock")
+    std::map<std::string, WidgetCreator> anySizeCreators;
 };

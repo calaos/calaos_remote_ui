@@ -37,13 +37,16 @@ inline constexpr const char* FW_HEADER_HARDWARE_ID = "X-Device-Hardware-Id";
  */
 struct WidgetConfig
 {
-    std::string io_id;          // IO unique identifier (e.g., "io_0")
-    std::string type;           // Widget type (e.g., "LightSwitch", "Temperature")
+    std::string io_id;          // IO unique identifier (e.g., "io_0"), empty for non-IO widgets
+    std::string type;           // Widget type (e.g., "LightSwitch", "Temperature", "Clock")
     std::string override_name;  // Optional user-defined name override for display
     int x = 0;                  // Grid position X
     int y = 0;                  // Grid position Y
     int w = 1;                  // Grid width
     int h = 1;                  // Grid height
+
+    // Extra parameters from JSON/XML attributes (e.g., clock_timezone, clock_format)
+    std::map<std::string, std::string> params;
 
     WidgetConfig() = default;
 

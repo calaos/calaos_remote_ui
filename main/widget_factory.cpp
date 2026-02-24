@@ -4,6 +4,7 @@
 #include "widgets/light_switch_wide_widget.h"
 #include "widgets/temperature_widget.h"
 #include "widgets/scenario_widget.h"
+#include "widgets/clock_widget.h"
 #include "logging.h"
 #include <sstream>
 
@@ -31,10 +32,18 @@ void WidgetFactory::registerWidget(const std::string& typeName,
     ESP_LOGI(TAG, "Registered widget: %s", key.c_str());
 }
 
+void WidgetFactory::registerWidgetAnySize(const std::string& typeName, WidgetCreator creator)
+{
+    anySizeCreators[typeName] = creator;
+    ESP_LOGI(TAG, "Registered any-size widget: %s", typeName.c_str());
+}
+
 bool WidgetFactory::isRegistered(const std::string& typeName, int width, int height) const
 {
     std::string key = makeKey(typeName, width, height);
-    return creators.find(key) != creators.end();
+    if (creators.find(key) != creators.end())
+        return true;
+    return anySizeCreators.find(typeName) != anySizeCreators.end();
 }
 
 std::string WidgetFactory::makeKey(const std::string& type, int w, int h) const
@@ -53,12 +62,20 @@ std::unique_ptr<CalaosWidget> WidgetFactory::createWidget(
 
     ESP_LOGI(TAG, "Creating widget: %s (io_id=%s)", key.c_str(), config.io_id.c_str());
 
-    // Look up creator
+    // Look up creator - first try exact Type_WxH match
     auto it = creators.find(key);
     if (it != creators.end())
     {
-        // Found - create the widget
+        // Found exact match - create the widget
         return it->second(parent, config, gridInfo);
+    }
+
+    // Try any-size fallback for this type
+    auto anyIt = anySizeCreators.find(config.type);
+    if (anyIt != anySizeCreators.end())
+    {
+        ESP_LOGI(TAG, "Using any-size creator for type: %s", config.type.c_str());
+        return anyIt->second(parent, config, gridInfo);
     }
 
     // Not found - create WidgetError
@@ -110,5 +127,13 @@ void WidgetFactory::registerBuiltinWidgets()
         }
     );
 
-    ESP_LOGI(TAG, "Built-in widgets registered: %zu", creators.size());
+    // Register Clock for any size (dynamically adapts to grid dimensions)
+    registerWidgetAnySize("Clock",
+        [](lv_obj_t* parent, const auto& config, const auto& gridInfo) {
+            return std::make_unique<ClockWidget>(parent, config, gridInfo);
+        }
+    );
+
+    ESP_LOGI(TAG, "Built-in widgets registered: %zu sized + %zu any-size",
+             creators.size(), anySizeCreators.size());
 }

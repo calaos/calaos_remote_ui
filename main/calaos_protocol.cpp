@@ -108,16 +108,34 @@ PagesConfig PagesConfig::fromJson(const std::string& json_str)
                                 widget.h = widget_json["height"].get<int>();
                         }
 
-                        // Validate widget
-                        if (widget.io_id.empty())
+                        // Collect extra parameters (unknown keys) into params map
+                        static const std::vector<std::string> knownKeys = {
+                            "io_id", "type", "name", "x", "y", "w", "h", "width", "height"
+                        };
+                        for (auto it = widget_json.begin(); it != widget_json.end(); ++it)
                         {
-                            ESP_LOGW(TAG, "Skipping widget with empty io_id");
-                            continue;
+                            const std::string& key = it.key();
+                            bool isKnown = false;
+                            for (const auto& k : knownKeys)
+                            {
+                                if (key == k)
+                                {
+                                    isKnown = true;
+                                    break;
+                                }
+                            }
+                            if (!isKnown && it.value().is_string())
+                                widget.params[key] = it.value().get<std::string>();
+                            else if (!isKnown && it.value().is_number())
+                                widget.params[key] = std::to_string(it.value().get<int>());
+                            else if (!isKnown && it.value().is_boolean())
+                                widget.params[key] = it.value().get<bool>() ? "true" : "false";
                         }
 
+                        // Validate widget
                         if (widget.type.empty())
                         {
-                            ESP_LOGW(TAG, "Skipping widget %s with empty type", widget.io_id.c_str());
+                            ESP_LOGW(TAG, "Skipping widget with empty type");
                             continue;
                         }
 
