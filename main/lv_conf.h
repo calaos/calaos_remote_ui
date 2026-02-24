@@ -529,6 +529,7 @@
    LV_FONT_DECLARE(roboto_regular_28) \
    LV_FONT_DECLARE(roboto_regular_32) \
    LV_FONT_DECLARE(roboto_regular_48) \
+   LV_FONT_DECLARE(roboto_regular_60) \
    LV_FONT_DECLARE(roboto_medium_22) \
    LV_FONT_DECLARE(roboto_medium_24) \
    LV_FONT_DECLARE(roboto_medium_26) \
@@ -541,7 +542,12 @@
    LV_FONT_DECLARE(roboto_bold_28) \
    LV_FONT_DECLARE(roboto_bold_32) \
    LV_FONT_DECLARE(roboto_bold_48) \
-   LV_FONT_DECLARE(roboto_bold_50)
+   LV_FONT_DECLARE(roboto_bold_50) \
+   LV_FONT_DECLARE(roboto_bold_60) \
+   LV_FONT_DECLARE(roboto_bold_72) \
+   LV_FONT_DECLARE(roboto_bold_96) \
+   LV_FONT_DECLARE(roboto_bold_120) \
+   LV_FONT_DECLARE(roboto_bold_150)
 
 /*Always set a default font*/
 #define LV_FONT_DEFAULT &roboto_regular_24
@@ -549,7 +555,7 @@
 /*Enable handling large font and/or fonts with a lot of characters.
  *The limit depends on the font size, font face and bpp.
  *Compiler error will be triggered if a font needs it.*/
-#define LV_FONT_FMT_TXT_LARGE 0
+#define LV_FONT_FMT_TXT_LARGE 1
 
 /*Enables/disables support for compressed fonts.*/
 #define LV_USE_FONT_COMPRESSED 1

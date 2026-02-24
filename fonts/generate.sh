@@ -10,9 +10,9 @@ set -e
 
 FONT_CONFIGS=(
     "Roboto-Light:roboto_light:22,24,26,28,32,48"
-    "Roboto-Regular:roboto_regular:22,24,26,28,32,48"
+    "Roboto-Regular:roboto_regular:22,24,26,28,32,48,60"
     "Roboto-Medium:roboto_medium:22,24,26,28,32,48"
-    "Roboto-Bold:roboto_bold:22,24,26,28,32,48,50"
+    "Roboto-Bold:roboto_bold:22,24,26,28,32,48,50,60,72,96,120,150"
 )
 
 # Output directory
