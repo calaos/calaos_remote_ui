@@ -28,6 +28,12 @@ private:
     void stopNetworkTimeout();
     void networkTimeoutTask();
 
+    std::string findActiveInterface() const;
+    std::string findWirelessInterface() const;
+    std::string getDefaultGateway() const;
+    std::string getNetmaskForInterface(const std::string &ifname) const;
+    bool isWirelessInterface(const std::string &ifname) const;
+
     WifiStatus wifi_status_ = WifiStatus::DISCONNECTED;
     WifiEventCallback wifi_callback_;
     std::thread status_thread_;

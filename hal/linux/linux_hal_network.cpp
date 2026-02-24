@@ -13,6 +13,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <net/if.h>
+#include <dirent.h>
 #include <thread>
 #include <chrono>
 
@@ -127,7 +128,15 @@ HalResult LinuxHalNetwork::connectWifi(const WifiConfig& config)
 
 HalResult LinuxHalNetwork::disconnectWifi()
 {
-    int result = system("nmcli dev disconnect iface wlan0");
+    std::string iface = findWirelessInterface();
+    if (iface.empty())
+    {
+        ESP_LOGW(TAG, "No wireless interface found for disconnect");
+        return HalResult::ERROR;
+    }
+
+    std::string command = "nmcli dev disconnect " + iface;
+    int result = system(command.c_str());
     wifi_status_ = WifiStatus::DISCONNECTED;
     return (result == 0) ? HalResult::OK : HalResult::ERROR;
 }
@@ -177,25 +186,177 @@ std::string LinuxHalNetwork::getLocalIp() const
 
 std::string LinuxHalNetwork::getMacAddress() const
 {
-    std::ifstream file("/sys/class/net/wlan0/address");
-    if (file.is_open())
+    // Try to get MAC from the active non-loopback interface
+    std::string iface = findActiveInterface();
+    if (!iface.empty())
     {
-        std::string mac;
-        std::getline(file, mac);
-        return mac;
+        std::ifstream file("/sys/class/net/" + iface + "/address");
+        if (file.is_open())
+        {
+            std::string mac;
+            std::getline(file, mac);
+            if (!mac.empty())
+                return mac;
+        }
     }
 
-    // Try eth0 if wlan0 doesn't exist
-    file.close();
-    file.open("/sys/class/net/eth0/address");
-    if (file.is_open())
+    // Fallback: iterate all interfaces in /sys/class/net/ and return the first valid MAC
+    DIR *dir = opendir("/sys/class/net");
+    if (dir)
     {
-        std::string mac;
-        std::getline(file, mac);
-        return mac;
+        struct dirent *entry;
+        while ((entry = readdir(dir)) != nullptr)
+        {
+            std::string name(entry->d_name);
+            if (name == "." || name == ".." || name == "lo")
+                continue;
+
+            std::ifstream file("/sys/class/net/" + name + "/address");
+            if (file.is_open())
+            {
+                std::string mac;
+                std::getline(file, mac);
+                if (!mac.empty() && mac != "00:00:00:00:00:00")
+                {
+                    closedir(dir);
+                    return mac;
+                }
+            }
+        }
+        closedir(dir);
     }
 
     return "";
+}
+
+std::string LinuxHalNetwork::findActiveInterface() const
+{
+    struct ifaddrs *ifaddrs_ptr, *ifa;
+
+    if (getifaddrs(&ifaddrs_ptr) == -1)
+        return "";
+
+    std::string result;
+    for (ifa = ifaddrs_ptr; ifa != nullptr; ifa = ifa->ifa_next)
+    {
+        if (ifa->ifa_addr == nullptr)
+            continue;
+
+        // Look for IPv4, non-loopback, UP and RUNNING interface
+        if (ifa->ifa_addr->sa_family == AF_INET && (ifa->ifa_flags & (IFF_UP | IFF_RUNNING)) == (IFF_UP | IFF_RUNNING))
+        {
+            struct sockaddr_in *addr_in = (struct sockaddr_in *)ifa->ifa_addr;
+            char ip_str[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &(addr_in->sin_addr), ip_str, INET_ADDRSTRLEN);
+
+            if (std::string(ip_str) != "127.0.0.1")
+            {
+                result = std::string(ifa->ifa_name);
+                break;
+            }
+        }
+    }
+
+    freeifaddrs(ifaddrs_ptr);
+    return result;
+}
+
+std::string LinuxHalNetwork::findWirelessInterface() const
+{
+    DIR *dir = opendir("/sys/class/net");
+    if (!dir)
+        return "";
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != nullptr)
+    {
+        std::string name(entry->d_name);
+        if (name == "." || name == "..")
+            continue;
+
+        // The presence of /sys/class/net/<iface>/wireless indicates a WiFi interface
+        std::string wirelessPath = "/sys/class/net/" + name + "/wireless";
+        DIR *wdir = opendir(wirelessPath.c_str());
+        if (wdir)
+        {
+            closedir(wdir);
+            closedir(dir);
+            return name;
+        }
+    }
+
+    closedir(dir);
+    return "";
+}
+
+bool LinuxHalNetwork::isWirelessInterface(const std::string &ifname) const
+{
+    std::string wirelessPath = "/sys/class/net/" + ifname + "/wireless";
+    DIR *dir = opendir(wirelessPath.c_str());
+    if (dir)
+    {
+        closedir(dir);
+        return true;
+    }
+    return false;
+}
+
+std::string LinuxHalNetwork::getDefaultGateway() const
+{
+    std::ifstream file("/proc/net/route");
+    if (!file.is_open())
+        return "";
+
+    std::string line;
+    std::getline(file, line); // Skip header
+
+    while (std::getline(file, line))
+    {
+        std::istringstream iss(line);
+        std::string iface, dest, gateway;
+        iss >> iface >> dest >> gateway;
+
+        // Default route has destination 00000000
+        if (dest == "00000000")
+        {
+            // Convert hex gateway to dotted IP (little-endian on x86)
+            unsigned long gw = std::stoul(gateway, nullptr, 16);
+            struct in_addr addr;
+            addr.s_addr = (in_addr_t)gw;
+            return std::string(inet_ntoa(addr));
+        }
+    }
+
+    return "";
+}
+
+std::string LinuxHalNetwork::getNetmaskForInterface(const std::string &ifname) const
+{
+    if (ifname.empty())
+        return "";
+
+    struct ifaddrs *ifaddrs_ptr, *ifa;
+    if (getifaddrs(&ifaddrs_ptr) == -1)
+        return "";
+
+    std::string result;
+    for (ifa = ifaddrs_ptr; ifa != nullptr; ifa = ifa->ifa_next)
+    {
+        if (ifa->ifa_addr == nullptr || ifa->ifa_netmask == nullptr)
+            continue;
+
+        if (ifa->ifa_addr->sa_family == AF_INET && std::string(ifa->ifa_name) == ifname)
+        {
+            struct sockaddr_in *mask_in = (struct sockaddr_in *)ifa->ifa_netmask;
+            char mask_str[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &(mask_in->sin_addr), mask_str, INET_ADDRSTRLEN);
+            result = std::string(mask_str);
+            break;
+        }
+    }
+
+    freeifaddrs(ifaddrs_ptr);
+    return result;
 }
 
 WifiStatus LinuxHalNetwork::checkWifiStatus()
@@ -261,17 +422,42 @@ void LinuxHalNetwork::statusMonitorThread() {
             network_connected_ = true;
             stopNetworkTimeout();
 
-            // Dispatch network events - assume Ethernet for Linux for now
-            NetworkStatusChangedData statusData = { true, NetworkConnectionType::Ethernet };
+            // Detect connection type and gather real network info
+            std::string activeIface = findActiveInterface();
+            bool isWifi = !activeIface.empty() && isWirelessInterface(activeIface);
+            NetworkConnectionType connType = isWifi ? NetworkConnectionType::WiFi : NetworkConnectionType::Ethernet;
+
+            std::string gateway = getDefaultGateway();
+            std::string netmask = getNetmaskForInterface(activeIface);
+            std::string ssid;
+            int rssi = 0;
+
+            if (isWifi)
+            {
+                // Try to get SSID via iwgetid
+                FILE *pipe = popen("iwgetid -r 2>/dev/null", "r");
+                if (pipe)
+                {
+                    char buf[128];
+                    if (fgets(buf, sizeof(buf), pipe))
+                    {
+                        ssid = std::string(buf);
+                        ssid.erase(ssid.find_last_not_of(" \n\r\t") + 1);
+                    }
+                    pclose(pipe);
+                }
+            }
+
+            NetworkStatusChangedData statusData = { true, connType };
             AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NetworkStatusChanged, statusData));
 
             NetworkIpAssignedData ipData = {
                 .ipAddress = localIp,
-                .gateway = "192.168.1.1", // Simplified for Linux
-                .netmask = "255.255.255.0",
-                .connectionType = NetworkConnectionType::Ethernet,
-                .ssid = "",
-                .rssi = 0
+                .gateway = gateway,
+                .netmask = netmask,
+                .connectionType = connType,
+                .ssid = ssid,
+                .rssi = rssi
             };
             AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NetworkIpAssigned, ipData));
 
