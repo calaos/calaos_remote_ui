@@ -1,0 +1,3 @@
+[submodule "boards/luckfox-86-panel/luckfox-pico-86-panel"]
+	path = boards/luckfox-86-panel/luckfox-pico-86-panel
+	url = https://github.com/naguirre/buildroot-luckfox-pico-86-panel
