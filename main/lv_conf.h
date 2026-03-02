@@ -24,7 +24,7 @@
 
 #ifndef ESP_PLATFORM
 /* Include platform-specific configuration */
-#include "lv_conf_platform.h"
+#include "../hal/linux/lv_conf_platform.h"
 #else
     /* ESP32 Platform - Disable all Linux-specific backends */
     #define LV_USE_FBDEV            0
