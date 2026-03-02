@@ -79,6 +79,7 @@ set(LINUX_HAL_SOURCES
 set(COMMON_INCLUDE_DIRS
     main
     hal
+    hal/linux
     flux
     network
     components/mongoose/mongoose
