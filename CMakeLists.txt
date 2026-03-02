@@ -271,7 +271,7 @@ if(DETECTED_PLATFORM STREQUAL "LINUX")
 
     # Add LVGL include directories for lv_conf.h/lv_conf_platform.h
     target_include_directories(lvgl PUBLIC
-        ${CMAKE_BINARY_DIR}/hal/linux
+        ${CMAKE_SOURCE_DIR}/hal/linux
         ${CMAKE_SOURCE_DIR}/main
     )
 
