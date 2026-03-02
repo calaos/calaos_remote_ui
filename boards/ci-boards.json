@@ -7,5 +7,13 @@
     "build_script": "boards/waveshare-86-panel/build.sh",
     "bin_path": "build/calaos-remote-ui.bin",
     "description": "Waveshare ESP32-P4 86-Panel firmware"
+  },
+  {
+    "name": "luckfox-86-panel",
+    "platform": "linux",
+    "dockerfile": "boards/luckfox-86-panel/Dockerfile",
+    "docker_image": "ghcr.io/calaos/calaos-build-luckfox-86-panel:latest",
+    "build_script": "boards/luckfox-86-panel/build.sh",
+    "description": "Luckfox Linux 86-Panel firmware"
   }
 ]
