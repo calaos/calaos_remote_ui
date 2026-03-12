@@ -203,7 +203,7 @@ HalResult LinuxHalDisplay::initFbdevBackend()
 
     displayInfo.width = BOARD_DISPLAY_WIDTH;
     displayInfo.height = BOARD_DISPLAY_HEIGHT;
-    displayInfo.colorDepth = 16;
+    displayInfo.colorDepth = BOARD_DISPLAY_COLOR_DEPTH;
 
     display = lv_linux_fbdev_create();
     if (!display)
@@ -239,9 +239,21 @@ HalResult LinuxHalDisplay::initDrmBackend()
 
     lv_linux_drm_set_file(display, drmCard, -1);
 
+    int32_t horRes = lv_display_get_horizontal_resolution(display);
+    int32_t verRes = lv_display_get_vertical_resolution(display);
+    if (horRes != BOARD_DISPLAY_WIDTH || verRes != BOARD_DISPLAY_HEIGHT)
+    {
+        ESP_LOGE(TAG, "DRM setup failed: display resolution %dx%d doesn't match expected %dx%d. "
+                 "Check that the DRM plane supports the configured color depth (%d-bit)",
+                 horRes, verRes, BOARD_DISPLAY_WIDTH, BOARD_DISPLAY_HEIGHT, BOARD_DISPLAY_COLOR_DEPTH);
+        lv_display_delete(display);
+        display = nullptr;
+        return HalResult::ERROR;
+    }
+
     displayInfo.width = BOARD_DISPLAY_WIDTH;
     displayInfo.height = BOARD_DISPLAY_HEIGHT;
-    displayInfo.colorDepth = 16;
+    displayInfo.colorDepth = BOARD_DISPLAY_COLOR_DEPTH;
 
     return HalResult::OK;
 #else

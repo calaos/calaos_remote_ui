@@ -7,6 +7,9 @@
 
 /* Linux Platform - Enable available backends detected by CMake */
 
+/* Color depth from board configuration */
+#define LV_COLOR_DEPTH          @BOARD_DISPLAY_COLOR_DEPTH@
+
 #define LV_USE_OS               LV_OS_NONE
 
 /* Display backends */

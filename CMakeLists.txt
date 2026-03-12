@@ -61,6 +61,14 @@ if(NOT BOARD_PLATFORM STREQUAL DETECTED_PLATFORM)
     message(FATAL_ERROR "Board '${BOARD}' requires ${BOARD_PLATFORM} platform but ${DETECTED_PLATFORM} was detected")
 endif()
 
+# Validate BOARD_DISPLAY_COLOR_DEPTH
+if(NOT DEFINED BOARD_DISPLAY_COLOR_DEPTH)
+    message(WARNING "BOARD_DISPLAY_COLOR_DEPTH not set in board config, defaulting to 16")
+    set(BOARD_DISPLAY_COLOR_DEPTH 16)
+elseif(NOT BOARD_DISPLAY_COLOR_DEPTH MATCHES "^(16|24|32)$")
+    message(FATAL_ERROR "Invalid BOARD_DISPLAY_COLOR_DEPTH=${BOARD_DISPLAY_COLOR_DEPTH}. Must be 16, 24, or 32")
+endif()
+
 # ESP-IDF setup (only if targeting ESP32)
 if(DETECTED_PLATFORM STREQUAL "ESP32")
     if(NOT DEFINED ENV{IDF_PATH})
@@ -272,6 +280,7 @@ if(DETECTED_PLATFORM STREQUAL "LINUX")
     # Add LVGL include directories for lv_conf.h/lv_conf_platform.h
     target_include_directories(lvgl PUBLIC
         ${CMAKE_SOURCE_DIR}/hal/linux
+        ${CMAKE_BINARY_DIR}/hal/linux
         ${CMAKE_SOURCE_DIR}/main
         ${LINUX_DISPLAY_INCLUDES}
     )
