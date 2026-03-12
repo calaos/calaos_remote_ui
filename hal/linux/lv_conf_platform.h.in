@@ -10,8 +10,8 @@
 #define LV_USE_OS               LV_OS_NONE
 
 /* Display backends */
-#define LV_USE_FBDEV            @LV_USE_FBDEV@
-#define LV_USE_DRM              @LV_USE_DRM@
+#define LV_USE_LINUX_FBDEV      @LV_USE_FBDEV@
+#define LV_USE_LINUX_DRM        @LV_USE_DRM@
 #define LV_USE_SDL              @LV_USE_SDL@
 #define LV_USE_X11              @LV_USE_X11@
 #define LV_USE_OPENGLES         @LV_USE_OPENGLES@
@@ -37,15 +37,14 @@
 #define LV_X11_RENDER_MODE      LV_DISPLAY_RENDER_MODE_PARTIAL
 #endif
 
-#if LV_USE_FBDEV
-#define LV_FBDEV_DEVICE   "/dev/fb0"
-#define LV_FBDEV_RENDER_MODE LV_DISPLAY_RENDER_MODE_PARTIAL
+#if LV_USE_LINUX_FBDEV
+#define LV_LINUX_FBDEV_DEVICE   "/dev/fb0"
+#define LV_LINUX_FBDEV_RENDER_MODE LV_DISPLAY_RENDER_MODE_PARTIAL
 #endif
 
-#if LV_USE_DRM
-#define LV_DRM_CARD       "/dev/dri/card0"
-#define LV_DRM_CONNECTOR_ID -1
-#define LV_DRM_RENDER_MODE LV_DISPLAY_RENDER_MODE_PARTIAL
+#if LV_USE_LINUX_DRM
+#define LV_USE_LINUX_DRM_GBM_BUFFERS 0
+#define LV_LINUX_DRM_USE_EGL         0
 #endif
 
 #if LV_USE_EVDEV

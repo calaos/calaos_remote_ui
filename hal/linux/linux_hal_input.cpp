@@ -1,6 +1,7 @@
 #include "linux_hal_input.h"
 #include "logging.h"
 #include <cstdlib>
+#include <unistd.h>
 
 static const char* TAG = "hal.input";
 
@@ -125,13 +126,13 @@ bool LinuxHalInput::isInputBackendAvailable(calaos_input_backend_t backend)
     switch (backend)
     {
         case CALAOS_INPUT_BACKEND_EVDEV:
-#if LV_USE_LINUX_EVDEV
+#if LV_USE_EVDEV
             return access("/dev/input", F_OK) == 0;
 #else
             return false;
 #endif
         case CALAOS_INPUT_BACKEND_LIBINPUT:
-#if LV_USE_LINUX_LIBINPUT
+#if LV_USE_LIBINPUT
             return access("/dev/input", F_OK) == 0;  // Simplified check
 #else
             return false;
@@ -166,14 +167,14 @@ calaos_input_backend_t LinuxHalInput::getInputBackendFromEnv()
 
 HalResult LinuxHalInput::initEvdevBackend()
 {
-#if LV_USE_LINUX_EVDEV
+#if LV_USE_EVDEV
     ESP_LOGI(TAG, "Initializing evdev input backend");
     
     // Use environment variable override if set
     const char* evdevDevice = getenv("LV_LINUX_EVDEV_POINTER_DEVICE");
     if (!evdevDevice) evdevDevice = "/dev/input/event*";  // Let LVGL find the device
     
-    inputDevice = lv_linux_evdev_create(LV_INDEV_TYPE_POINTER, evdevDevice);
+    inputDevice = lv_evdev_create(LV_INDEV_TYPE_POINTER, evdevDevice);
     if (!inputDevice)
     {
         ESP_LOGE(TAG, "Failed to create evdev input device");
@@ -190,10 +191,10 @@ HalResult LinuxHalInput::initEvdevBackend()
 
 HalResult LinuxHalInput::initLibinputBackend()
 {
-#if LV_USE_LINUX_LIBINPUT
+#if LV_USE_LIBINPUT
     ESP_LOGI(TAG, "Initializing libinput backend");
     
-    inputDevice = lv_linux_libinput_create(LV_INDEV_TYPE_POINTER, "/dev/input/event*");
+    inputDevice = lv_libinput_create(LV_INDEV_TYPE_POINTER, "/dev/input/event*");
     if (!inputDevice)
     {
         ESP_LOGE(TAG, "Failed to create libinput input device");

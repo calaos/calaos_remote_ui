@@ -27,8 +27,8 @@
 #include "../hal/linux/lv_conf_platform.h"
 #else
     /* ESP32 Platform - Disable all Linux-specific backends */
-    #define LV_USE_FBDEV            0
-    #define LV_USE_DRM              0
+    #define LV_USE_LINUX_FBDEV      0
+    #define LV_USE_LINUX_DRM        0
     #define LV_USE_EVDEV            0
     #define LV_USE_LIBINPUT         0
     #define LV_USE_SDL              0
