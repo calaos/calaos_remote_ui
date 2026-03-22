@@ -264,8 +264,6 @@ if(DETECTED_PLATFORM STREQUAL "LINUX")
     set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
     set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(LV_BUILD_CONF_PATH ${CMAKE_SOURCE_DIR}/main/lv_conf.h CACHE PATH "Path to lv_conf.h" FORCE)
-    # Make generated lv_conf_platform.h available to all lvgl sub-targets
-    include_directories(${CMAKE_BINARY_DIR}/hal/linux)
     add_subdirectory(components/lvgl)
 
     # Add mongoose
