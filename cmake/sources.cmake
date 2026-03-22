@@ -33,6 +33,9 @@ set(MAIN_SOURCES
     main/widgets/temperature_widget.cpp
     main/widgets/scenario_widget.cpp
     main/widgets/clock_widget.cpp
+    main/widgets/shutter_widget.cpp
+    main/widgets/shutter_wide_widget.cpp
+    main/widgets/shutter_large_widget.cpp
 )
 
 # Flux architecture sources

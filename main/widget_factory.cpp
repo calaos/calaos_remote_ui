@@ -5,6 +5,9 @@
 #include "widgets/temperature_widget.h"
 #include "widgets/scenario_widget.h"
 #include "widgets/clock_widget.h"
+#include "widgets/shutter_widget.h"
+#include "widgets/shutter_wide_widget.h"
+#include "widgets/shutter_large_widget.h"
 #include "logging.h"
 #include <sstream>
 
@@ -131,6 +134,32 @@ void WidgetFactory::registerBuiltinWidgets()
     registerWidgetAnySize("Clock",
         [](lv_obj_t* parent, const auto& config, const auto& gridInfo) {
             return std::make_unique<ClockWidget>(parent, config, gridInfo);
+        }
+    );
+
+    // Register Shutter 1x1
+    registerWidget("Shutter", 1, 1,
+        [](lv_obj_t* parent, const auto& config, const auto& gridInfo) {
+            return std::make_unique<ShutterWidget>(parent, config, gridInfo);
+        }
+    );
+
+    // Register Shutter 2x1 (wide with buttons)
+    registerWidget("Shutter", 2, 1,
+        [](lv_obj_t* parent, const auto& config, const auto& gridInfo) {
+            return std::make_unique<ShutterWideWidget>(parent, config, gridInfo);
+        }
+    );
+
+    // Register Shutter 3x1 and 4x1 (large with buttons + status text)
+    registerWidget("Shutter", 3, 1,
+        [](lv_obj_t* parent, const auto& config, const auto& gridInfo) {
+            return std::make_unique<ShutterLargeWidget>(parent, config, gridInfo);
+        }
+    );
+    registerWidget("Shutter", 4, 1,
+        [](lv_obj_t* parent, const auto& config, const auto& gridInfo) {
+            return std::make_unique<ShutterLargeWidget>(parent, config, gridInfo);
         }
     );
 
