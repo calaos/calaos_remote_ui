@@ -17,6 +17,8 @@ RUN apt-get update \
   python3-lz4 \
   libx11-dev \
   libsdl2-dev \
+  jq \
+  zip \
   && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --break-system-packages pypng lz4

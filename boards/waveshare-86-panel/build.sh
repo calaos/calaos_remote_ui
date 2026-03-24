@@ -23,3 +23,11 @@ idf.py -B build set-target esp32p4
 idf.py -B build build
 
 echo "=== Build complete: build/calaos-remote-ui.bin ==="
+
+# Build flash package for initial flashing via esptool
+chmod +x scripts/build-flash-package.sh
+scripts/build-flash-package.sh \
+    "${BOARD}" \
+    "${VERSION}" \
+    build \
+    boards/waveshare-86-panel/partitions.csv

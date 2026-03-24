@@ -54,6 +54,8 @@ All CI-enabled boards are declared in `boards/ci-boards.json`:
 | `docker_image` | Pre-built image on ghcr.io (pulled by CI, built by `build-docker-images.yml`) |
 | `build_script` | Path to the board-specific build script (called inside the Docker container) |
 | `bin_path` | Path to the firmware binary produced by the build |
+| `flash_package` | (ESP32 only) If `true`, build a flash package `.zip` for initial flashing via esptool |
+| `partition_table` | (ESP32 only) Path to the partition table CSV, used by the flash package script |
 | `description` | Human-readable description used in release notes |
 
 ## Adding a New Board
@@ -206,14 +208,114 @@ Prerelease versions use `~` instead of `-` for correct dpkg sorting:
 |---|---|
 | `scripts/bump-version.sh <board> <fragment>` | Compute next version from git tags for a board |
 | `scripts/build-deb.sh <board> <version> <bin-path>` | Build a `.deb` from a firmware binary |
+| `scripts/build-flash-package.sh <board> <version> <build-dir> <partition-csv>` | Build a flash package `.zip` for initial flashing via esptool (ESP32 only) |
 | `boards/<board>/build.sh <board> <version>` | Board-specific firmware build (runs in Docker) |
 
 ## GitHub Releases
 
 Each release is tagged `<board-name>-<version>` and contains:
 - The `.deb` package as a release asset
+- For ESP32 boards: the flash package `.zip` as an additional release asset
 - Release notes with board name, version, and platform
 
 Prerelease versions (`-dev.N`) are marked as GitHub prereleases.
 
 Stable releases trigger the webhook to update the repository cache.
+
+## Flash Package (ESP32 only)
+
+For ESP32 boards, CI produces a flash package alongside the `.deb`. This package contains all binaries needed for initial device flashing via esptool.
+
+### Package Name
+
+```
+calaos-remote-ui-<board-name>-<version>-flash.zip
+```
+
+Example: `calaos-remote-ui-waveshare-86-panel-1.0.5-flash.zip`
+
+### Package Contents
+
+```
+bootloader.bin          # Second-stage bootloader
+partition-table.bin     # Partition table
+ota_data_initial.bin    # OTA data (selects ota_0 slot)
+calaos-remote-ui.bin    # Application firmware
+config.bin              # Config partition placeholder (64 KiB of 0xFF)
+manifest.json           # Metadata and esptool parameters
+```
+
+### Manifest Format
+
+```json
+{
+    "schema_version": 1,
+    "board": "waveshare-86-panel",
+    "version": "1.0.5",
+    "release_date": "2026-03-24T12:00:00Z",
+    "esptool": {
+        "chip": "esp32p4",
+        "flash_mode": "dio",
+        "flash_size": "32MB",
+        "flash_freq": "40m",
+        "baudrate": 921600,
+        "before": "default_reset",
+        "after": "hard_reset"
+    },
+    "binaries": [
+        {
+            "filename": "bootloader.bin",
+            "offset": "0x2000",
+            "checksum_sha256": "abcdef...",
+            "checksum_md5": "123456..."
+        },
+        {
+            "filename": "partition-table.bin",
+            "offset": "0xc000",
+            "checksum_sha256": "...",
+            "checksum_md5": "..."
+        },
+        {
+            "filename": "ota_data_initial.bin",
+            "offset": "0x13000",
+            "checksum_sha256": "...",
+            "checksum_md5": "..."
+        },
+        {
+            "filename": "calaos-remote-ui.bin",
+            "offset": "0x20000",
+            "checksum_sha256": "...",
+            "checksum_md5": "..."
+        },
+        {
+            "filename": "config.bin",
+            "offset": "0x1E20000",
+            "checksum_sha256": "...",
+            "checksum_md5": "..."
+        }
+    ]
+}
+```
+
+### Manual Flashing with esptool
+
+The manifest contains all information needed to construct the esptool command:
+
+```bash
+esptool.py --chip esp32p4 --baud 921600 \
+    --before default_reset --after hard_reset \
+    write_flash --flash_mode dio --flash_size 32MB --flash_freq 40m \
+    0x2000    bootloader.bin \
+    0xc000    partition-table.bin \
+    0x13000   ota_data_initial.bin \
+    0x20000   calaos-remote-ui.bin \
+    0x1E20000 config.bin
+```
+
+### Calaos Installer Integration
+
+Calaos Installer reads the `manifest.json` from the flash package to automatically determine all esptool parameters, binary offsets, and checksums. The user selects the `.zip` file and Calaos Installer handles the rest.
+
+### Config Partition Placeholder
+
+The `config.bin` file is a placeholder filled with `0xFF` bytes (erased flash state). It ensures the config partition is in a clean state after initial flashing. Calaos Installer can replace this placeholder with a real provisioning configuration when the user provides network/server settings (see `PROV_FEATURE.md`).

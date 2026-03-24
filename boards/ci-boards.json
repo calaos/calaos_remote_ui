@@ -6,6 +6,8 @@
     "docker_image": "ghcr.io/calaos/calaos-build-waveshare-86-panel:latest",
     "build_script": "boards/waveshare-86-panel/build.sh",
     "bin_path": "build/calaos-remote-ui.bin",
+    "flash_package": true,
+    "partition_table": "boards/waveshare-86-panel/partitions.csv",
     "description": "Waveshare ESP32-P4 86-Panel firmware"
   },
   {

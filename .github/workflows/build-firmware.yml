@@ -94,6 +94,14 @@ jobs:
           path: ${{ matrix.bin_path }}
           if-no-files-found: error
 
+      - name: Upload flash package artifact
+        if: matrix.flash_package
+        uses: actions/upload-artifact@v4
+        with:
+          name: flash-package-${{ matrix.name }}
+          path: pkg/*-flash.zip
+          if-no-files-found: error
+
       - name: Upload version info
         run: |
           echo "${{ steps.version.outputs.version }}" > version.txt
@@ -127,6 +135,13 @@ jobs:
         with:
           name: firmware-${{ matrix.name }}
           path: firmware/
+
+      - name: Download flash package artifact
+        if: matrix.flash_package
+        uses: actions/download-artifact@v4
+        with:
+          name: flash-package-${{ matrix.name }}
+          path: flash-pkg/
 
       - name: Download version info
         uses: actions/download-artifact@v4
@@ -175,7 +190,9 @@ jobs:
             **Version:** ${{ steps.version.outputs.version }}
             **Board:** ${{ matrix.name }}
             **Platform:** ${{ matrix.platform }}
-          files: pkg/*.deb
+          files: |
+            pkg/*.deb
+            flash-pkg/*-flash.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
