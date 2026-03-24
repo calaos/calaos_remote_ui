@@ -11,6 +11,7 @@
 #include "esp_hosted.h"
 #include "flux.h"
 #include "../hal.h"
+#include "../calaos_config/device_config.h"
 
 static const char* TAG = "hal.network";
 
@@ -249,6 +250,76 @@ HalResult Esp32HalNetwork::init()
     }
 
     ESP_LOGI(TAG, "WiFi initialized successfully");
+
+    // Apply device provisioning config (WiFi credentials and/or static IP)
+    auto& devCfg = DeviceConfig::getInstance();
+    if (devCfg.isLoaded())
+    {
+        // If provisioned for WiFi, set credentials and connect
+        if (devCfg.isWifi())
+        {
+            ESP_LOGI(TAG, "Device config: connecting to WiFi SSID '%s'", devCfg.getWifiSsid().c_str());
+
+            wifi_config_t provWifiCfg = {};
+            strncpy((char*)provWifiCfg.sta.ssid, devCfg.getWifiSsid().c_str(), sizeof(provWifiCfg.sta.ssid) - 1);
+            strncpy((char*)provWifiCfg.sta.password, devCfg.getWifiPassword().c_str(), sizeof(provWifiCfg.sta.password) - 1);
+            provWifiCfg.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+            provWifiCfg.sta.pmf_cfg.capable = true;
+            provWifiCfg.sta.pmf_cfg.required = false;
+
+            ret = esp_wifi_set_config(WIFI_IF_STA, &provWifiCfg);
+            if (ret != ESP_OK)
+                ESP_LOGW(TAG, "Device config: failed to set wifi config: %s", esp_err_to_name(ret));
+            else
+            {
+                ret = esp_wifi_connect();
+                if (ret != ESP_OK)
+                    ESP_LOGW(TAG, "Device config: failed to connect wifi: %s", esp_err_to_name(ret));
+                else
+                    ESP_LOGI(TAG, "Device config: WiFi connect initiated");
+            }
+        }
+
+        // Apply static IP if configured
+        if (devCfg.isStaticIp())
+        {
+            // Determine which netif to configure
+            const char* ifkey = devCfg.isWifi() ? "WIFI_STA_DEF" : "ETH_DEF";
+            esp_netif_t* targetNetif = esp_netif_get_handle_from_ifkey(ifkey);
+
+            if (targetNetif)
+            {
+                ESP_LOGI(TAG, "Device config: applying static IP %s on %s",
+                         devCfg.getStaticIp().c_str(), ifkey);
+
+                // Stop DHCP client
+                esp_netif_dhcpc_stop(targetNetif);
+
+                esp_netif_ip_info_t ipInfo = {};
+                esp_netif_str_to_ip4(devCfg.getStaticIp().c_str(), &ipInfo.ip);
+                esp_netif_str_to_ip4(devCfg.getStaticMask().c_str(), &ipInfo.netmask);
+                esp_netif_str_to_ip4(devCfg.getStaticGateway().c_str(), &ipInfo.gw);
+
+                ret = esp_netif_set_ip_info(targetNetif, &ipInfo);
+                if (ret != ESP_OK)
+                    ESP_LOGW(TAG, "Device config: failed to set static IP: %s", esp_err_to_name(ret));
+
+                // Set DNS if provided
+                if (!devCfg.getStaticDns().empty())
+                {
+                    esp_netif_dns_info_t dnsInfo = {};
+                    esp_netif_str_to_ip4(devCfg.getStaticDns().c_str(), &dnsInfo.ip.u_addr.ip4);
+                    dnsInfo.ip.type = ESP_IPADDR_TYPE_V4;
+                    esp_netif_set_dns_info(targetNetif, ESP_NETIF_DNS_MAIN, &dnsInfo);
+                }
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Device config: netif '%s' not found for static IP", ifkey);
+            }
+        }
+    }
+
     ESP_LOGI(TAG, "Network initialized successfully (ethernet + wifi)");
 
     // Create timeout queue and task (only once, static)

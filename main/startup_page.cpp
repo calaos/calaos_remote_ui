@@ -9,6 +9,7 @@
 #include "../hal/hal_ota.h"
 #include "provisioning_manager.h"
 #include "../flux/app_dispatcher.h"
+#include "../hal/calaos_config/device_config.h"
 
 using namespace smooth_ui_toolkit;
 
@@ -493,8 +494,37 @@ void StartupPage::onStateChanged(const AppState& state)
             ESP_LOGI(TAG, "Waiting 1 second before starting Calaos discovery");
             discoveryDelayTimer = LvglTimer::createOneShot([this]()
             {
-                ESP_LOGI(TAG, "Starting Calaos discovery after NTP sync");
-                calaosDiscovery->startDiscovery();
+                auto& devCfg = DeviceConfig::getInstance();
+                if (devCfg.isLoaded() && devCfg.hasServerHost())
+                {
+                    // Device config has a forced server host — skip discovery entirely
+                    ESP_LOGI(TAG, "Device config: using server_host '%s', skipping discovery",
+                             devCfg.getServerHost().c_str());
+
+                    // Initialize CalaosNet for HTTP/WebSocket requests
+                    if (!CalaosNet::instance().isInitialized())
+                    {
+                        NetworkResult result = CalaosNet::instance().init();
+                        if (result != NetworkResult::OK)
+                        {
+                            ESP_LOGE(TAG, "Failed to initialize CalaosNet");
+                            AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::CalaosDiscoveryTimeout));
+                            return;
+                        }
+                    }
+
+                    // Dispatch server found directly
+                    CalaosServerFoundData serverData;
+                    serverData.serverIp = devCfg.getServerHost();
+                    AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::CalaosDiscoveryStarted));
+                    AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::CalaosServerFound, serverData));
+                    AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::CalaosDiscoveryStopped));
+                }
+                else
+                {
+                    ESP_LOGI(TAG, "Starting Calaos discovery after NTP sync");
+                    calaosDiscovery->startDiscovery();
+                }
             }, 1000);
         }
         else if (state.ntp.hasFailed && !lastNtpState.hasFailed)

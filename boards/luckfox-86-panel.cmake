@@ -18,6 +18,9 @@ set(BOARD_HAS_TOUCHSCREEN true)
 set(BOARD_HAS_WIFI true)
 set(BOARD_HAS_ETHERNET true)
 
+# Device provisioning config path (raw partition on eMMC/SD)
+set(BOARD_DEVICE_CONFIG_PATH "/dev/mmcblk0p3")
+
 # OTA configuration - Luckfox specific (stub for now)
 set(BOARD_OTA_BACKEND "luckfox")
 set(BOARD_OTA_BACKEND_TYPE "BOARD_OTA_BACKEND_LUCKFOX")

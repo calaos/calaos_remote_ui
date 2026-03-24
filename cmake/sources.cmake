@@ -62,6 +62,7 @@ set(ESP32_HAL_SOURCES
     hal/esp32/esp32_hal_network.cpp
     hal/esp32/esp32_hal_system.cpp
     hal/esp32/esp32_ota.cpp
+    hal/calaos_config/calaos_config.cpp
 )
 
 # HAL sources - Linux specific
@@ -75,6 +76,7 @@ set(LINUX_HAL_SOURCES
     hal/linux/linux_ota.cpp
     hal/linux/display_backend_selector.cpp
     hal/linux/logging.cpp
+    hal/calaos_config/calaos_config.cpp
     components/mongoose/mongoose/mongoose.c
 )
 
@@ -83,6 +85,7 @@ set(COMMON_INCLUDE_DIRS
     main
     hal
     hal/linux
+    hal/calaos_config
     flux
     network
     components/mongoose/mongoose

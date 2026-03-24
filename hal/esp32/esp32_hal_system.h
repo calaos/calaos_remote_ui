@@ -19,6 +19,9 @@ public:
     HalResult loadConfig(const std::string& key, std::string& value) override;
     HalResult eraseConfig(const std::string& key) override;
 
+    // Device provisioning config
+    HalResult loadDeviceConfig(DeviceConfig &devCfg) override;
+
     // NTP time synchronization
     HalResult initNtp() override;
     HalResult waitForTimeSync(uint32_t timeoutMs = 15000) override;

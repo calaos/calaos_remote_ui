@@ -9,8 +9,10 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "esp_sntp.h"
+#include "esp_partition.h"
 #include "flux.h"
 #include "board_config.h"
+#include "calaos_config/device_config.h"
 
 static const char* TAG = "hal.system";
 static const char* NVS_NAMESPACE = "calaos_config";
@@ -158,6 +160,53 @@ HalResult Esp32HalSystem::eraseConfig(const std::string& key)
     nvs_close(handle);
 
     return (ret == ESP_OK) ? HalResult::OK : HalResult::ERROR;
+}
+
+// ============================================================================
+// Device Provisioning Config
+// ============================================================================
+
+HalResult Esp32HalSystem::loadDeviceConfig(DeviceConfig &devCfg)
+{
+    // Find the "config" partition (type data, subtype 0x40)
+    const esp_partition_t *partition = esp_partition_find_first(
+        ESP_PARTITION_TYPE_DATA, static_cast<esp_partition_subtype_t>(0x40), "config");
+
+    if (!partition)
+    {
+        ESP_LOGW(TAG, "Device config partition 'config' not found");
+        return HalResult::ERROR;
+    }
+
+    ESP_LOGI(TAG, "Found device config partition: offset=0x%lx, size=%lu",
+             (unsigned long)partition->address, (unsigned long)partition->size);
+
+    // Local streaming reader that wraps esp_partition_read()
+    class PartitionCfgReader : public CfgReader
+    {
+    public:
+        PartitionCfgReader(const esp_partition_t *part) : part_(part) {}
+
+        bool read(uint8_t *dst, size_t len) override
+        {
+            if (offset_ + len > part_->size)
+                return false;
+            esp_err_t ret = esp_partition_read(part_, offset_, dst, len);
+            if (ret != ESP_OK)
+                return false;
+            offset_ += len;
+            return true;
+        }
+
+    private:
+        const esp_partition_t *part_;
+        size_t offset_ = 0;
+    };
+
+    PartitionCfgReader reader(partition);
+    devCfg.loadFromReader(reader);
+
+    return devCfg.isLoaded() ? HalResult::OK : HalResult::ERROR;
 }
 
 // ============================================================================

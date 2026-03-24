@@ -18,6 +18,10 @@ set(BOARD_HAS_TOUCHSCREEN true)
 set(BOARD_HAS_WIFI false)
 set(BOARD_HAS_ETHERNET true)
 
+# Device provisioning config path
+# For development: read from a regular file in the user config directory
+set(BOARD_DEVICE_CONFIG_PATH "")
+
 # OTA configuration - disabled for development
 set(BOARD_OTA_BACKEND "none")
 set(BOARD_OTA_BACKEND_TYPE "BOARD_OTA_BACKEND_NONE")

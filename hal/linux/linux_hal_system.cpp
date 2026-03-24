@@ -5,11 +5,13 @@
 #include <chrono>
 #include <thread>
 #include <cstdlib>
+#include <cstring>
 #include <unistd.h>
 #include <sys/utsname.h>
 #include <filesystem>
 #include <sys/stat.h>
 #include "flux.h"
+#include "calaos_config/device_config.h"
 
 static const char* TAG = "hal.system";
 
@@ -174,6 +176,51 @@ HalResult LinuxHalSystem::ensureConfigDir()
     }
 
     return HalResult::OK;
+}
+
+// ============================================================================
+// Device Provisioning Config
+// ============================================================================
+
+HalResult LinuxHalSystem::loadDeviceConfig(DeviceConfig &devCfg)
+{
+    // Determine the config source path.
+    // If BOARD_DEVICE_CONFIG_PATH is set (e.g. /dev/mmcblk0p3), read from that
+    // raw partition/block device. Otherwise fall back to a regular file in the
+    // user config directory (development mode).
+    std::string configPath(BOARD_DEVICE_CONFIG_PATH);
+    if (configPath.empty())
+        configPath = config_dir_path_ + "/device_config.bin";
+
+    // Local streaming reader that wraps std::ifstream
+    class FileCfgReader : public CfgReader
+    {
+    public:
+        explicit FileCfgReader(std::ifstream &f) : f_(f) {}
+
+        bool read(uint8_t *dst, size_t len) override
+        {
+            return static_cast<bool>(f_.read(reinterpret_cast<char *>(dst), len));
+        }
+
+    private:
+        std::ifstream &f_;
+    };
+
+    std::ifstream file(configPath, std::ios::binary);
+    if (!file.is_open())
+    {
+        ESP_LOGD(TAG, "Device config not found: %s", configPath.c_str());
+        return HalResult::ERROR;
+    }
+
+    FileCfgReader reader(file);
+    devCfg.loadFromReader(reader);
+
+    if (devCfg.isLoaded())
+        ESP_LOGI(TAG, "Device config loaded from %s", configPath.c_str());
+
+    return devCfg.isLoaded() ? HalResult::OK : HalResult::ERROR;
 }
 
 // ============================================================================

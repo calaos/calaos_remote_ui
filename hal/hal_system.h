@@ -5,6 +5,8 @@
 #include <cstdint>
 #include "board_config.h"
 
+class DeviceConfig;
+
 class HalSystem
 {
 public:
@@ -26,6 +28,12 @@ public:
     bool hasWifi() const { return BOARD_HAS_WIFI; }
     bool hasEthernet() const { return BOARD_HAS_ETHERNET; }
     bool hasTouchscreen() const { return BOARD_HAS_TOUCHSCREEN; }
+
+    // Load device provisioning config from platform storage and parse it.
+    // On ESP32: reads from dedicated raw partition "config".
+    // On Linux: reads from BOARD_DEVICE_CONFIG_PATH or config dir fallback.
+    // Returns HalResult::OK on success, HalResult::ERROR on failure.
+    virtual HalResult loadDeviceConfig(DeviceConfig &devCfg) = 0;
 
     // NTP time synchronization
     // Initialize NTP client with multiple servers

@@ -3,6 +3,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "flux.h"
+#include "../calaos_config/device_config.h"
 
 static const char* TAG = "hal";
 
@@ -42,6 +43,29 @@ HalResult Esp32HAL::initEssentials()
     {
         ESP_LOGE(TAG, "Failed to init system HAL");
         return HalResult::ERROR;
+    }
+
+    // Load device provisioning config from flash partition
+    {
+        HalResult cfgResult = system->loadDeviceConfig(DeviceConfig::getInstance());
+        if (cfgResult == HalResult::OK)
+        {
+            ESP_LOGI(TAG, "Device config loaded: iface=%s ip_mode=%s server=%s",
+                     DeviceConfig::getInstance().getNetworkInterface().c_str(),
+                     DeviceConfig::getInstance().getIpMode().c_str(),
+                     DeviceConfig::getInstance().hasServerHost()
+                         ? DeviceConfig::getInstance().getServerHost().c_str()
+                         : "(discovery)");
+        }
+        else if (DeviceConfig::getInstance().getParseError() != CfgError::Ok)
+        {
+            ESP_LOGW(TAG, "Device config parse failed (error %d), using defaults",
+                     static_cast<int>(DeviceConfig::getInstance().getParseError()));
+        }
+        else
+        {
+            ESP_LOGI(TAG, "No device config found, using defaults");
+        }
     }
 
     display = std::make_unique<Esp32HalDisplay>();
