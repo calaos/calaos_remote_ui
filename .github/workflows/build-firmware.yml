@@ -119,6 +119,7 @@ jobs:
   package-and-release:
     name: Package ${{ matrix.name }}
     needs: [matrix-setup, build]
+    if: ${{ !cancelled() && needs.matrix-setup.result == 'success' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
