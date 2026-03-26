@@ -122,6 +122,15 @@ void AppStore::handleEvent(const AppEvent& event)
                 break;
             }
 
+            case AppEventType::NetworkRetryStarted:
+            {
+                state_.network.hasTimeout = false;
+                state_.network.retryCount++;
+                stateChanged = true;
+                ESP_LOGI(TAG, "Network retry started (attempt %d)", state_.network.retryCount);
+                break;
+            }
+
             // NTP time synchronization events
             case AppEventType::NtpSyncStarted:
             {

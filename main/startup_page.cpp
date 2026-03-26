@@ -37,9 +37,33 @@ StartupPage::StartupPage(lv_obj_t *parent):
     lv_obj_set_style_arc_color(networkSpinner->get(), theme_color_blue, LV_PART_INDICATOR);
     lv_obj_set_style_arc_color(networkSpinner->get(), theme_color_black, LV_PART_MAIN);
 
-    // Network status label
+    // Network status label - show detailed info from DeviceConfig
     networkStatusLabel = std::make_unique<lvgl_cpp::Label>(*this);
-    networkStatusLabel->setText("Initializing network...");
+    {
+        auto& devCfg = DeviceConfig::getInstance();
+        std::string initMsg;
+        if (devCfg.isLoaded() && devCfg.isWifi())
+        {
+            initMsg = std::string("Connecting to WiFi '") + devCfg.getWifiSsid() + "'";
+            if (devCfg.isStaticIp())
+                initMsg += " (static IP)";
+            initMsg += "...";
+        }
+        else if (devCfg.isLoaded() && devCfg.isEthernet())
+        {
+            initMsg = "Connecting via Ethernet";
+            if (devCfg.isStaticIp())
+                initMsg += " (static IP)";
+            else
+                initMsg += " (DHCP)";
+            initMsg += "...";
+        }
+        else
+        {
+            initMsg = "Initializing network...";
+        }
+        networkStatusLabel->setText(initMsg.c_str());
+    }
     networkStatusLabel->align(LV_ALIGN_BOTTOM_MID, 0, -120);
     networkStatusLabel->setTextFont(&roboto_light_26);
 
@@ -392,7 +416,8 @@ void StartupPage::onStateChanged(const AppState& state)
     bool networkStateChanged = (state.network.isReady != lastNetworkState.isReady ||
                                state.network.hasTimeout != lastNetworkState.hasTimeout ||
                                state.network.ipAddress != lastNetworkState.ipAddress ||
-                               state.network.connectionType != lastNetworkState.connectionType);
+                               state.network.connectionType != lastNetworkState.connectionType ||
+                               state.network.retryCount != lastNetworkState.retryCount);
 
     // Check if NTP state has changed
     bool ntpStateChanged = (state.ntp.isSyncing != lastNtpState.isSyncing ||
@@ -426,8 +451,20 @@ void StartupPage::onStateChanged(const AppState& state)
         }
         else if (state.network.hasTimeout)
         {
-            // Network timeout - show error message
-            networkStatusLabel->setText("Network connection failed\nPlease connect WiFi or Ethernet\nand restart the device");
+            // Network timeout - show error message with details and retry info
+            auto& devCfg = DeviceConfig::getInstance();
+            std::string timeoutMsg;
+            if (devCfg.isLoaded() && devCfg.isWifi())
+                timeoutMsg = std::string("WiFi connection failed\nSSID: '") + devCfg.getWifiSsid() + "'\nRetrying in 30s...";
+            else if (devCfg.isLoaded() && devCfg.isEthernet())
+                timeoutMsg = "Ethernet connection failed\nRetrying in 30s...";
+            else
+                timeoutMsg = "Network connection failed\nRetrying in 30s...";
+
+            if (state.network.retryCount > 0)
+                timeoutMsg += "\n(attempt " + std::to_string(state.network.retryCount) + " failed)";
+
+            networkStatusLabel->setText(timeoutMsg.c_str());
             lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_red, LV_PART_MAIN);
             lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);
             networkStatusLabel->setTextFont(&roboto_regular_26);
@@ -440,12 +477,43 @@ void StartupPage::onStateChanged(const AppState& state)
         }
         else if (!state.network.isReady)
         {
-            // Network still connecting
-            networkStatusLabel->setText("Initializing network...");
+            // Network connecting or retrying - show detailed info from DeviceConfig
+            auto& devCfg = DeviceConfig::getInstance();
+            std::string connectMsg;
+            if (devCfg.isLoaded() && devCfg.isWifi())
+            {
+                connectMsg = std::string("Connecting to WiFi '") + devCfg.getWifiSsid() + "'";
+                if (devCfg.isStaticIp())
+                    connectMsg += " (static IP)";
+                connectMsg += "...";
+            }
+            else if (devCfg.isLoaded() && devCfg.isEthernet())
+            {
+                connectMsg = "Connecting via Ethernet";
+                if (devCfg.isStaticIp())
+                    connectMsg += " (static IP)";
+                else
+                    connectMsg += " (DHCP)";
+                connectMsg += "...";
+            }
+            else
+            {
+                connectMsg = "Initializing network...";
+            }
+
+            if (state.network.retryCount > 0)
+                connectMsg = "Retrying connection (attempt " + std::to_string(state.network.retryCount + 1) + ")\n" + connectMsg;
+
+            networkStatusLabel->setText(connectMsg.c_str());
             lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_white, LV_PART_MAIN);
+            networkStatusLabel->setTextFont(&roboto_light_26);
 
             // Show the spinner
             lv_obj_clear_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
+
+            // Restart pulsing animation if not already running
+            if (networkStatusAnimation.currentPlayingState() != animate_state::playing)
+                networkStatusAnimation.play();
         }
     }
 

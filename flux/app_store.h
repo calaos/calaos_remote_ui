@@ -21,6 +21,9 @@ struct NetworkState
     // WiFi specific info
     std::string ssid;
     int rssi = 0;
+
+    // Retry tracking
+    int retryCount = 0;
 };
 
 struct NtpState
@@ -183,6 +186,7 @@ struct AppState
                network.ipAddress == other.network.ipAddress &&
                network.ssid == other.network.ssid &&
                network.rssi == other.network.rssi &&
+               network.retryCount == other.network.retryCount &&
                ntp.isSyncing == other.ntp.isSyncing &&
                ntp.isSynced == other.ntp.isSynced &&
                ntp.hasFailed == other.ntp.hasFailed &&

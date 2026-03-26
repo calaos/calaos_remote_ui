@@ -12,6 +12,7 @@ enum class AppEventType
     NetworkIpAssigned,
     NetworkDisconnected,
     NetworkTimeout,
+    NetworkRetryStarted,
 
     // NTP time synchronization events
     NtpSyncStarted,

@@ -21,6 +21,7 @@ public:
     HalResult registerWifiCallback(WifiEventCallback callback) override;
     std::string getLocalIp() const override;
     std::string getMacAddress() const override;
+    void retryConnection() override;
 
     // Public method for event handlers to signal network connection
     void onNetworkConnected();
@@ -62,4 +63,6 @@ private:
     // Static members for timeout handling
     static QueueHandle_t timeoutQueue;
     static TaskHandle_t timeoutTaskHandle;
+    static SemaphoreHandle_t retrySemaphore_;
+    static Esp32HalNetwork* retryInstance_;
 };

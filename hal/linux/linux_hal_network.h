@@ -19,6 +19,7 @@ public:
     HalResult registerWifiCallback(WifiEventCallback callback) override;
     std::string getLocalIp() const override;
     std::string getMacAddress() const override;
+    void retryConnection() override;
 
 private:
     void statusMonitorThread();

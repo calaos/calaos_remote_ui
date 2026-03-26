@@ -18,6 +18,8 @@ static const char* TAG = "hal.network";
 // Static members initialization
 QueueHandle_t Esp32HalNetwork::timeoutQueue = nullptr;
 TaskHandle_t Esp32HalNetwork::timeoutTaskHandle = nullptr;
+SemaphoreHandle_t Esp32HalNetwork::retrySemaphore_ = nullptr;
+Esp32HalNetwork* Esp32HalNetwork::retryInstance_ = nullptr;
 
 // Forward declaration for NTP sync task
 static void ntpSyncTask(void* arg);
@@ -159,10 +161,12 @@ HalResult Esp32HalNetwork::init()
         }
     }
 
-    // Create timeout queue and task (only once, static)
+    // Create timeout queue, semaphore and task (only once, static)
     if (timeoutQueue == nullptr)
     {
         timeoutQueue = xQueueCreate(5, sizeof(uint32_t));
+        retrySemaphore_ = xSemaphoreCreateBinary();
+        retryInstance_ = this;
         xTaskCreate(
             networkTimeoutTask,
             "network_timeout",
@@ -697,6 +701,10 @@ void Esp32HalNetwork::stopNetworkTimeout()
 {
     if (networkTimeoutTimer)
         xTimerStop(networkTimeoutTimer, 0);
+
+    // Wake up any pending retry sleep so it can check networkConnected and abort
+    if (retrySemaphore_)
+        xSemaphoreGive(retrySemaphore_);
 }
 
 void Esp32HalNetwork::networkTimeoutCallback(TimerHandle_t timer)
@@ -725,8 +733,43 @@ void Esp32HalNetwork::networkTimeoutTask(void* parameter)
         if (xQueueReceive(timeoutQueue, &signal, portMAX_DELAY) == pdTRUE)
         {
             ESP_LOGW(TAG, "Processing network timeout in task context");
-            // Now we can safely dispatch the event from task context
             AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NetworkTimeout));
+
+            // Wait 30 seconds before retrying (cancellable via retrySemaphore_)
+            ESP_LOGI(TAG, "Waiting 30s before network retry...");
+            xSemaphoreTake(retrySemaphore_, pdMS_TO_TICKS(30000));
+
+            // Check if network connected during the wait
+            if (retryInstance_ && retryInstance_->networkConnected)
+            {
+                ESP_LOGI(TAG, "Network connected during retry wait, aborting retry");
+                continue;
+            }
+
+            ESP_LOGI(TAG, "Retrying network connection");
+            AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NetworkRetryStarted));
+
+            if (retryInstance_)
+                retryInstance_->retryConnection();
         }
     }
+}
+
+void Esp32HalNetwork::retryConnection()
+{
+    networkConnected = false;
+
+    if (wifiInitialized_)
+    {
+        ESP_LOGI(TAG, "Retrying WiFi connection");
+        esp_err_t ret = esp_wifi_connect();
+        if (ret != ESP_OK)
+            ESP_LOGW(TAG, "WiFi connect retry failed: %s", esp_err_to_name(ret));
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Retrying Ethernet connection (waiting for link)");
+    }
+
+    startNetworkTimeout();
 }

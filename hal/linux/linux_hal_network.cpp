@@ -741,19 +741,59 @@ void LinuxHalNetwork::stopNetworkTimeout()
 
 void LinuxHalNetwork::networkTimeoutTask()
 {
-    std::unique_lock<std::mutex> lock(timeout_mutex_);
-
-    // Wait for 30 seconds OR until timeout_active_ becomes false
-    if (timeout_cv_.wait_for(lock, std::chrono::seconds(30), [this] { return !timeout_active_.load(); }))
+    while (true)
     {
-        // Timeout was cancelled (timeout_active_ became false)
-        return;
-    }
+        {
+            std::unique_lock<std::mutex> lock(timeout_mutex_);
 
-    // Timeout expired
-    if (timeout_active_.load() && !network_connected_.load())
-    {
+            // Wait 30 seconds for connection OR until cancelled
+            if (timeout_cv_.wait_for(lock, std::chrono::seconds(30), [this] { return !timeout_active_.load(); }))
+                return; // Cancelled (deinit or connection succeeded)
+        }
+
+        // Check if network connected during the wait
+        if (network_connected_.load())
+            return;
+
+        if (!timeout_active_.load())
+            return;
+
         ESP_LOGW(TAG, "Network connection timeout - no connection after 30 seconds");
         AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NetworkTimeout));
+
+        // Wait 30 seconds before retrying (cancellable)
+        {
+            std::unique_lock<std::mutex> lock(timeout_mutex_);
+            ESP_LOGI(TAG, "Waiting 30s before network retry...");
+            if (timeout_cv_.wait_for(lock, std::chrono::seconds(30), [this] { return !timeout_active_.load(); }))
+                return; // Cancelled
+        }
+
+        // Check again if network connected during the retry wait
+        if (network_connected_.load())
+        {
+            ESP_LOGI(TAG, "Network connected during retry wait, aborting retry");
+            return;
+        }
+
+        if (!timeout_active_.load())
+            return;
+
+        ESP_LOGI(TAG, "Retrying network connection");
+        AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NetworkRetryStarted));
+        retryConnection();
     }
+}
+
+void LinuxHalNetwork::retryConnection()
+{
+    network_connected_ = false;
+    staticIpApplied_ = false;
+
+    auto& devCfg = DeviceConfig::getInstance();
+    if (devCfg.isLoaded() && devCfg.isWifi())
+        applyWifiConfig();
+
+    // The statusMonitorThread polls every 5s and will detect connection automatically.
+    // The timeout loop in networkTimeoutTask will continue waiting for the next 30s.
 }
