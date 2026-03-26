@@ -189,8 +189,11 @@ HalResult LinuxHalSystem::loadDeviceConfig(DeviceConfig &devCfg)
     // raw partition/block device. Otherwise fall back to a regular file in the
     // user config directory (development mode).
     std::string configPath(BOARD_DEVICE_CONFIG_PATH);
+    ESP_LOGI(TAG, "BOARD_DEVICE_CONFIG_PATH='%s'", BOARD_DEVICE_CONFIG_PATH);
     if (configPath.empty())
         configPath = config_dir_path_ + "/device_config.bin";
+
+    ESP_LOGI(TAG, "Loading device config from: %s", configPath.c_str());
 
     // Local streaming reader that wraps std::ifstream
     class FileCfgReader : public CfgReader

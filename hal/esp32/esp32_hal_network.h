@@ -26,7 +26,16 @@ public:
     void onNetworkConnected();
 
 private:
+    HalResult initEthernet();
+    HalResult initWifi();
+    void setupTimeout();
+
+    // Apply static IP configuration on a netif (called from event handlers after link-up)
+    static void applyStaticIpConfig(esp_netif_t *netif, const char *ifkey);
+
     static void wifiEventHandler(void* arg, esp_event_base_t eventBase,
+                                int32_t eventId, void* eventData);
+    static void ethEventHandler(void* arg, esp_event_base_t eventBase,
                                 int32_t eventId, void* eventData);
 
     void startNetworkTimeout();
@@ -36,10 +45,14 @@ private:
 
     WifiStatus wifiStatus = WifiStatus::DISCONNECTED;
     WifiEventCallback wifiCallback;
-    esp_event_handler_instance_t wifiHandlerInstance;
-    esp_event_handler_instance_t ipHandlerInstance;
-    TimerHandle_t networkTimeoutTimer;
-    bool networkConnected;
+    esp_event_handler_instance_t wifiHandlerInstance = nullptr;
+    esp_event_handler_instance_t ipHandlerInstance = nullptr;
+    TimerHandle_t networkTimeoutTimer = nullptr;
+    bool networkConnected = false;
+
+    // Track which subsystems are initialized
+    bool ethInitialized_ = false;
+    bool wifiInitialized_ = false;
 
     // Ethernet support
     esp_eth_handle_t ethHandle = nullptr;

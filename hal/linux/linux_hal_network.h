@@ -28,6 +28,9 @@ private:
     void stopNetworkTimeout();
     void networkTimeoutTask();
 
+    void applyWifiConfig();
+    void applyStaticIpConfig(const std::string &ifname);
+
     std::string findActiveInterface() const;
     std::string findWirelessInterface() const;
     std::string getDefaultGateway() const;
@@ -45,4 +48,5 @@ private:
     std::condition_variable timeout_cv_;
     std::mutex status_mutex_;
     std::condition_variable status_cv_;
+    bool staticIpApplied_ = false;
 };

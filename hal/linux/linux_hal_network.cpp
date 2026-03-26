@@ -2,6 +2,7 @@
 #include "logging.h"
 #include "flux.h"
 #include "hal.h"
+#include "../calaos_config/device_config.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -28,17 +29,58 @@ HalResult LinuxHalNetwork::init()
 {
     ESP_LOGI(TAG, "Initializing Linux network");
 
+    // Log DeviceConfig state for debugging
+    auto& devCfg = DeviceConfig::getInstance();
+    ESP_LOGI(TAG, "DeviceConfig loaded=%s", devCfg.isLoaded() ? "true" : "false");
+    if (devCfg.isLoaded())
+    {
+        ESP_LOGI(TAG, "DeviceConfig: interface=%s (%s)",
+                 devCfg.getNetworkInterface().c_str(),
+                 devCfg.isWifi() ? "wifi" : "ethernet");
+        ESP_LOGI(TAG, "DeviceConfig: ip_mode=%s (%s)",
+                 devCfg.getIpMode().c_str(),
+                 devCfg.isStaticIp() ? "static" : "dhcp");
+        if (devCfg.isWifi())
+        {
+            ESP_LOGI(TAG, "DeviceConfig: wifi_ssid='%s' wifi_password=%s",
+                     devCfg.getWifiSsid().c_str(),
+                     devCfg.getWifiPassword().empty() ? "(empty)" : "***");
+        }
+        if (devCfg.isStaticIp())
+        {
+            ESP_LOGI(TAG, "DeviceConfig: static_ip=%s mask=%s gw=%s dns=%s",
+                     devCfg.getStaticIp().c_str(),
+                     devCfg.getStaticMask().c_str(),
+                     devCfg.getStaticGateway().c_str(),
+                     devCfg.getStaticDns().c_str());
+        }
+        ESP_LOGI(TAG, "DeviceConfig: server_host=%s port=%u ssl=%s hasServerHost=%s",
+                 devCfg.getServerHost().c_str(),
+                 devCfg.getServerPort(),
+                 devCfg.getServerSsl() ? "true" : "false",
+                 devCfg.hasServerHost() ? "true" : "false");
+    }
+    else
+    {
+        ESP_LOGI(TAG, "No DeviceConfig loaded, using system defaults");
+    }
+
+    // If DeviceConfig says WiFi, try to auto-connect
+    if (devCfg.isLoaded() && devCfg.isWifi())
+        applyWifiConfig();
+
     // Start status monitoring thread
     thread_running_ = true;
     status_thread_ = std::thread(&LinuxHalNetwork::statusMonitorThread, this);
 
     wifi_status_ = checkWifiStatus();
+    ESP_LOGI(TAG, "Initial wifi status: %d", static_cast<int>(wifi_status_));
 
     // Start network timeout (30 seconds)
     network_connected_ = false;
     startNetworkTimeout();
 
-    ESP_LOGI(TAG, "Linux network initialized");
+    ESP_LOGI(TAG, "Linux network initialized, waiting for connection...");
     return HalResult::OK;
 }
 
@@ -236,6 +278,11 @@ std::string LinuxHalNetwork::findActiveInterface() const
     if (getifaddrs(&ifaddrs_ptr) == -1)
         return "";
 
+    // Check if DeviceConfig constrains the interface type
+    auto& devCfg = DeviceConfig::getInstance();
+    bool wantWifi = devCfg.isLoaded() && devCfg.isWifi();
+    bool wantEthernet = devCfg.isLoaded() && devCfg.isEthernet();
+
     std::string result;
     for (ifa = ifaddrs_ptr; ifa != nullptr; ifa = ifa->ifa_next)
     {
@@ -249,11 +296,20 @@ std::string LinuxHalNetwork::findActiveInterface() const
             char ip_str[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &(addr_in->sin_addr), ip_str, INET_ADDRSTRLEN);
 
-            if (std::string(ip_str) != "127.0.0.1")
-            {
-                result = std::string(ifa->ifa_name);
-                break;
-            }
+            if (std::string(ip_str) == "127.0.0.1")
+                continue;
+
+            std::string ifname(ifa->ifa_name);
+            bool isWireless = isWirelessInterface(ifname);
+
+            // Filter based on DeviceConfig preference
+            if (wantWifi && !isWireless)
+                continue;
+            if (wantEthernet && isWireless)
+                continue;
+
+            result = ifname;
+            break;
         }
     }
 
@@ -427,10 +483,29 @@ void LinuxHalNetwork::statusMonitorThread() {
             bool isWifi = !activeIface.empty() && isWirelessInterface(activeIface);
             NetworkConnectionType connType = isWifi ? NetworkConnectionType::WiFi : NetworkConnectionType::Ethernet;
 
+            ESP_LOGI(TAG, "Network connected: iface=%s type=%s ip=%s",
+                     activeIface.c_str(),
+                     isWifi ? "WiFi" : "Ethernet",
+                     localIp.c_str());
+
+            // Apply static IP if configured and not already applied
+            auto& devCfg = DeviceConfig::getInstance();
+            if (!staticIpApplied_ && devCfg.isLoaded() && devCfg.isStaticIp() && !activeIface.empty())
+            {
+                applyStaticIpConfig(activeIface);
+                staticIpApplied_ = true;
+                // Re-read the IP after applying static config
+                localIp = getLocalIp();
+                ESP_LOGI(TAG, "IP after static config: %s", localIp.c_str());
+            }
+
             std::string gateway = getDefaultGateway();
             std::string netmask = getNetmaskForInterface(activeIface);
             std::string ssid;
             int rssi = 0;
+
+            ESP_LOGI(TAG, "Network info: gateway=%s netmask=%s",
+                     gateway.c_str(), netmask.c_str());
 
             if (isWifi)
             {
@@ -446,7 +521,11 @@ void LinuxHalNetwork::statusMonitorThread() {
                     }
                     pclose(pipe);
                 }
+                ESP_LOGI(TAG, "WiFi connected: ssid=%s", ssid.c_str());
             }
+
+            ESP_LOGI(TAG, "Dispatching NetworkStatusChanged (connected=%d) and NetworkIpAssigned (ip=%s)",
+                     1, localIp.c_str());
 
             NetworkStatusChangedData statusData = { true, connType };
             AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NetworkStatusChanged, statusData));
@@ -462,6 +541,7 @@ void LinuxHalNetwork::statusMonitorThread() {
             AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NetworkIpAssigned, ipData));
 
             // Simulate NTP sync like ESP32 does after network connection
+            ESP_LOGI(TAG, "Dispatching NtpSyncStarted and initiating NTP");
             AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::NtpSyncStarted));
             HAL::getInstance().getSystem().initNtp();
         }
@@ -478,6 +558,168 @@ void LinuxHalNetwork::statusMonitorThread() {
         std::unique_lock<std::mutex> lock(status_mutex_);
         status_cv_.wait_for(lock, std::chrono::seconds(5), [this] { return !thread_running_.load(); });
     }
+}
+
+void LinuxHalNetwork::applyWifiConfig()
+{
+    auto& devCfg = DeviceConfig::getInstance();
+    if (!devCfg.isLoaded() || !devCfg.isWifi())
+        return;
+
+    std::string ssid = devCfg.getWifiSsid();
+    std::string password = devCfg.getWifiPassword();
+
+    if (ssid.empty())
+    {
+        ESP_LOGW(TAG, "WiFi SSID is empty, cannot auto-connect");
+        return;
+    }
+
+    ESP_LOGI(TAG, "Auto-connecting WiFi to SSID '%s' from DeviceConfig", ssid.c_str());
+
+    // Try nmcli first (NetworkManager)
+    std::string nmcliCheck = "which nmcli >/dev/null 2>&1";
+    if (system(nmcliCheck.c_str()) == 0)
+    {
+        ESP_LOGI(TAG, "Using nmcli for WiFi connection");
+        std::string cmd = "nmcli dev wifi connect '" + ssid + "' password '" + password + "' 2>&1";
+        FILE *pipe = popen(cmd.c_str(), "r");
+        if (pipe)
+        {
+            char buf[256];
+            while (fgets(buf, sizeof(buf), pipe))
+                ESP_LOGI(TAG, "nmcli: %s", buf);
+            int ret = pclose(pipe);
+            if (ret == 0)
+                ESP_LOGI(TAG, "nmcli WiFi connection successful");
+            else
+                ESP_LOGW(TAG, "nmcli WiFi connection failed (ret=%d)", ret);
+        }
+        return;
+    }
+
+    // Fallback: try wpa_supplicant via wpa_cli
+    std::string wpaCheck = "which wpa_cli >/dev/null 2>&1";
+    if (system(wpaCheck.c_str()) == 0)
+    {
+        ESP_LOGI(TAG, "Using wpa_cli for WiFi connection");
+
+        std::string iface = findWirelessInterface();
+        if (iface.empty())
+        {
+            ESP_LOGW(TAG, "No wireless interface found for wpa_cli");
+            return;
+        }
+
+        // Add network using wpa_cli
+        std::string addNet = "wpa_cli -i " + iface + " add_network 2>&1";
+        FILE *pipe = popen(addNet.c_str(), "r");
+        if (!pipe)
+            return;
+
+        char buf[64];
+        std::string netId;
+        if (fgets(buf, sizeof(buf), pipe))
+        {
+            netId = std::string(buf);
+            netId.erase(netId.find_last_not_of(" \n\r\t") + 1);
+        }
+        pclose(pipe);
+
+        if (netId.empty())
+        {
+            ESP_LOGW(TAG, "wpa_cli add_network failed");
+            return;
+        }
+
+        // Set SSID
+        std::string setSSID = "wpa_cli -i " + iface + " set_network " + netId + " ssid '\"" + ssid + "\"' 2>&1";
+        system(setSSID.c_str());
+
+        // Set password
+        std::string setPSK = "wpa_cli -i " + iface + " set_network " + netId + " psk '\"" + password + "\"' 2>&1";
+        system(setPSK.c_str());
+
+        // Enable and select
+        std::string enableNet = "wpa_cli -i " + iface + " enable_network " + netId + " 2>&1";
+        system(enableNet.c_str());
+
+        std::string selectNet = "wpa_cli -i " + iface + " select_network " + netId + " 2>&1";
+        system(selectNet.c_str());
+
+        ESP_LOGI(TAG, "wpa_cli WiFi connection initiated (network %s)", netId.c_str());
+        return;
+    }
+
+    ESP_LOGW(TAG, "No WiFi management tool found (nmcli or wpa_cli)");
+}
+
+void LinuxHalNetwork::applyStaticIpConfig(const std::string &ifname)
+{
+    auto& devCfg = DeviceConfig::getInstance();
+    if (!devCfg.isLoaded() || !devCfg.isStaticIp())
+        return;
+
+    ESP_LOGI(TAG, "Applying static IP on %s: ip=%s mask=%s gw=%s dns=%s",
+             ifname.c_str(),
+             devCfg.getStaticIp().c_str(),
+             devCfg.getStaticMask().c_str(),
+             devCfg.getStaticGateway().c_str(),
+             devCfg.getStaticDns().c_str());
+
+    // Convert netmask to CIDR prefix length
+    struct in_addr maskAddr;
+    int prefix = 24; // default
+    if (inet_aton(devCfg.getStaticMask().c_str(), &maskAddr))
+    {
+        uint32_t mask = ntohl(maskAddr.s_addr);
+        prefix = 0;
+        while (mask & 0x80000000)
+        {
+            prefix++;
+            mask <<= 1;
+        }
+    }
+
+    // Flush existing addresses
+    std::string flushCmd = "ip addr flush dev " + ifname + " 2>&1";
+    ESP_LOGI(TAG, "  Running: %s", flushCmd.c_str());
+    system(flushCmd.c_str());
+
+    // Add static IP
+    std::string addCmd = "ip addr add " + devCfg.getStaticIp() + "/" + std::to_string(prefix) + " dev " + ifname + " 2>&1";
+    ESP_LOGI(TAG, "  Running: %s", addCmd.c_str());
+    int ret = system(addCmd.c_str());
+    if (ret != 0)
+        ESP_LOGW(TAG, "  ip addr add failed (ret=%d)", ret);
+
+    // Add default route
+    if (!devCfg.getStaticGateway().empty())
+    {
+        std::string routeCmd = "ip route add default via " + devCfg.getStaticGateway() + " dev " + ifname + " 2>&1";
+        ESP_LOGI(TAG, "  Running: %s", routeCmd.c_str());
+        ret = system(routeCmd.c_str());
+        if (ret != 0)
+            ESP_LOGW(TAG, "  ip route add failed (ret=%d)", ret);
+    }
+
+    // Write DNS
+    if (!devCfg.getStaticDns().empty())
+    {
+        std::ofstream resolvConf("/etc/resolv.conf");
+        if (resolvConf.is_open())
+        {
+            resolvConf << "nameserver " << devCfg.getStaticDns() << std::endl;
+            resolvConf.close();
+            ESP_LOGI(TAG, "  DNS written to /etc/resolv.conf: %s", devCfg.getStaticDns().c_str());
+        }
+        else
+        {
+            ESP_LOGW(TAG, "  Failed to write /etc/resolv.conf");
+        }
+    }
+
+    ESP_LOGI(TAG, "Static IP configuration applied on %s", ifname.c_str());
 }
 
 void LinuxHalNetwork::startNetworkTimeout()

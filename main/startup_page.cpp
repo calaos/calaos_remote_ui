@@ -495,11 +495,23 @@ void StartupPage::onStateChanged(const AppState& state)
             discoveryDelayTimer = LvglTimer::createOneShot([this]()
             {
                 auto& devCfg = DeviceConfig::getInstance();
+                ESP_LOGI(TAG, "Discovery decision: devCfg.isLoaded()=%s hasServerHost()=%s",
+                         devCfg.isLoaded() ? "true" : "false",
+                         devCfg.hasServerHost() ? "true" : "false");
+                if (devCfg.isLoaded())
+                {
+                    ESP_LOGI(TAG, "  server_host='%s' server_port=%u server_ssl=%s",
+                             devCfg.getServerHost().c_str(),
+                             devCfg.getServerPort(),
+                             devCfg.getServerSsl() ? "true" : "false");
+                }
                 if (devCfg.isLoaded() && devCfg.hasServerHost())
                 {
                     // Device config has a forced server host — skip discovery entirely
-                    ESP_LOGI(TAG, "Device config: using server_host '%s', skipping discovery",
-                             devCfg.getServerHost().c_str());
+                    ESP_LOGI(TAG, "Device config: using server_host '%s':%u (ssl=%s), skipping discovery",
+                             devCfg.getServerHost().c_str(),
+                             devCfg.getServerPort(),
+                             devCfg.getServerSsl() ? "true" : "false");
 
                     // Initialize CalaosNet for HTTP/WebSocket requests
                     if (!CalaosNet::instance().isInitialized())
