@@ -6,6 +6,7 @@
 #include <memory>
 
 class OtaUpdateScreen;
+class ScreenSaver;
 
 class AppMain
 {
@@ -32,4 +33,5 @@ private:
     bool running;
     std::unique_ptr<StackView> stackView;
     std::unique_ptr<OtaUpdateScreen> otaScreen;
+    std::unique_ptr<ScreenSaver> screenSaver;
 };

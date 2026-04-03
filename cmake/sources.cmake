@@ -27,6 +27,7 @@ set(MAIN_SOURCES
     main/ota_manager.cpp
     main/ota_update_screen.cpp
     main/about_page.cpp
+    main/screensaver.cpp
     main/widgets/widget_error.cpp
     main/widgets/light_switch_widget.cpp
     main/widgets/light_switch_wide_widget.cpp

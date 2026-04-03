@@ -182,6 +182,7 @@ struct AppState
     OtaState ota;
     std::map<std::string, CalaosProtocol::IoState> ioStates;
     CalaosProtocol::RemoteUIConfig config;
+    bool screensaverActive = false;
 
     bool operator==(const AppState& other) const
     {

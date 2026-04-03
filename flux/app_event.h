@@ -48,6 +48,10 @@ enum class AppEventType
     OtaComplete,
     OtaError,
     OtaReset,  // Reset OTA state after error to allow normal operation
+
+    // Screensaver events
+    ScreenSaverActivated,
+    ScreenSaverDeactivated,
 };
 
 enum class NetworkConnectionType

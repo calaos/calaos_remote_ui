@@ -485,6 +485,22 @@ void AppStore::handleEvent(const AppEvent& event)
                 ESP_LOGI(TAG, "OTA state reset to idle");
                 break;
             }
+
+            case AppEventType::ScreenSaverActivated:
+            {
+                state_.screensaverActive = true;
+                stateChanged = true;
+                ESP_LOGI(TAG, "Screensaver activated");
+                break;
+            }
+
+            case AppEventType::ScreenSaverDeactivated:
+            {
+                state_.screensaverActive = false;
+                stateChanged = true;
+                ESP_LOGI(TAG, "Screensaver deactivated");
+                break;
+            }
         }
     }
 

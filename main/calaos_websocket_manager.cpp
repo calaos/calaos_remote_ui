@@ -760,6 +760,30 @@ void CalaosWebSocketManager::handleConfigUpdate(const json& data)
 
         config.timeout = data.value("timeout", 30);
 
+        // Screensaver configuration (values can be int or string from server)
+        if (data.contains("screensaver_timeout"))
+        {
+            if (data["screensaver_timeout"].is_string())
+                config.screensaver_timeout = std::stoi(data["screensaver_timeout"].get<std::string>());
+            else
+                config.screensaver_timeout = data["screensaver_timeout"].get<int>();
+        }
+
+        if (data.contains("screensaver_dimming"))
+        {
+            if (data["screensaver_dimming"].is_string())
+                config.screensaver_dimming = std::stoi(data["screensaver_dimming"].get<std::string>());
+            else
+                config.screensaver_dimming = data["screensaver_dimming"].get<int>();
+        }
+
+        config.screensaver_mode = data.value("screensaver_mode", "black");
+        config.screensaver_clock_timezone = data.value("screensaver_clock_timezone", "");
+        config.screensaver_clock_format = data.value("screensaver_clock_format", "24");
+        config.screensaver_clock_show_date = data.value("screensaver_clock_show_date", "false");
+        config.screensaver_clock_date_format = data.value("screensaver_clock_date_format", "DD/MM/YYYY");
+        config.screensaver_clock_seconds = data.value("screensaver_clock_seconds", "false");
+
         // Build pages_json with grid info from root level
         json pagesConfig;
         pagesConfig["grid_width"] = data.value("grid_width", 3);

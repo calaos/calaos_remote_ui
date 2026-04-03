@@ -7,6 +7,7 @@
 #include "provisioning_manager.h"
 #include "ota_manager.h"
 #include "ota_update_screen.h"
+#include "screensaver.h"
 
 #ifdef ESP_PLATFORM
 #include "freertos/FreeRTOS.h"
@@ -178,6 +179,7 @@ void AppMain::run()
             // Shutdown dispatcher to stop processing events
             AppDispatcher::getInstance().shutdown();
             // Clear UI while we still have the lock
+            screenSaver.reset();
             stackView.reset();
             hal->getDisplay().unlock();
             running = false;
@@ -231,6 +233,9 @@ void AppMain::createBasicUi()
     // Create OTA update screen overlay on top layer (always above everything, hidden by default)
     otaScreen = std::make_unique<OtaUpdateScreen>(lv_layer_top());
 
+    // Create screensaver overlay on top layer (hidden by default, below OTA screen due to creation order)
+    screenSaver = std::make_unique<ScreenSaver>(lv_layer_top());
+
     hal->getDisplay().unlock();
 
     // Initialize OTA manager after UI is ready
@@ -248,6 +253,10 @@ void AppMain::initOtaManager()
 
 void AppMain::renderLoop()
 {
+    // Update screensaver (check inactivity, must be called with display lock held)
+    if (screenSaver)
+        screenSaver->update();
+
     // Update OTA screen if there are pending updates (must be called with display lock held)
     if (otaScreen)
     {

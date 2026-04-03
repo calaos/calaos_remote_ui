@@ -132,6 +132,16 @@ struct RemoteUIConfig
     int timeout = 30;           // Screen timeout in seconds
     std::string pages_json;     // Pages configuration as JSON string
 
+    // Screensaver configuration
+    int screensaver_timeout = 0;            // Seconds of inactivity before screensaver (0 = disabled)
+    int screensaver_dimming = 0;            // Backlight during screensaver (0 = off, 100 = normal)
+    std::string screensaver_mode = "black"; // "black" or "clock"
+    std::string screensaver_clock_timezone;  // POSIX TZ string (empty = system TZ)
+    std::string screensaver_clock_format = "24";         // "24" or "12"
+    std::string screensaver_clock_show_date = "false";   // "true" or "false"
+    std::string screensaver_clock_date_format = "DD/MM/YYYY"; // Date format string
+    std::string screensaver_clock_seconds = "false";     // "true" or "false"
+
     RemoteUIConfig() = default;
 
     /**

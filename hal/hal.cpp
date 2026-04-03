@@ -33,4 +33,5 @@ void HAL::initLogger()
     esp_log_level_set("net.http", ESP_LOG_VERBOSE);
     esp_log_level_set("net.ws", ESP_LOG_VERBOSE);
     esp_log_level_set("ws.mgr", ESP_LOG_VERBOSE);
+    esp_log_level_set("screensaver", ESP_LOG_VERBOSE);
 }
