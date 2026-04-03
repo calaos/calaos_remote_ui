@@ -174,9 +174,10 @@ void AppStore::handleEvent(const AppEvent& event)
             {
                 if (auto* data = event.getData<CalaosServerFoundData>())
                 {
-                    state_.calaosServer.addServer(data->serverIp);
+                    state_.calaosServer.addServer(data->serverIp, data->serverPort, data->serverSsl);
                     stateChanged = true;
-                    ESP_LOGD(TAG, "Calaos server found: %s", data->serverIp.c_str());
+                    ESP_LOGD(TAG, "Calaos server found: %s:%u (ssl=%s)", data->serverIp.c_str(),
+                             data->serverPort, data->serverSsl ? "true" : "false");
                 }
                 break;
             }

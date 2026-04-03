@@ -3,6 +3,7 @@
 #include "app_dispatcher.h"
 #include "hal.h"
 #include "nlohmann/json.hpp"
+#include <cctype>
 #include <sstream>
 #include "version.h"
 #include "board_config.h"
@@ -133,10 +134,31 @@ bool ProvisioningManager::isProvisioned() const
 
 std::string ProvisioningManager::getProvisioningCode()
 {
-    if (config_.provisioningCode.empty() ||
-        config_.provisioningCode.starts_with("ERROR"))
+    bool needsRegeneration = config_.provisioningCode.empty() ||
+        config_.provisioningCode.starts_with("ERROR") ||
+        config_.provisioningCode.length() != 6;
+
+    // Validate that the code contains only printable alphanumeric characters
+    if (!needsRegeneration)
     {
-        ESP_LOGD(TAG, "getProvisioningCode must generate new code with mac address: %s", config_.macAddress.c_str());
+        for (char c : config_.provisioningCode)
+        {
+            if (!std::isalnum(static_cast<unsigned char>(c)))
+            {
+                ESP_LOGW(TAG, "Provisioning code contains invalid character 0x%02x, regenerating",
+                         static_cast<unsigned char>(c));
+                needsRegeneration = true;
+                break;
+            }
+        }
+    }
+
+    if (needsRegeneration)
+    {
+        ESP_LOGI(TAG, "Regenerating provisioning code (current='%s', len=%zu, mac=%s)",
+                 config_.provisioningCode.c_str(),
+                 config_.provisioningCode.length(),
+                 config_.macAddress.c_str());
         config_.provisioningCode = generateNewCode();
         saveConfig();
     }

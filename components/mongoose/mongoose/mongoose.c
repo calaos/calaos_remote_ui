@@ -5186,12 +5186,14 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     }
     mbedtls_ssl_conf_ca_chain(&tls->conf, &tls->ca, NULL);
 #endif
-    if (opts->srvname.len > 0) {
-      char *x = mg_mprintf("%.*s", (int) opts->srvname.len, opts->srvname.ptr);
-      mbedtls_ssl_set_hostname(&tls->ssl, x);
-      free(x);
-    }
     mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
+  }
+  // Set SNI hostname regardless of CA verification mode
+  // This is needed for reverse proxies (e.g. HAProxy) that route based on SNI
+  if (opts->srvname.len > 0) {
+    char *x = mg_mprintf("%.*s", (int) opts->srvname.len, opts->srvname.ptr);
+    mbedtls_ssl_set_hostname(&tls->ssl, x);
+    free(x);
   }
   if (opts->cert != NULL && opts->cert[0] != '\0') {
     struct mg_str s = mg_loadfile(fs, opts->cert);

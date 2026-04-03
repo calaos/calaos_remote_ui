@@ -6,6 +6,7 @@
 #include "board_config.h"
 #include "version.h"
 #include "../hal/hal.h"
+#include "../hal/calaos_config/device_config.h"
 #include <nlohmann/json.hpp>
 #include <sstream>
 
@@ -132,15 +133,31 @@ bool CalaosWebSocketManager::connect()
         return false;
     }
 
-    std::string serverUrl = provMgr.getServerUrl();
-    if (serverUrl.empty())
+    // Determine server host, port and SSL from DeviceConfig (priority) or provisioning manager
+    std::string serverHost;
+    uint16_t serverPort = CalaosProtocol::WS_PORT;
+    bool serverSsl = false;
+
+    auto& devCfg = DeviceConfig::getInstance();
+    if (devCfg.isLoaded() && devCfg.hasServerHost())
+    {
+        serverHost = devCfg.getServerHost();
+        serverPort = devCfg.getServerPort();
+        serverSsl = devCfg.getServerSsl();
+    }
+    else
+    {
+        serverHost = provMgr.getServerUrl();
+    }
+
+    if (serverHost.empty())
     {
         ESP_LOGE(TAG, "Cannot connect: empty server URL");
         return false;
     }
 
     // Build WebSocket URL
-    std::string wsUrl = buildWebSocketUrl(serverUrl);
+    std::string wsUrl = buildWebSocketUrl(serverHost, serverPort, serverSsl);
     ESP_LOGI(TAG, "Connecting to WebSocket: %s", wsUrl.c_str());
 
     // Build authentication headers
@@ -292,10 +309,10 @@ bool CalaosWebSocketManager::requestConfig()
     }
 }
 
-std::string CalaosWebSocketManager::buildWebSocketUrl(const std::string& serverUrl)
+std::string CalaosWebSocketManager::buildWebSocketUrl(const std::string& serverUrl, uint16_t port, bool ssl)
 {
     std::ostringstream oss;
-    oss << "ws://" << serverUrl << ":" << CalaosProtocol::WS_PORT << CalaosProtocol::WS_ENDPOINT;
+    oss << (ssl ? "wss://" : "ws://") << serverUrl << ":" << port << CalaosProtocol::WS_ENDPOINT;
     return oss.str();
 }
 
@@ -888,18 +905,32 @@ void CalaosWebSocketManager::handleFirmwareUpdateAvailable(const json& data)
         }
 
         // Build absolute URL from relative path
-        // The server uses HTTP on the API port (5000 by default)
-        ProvisioningManager& provMgr = getProvisioningManager();
-        std::string serverHost = provMgr.getServerUrl();
+        // Use DeviceConfig (priority) or provisioning manager for server info
+        std::string serverHost;
+        uint16_t serverPort = CalaosProtocol::WS_PORT;
+        bool serverSsl = false;
+
+        auto& devCfg = DeviceConfig::getInstance();
+        if (devCfg.isLoaded() && devCfg.hasServerHost())
+        {
+            serverHost = devCfg.getServerHost();
+            serverPort = devCfg.getServerPort();
+            serverSsl = devCfg.getServerSsl();
+        }
+        else
+        {
+            ProvisioningManager& provMgr = getProvisioningManager();
+            serverHost = provMgr.getServerUrl();
+        }
+
         if (serverHost.empty())
         {
             ESP_LOGE(TAG, "Cannot build download URL: server URL not configured");
             return;
         }
 
-        // Construct the full URL: http://server:5454/api/v3/...
         std::ostringstream urlBuilder;
-        urlBuilder << "http://" << serverHost << ":5454" << downloadPath;
+        urlBuilder << (serverSsl ? "https://" : "http://") << serverHost << ":" << serverPort << downloadPath;
         otaData.downloadUrl = urlBuilder.str();
 
         ESP_LOGI(TAG, "Firmware update available: v%s for %s",

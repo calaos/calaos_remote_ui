@@ -478,6 +478,24 @@ void WebSocketClient::websocketEventHandler(struct mg_connection* c, int ev, voi
             break;
         }
 
+        case MG_EV_CONNECT:
+        {
+            // Initialize TLS if the URL uses wss://
+            std::lock_guard<std::mutex> lock(client->config_mutex_);
+            if (mg_url_is_ssl(client->current_config_.url.c_str()))
+            {
+                struct mg_str host = mg_url_host(client->current_config_.url.c_str());
+
+                struct mg_tls_opts opts = {};
+                opts.ca = nullptr;  // Skip certificate verification
+                opts.srvname = host;  // Set SNI hostname for reverse proxies (e.g. HAProxy)
+                mg_tls_init(c, &opts);
+                ESP_LOGD(TAG, "TLS initialized for wss:// connection (SNI: %.*s)",
+                         (int) host.len, host.ptr);
+            }
+            break;
+        }
+
         case MG_EV_WS_OPEN:
         {
             ESP_LOGI(TAG, "WebSocket handshake completed");

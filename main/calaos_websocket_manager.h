@@ -63,9 +63,11 @@ private:
     /**
      * @brief Build WebSocket URL from server URL
      * @param serverUrl Server IP or hostname
-     * @return WebSocket URL (ws://host:port/path)
+     * @param port Server port
+     * @param ssl Use wss:// if true
+     * @return WebSocket URL (ws[s]://host:port/path)
      */
-    std::string buildWebSocketUrl(const std::string& serverUrl);
+    std::string buildWebSocketUrl(const std::string& serverUrl, uint16_t port = 5454, bool ssl = false);
 
     /**
      * @brief Build authentication headers with HMAC

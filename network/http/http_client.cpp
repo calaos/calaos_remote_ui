@@ -387,6 +387,19 @@ void HttpClient::eventHandler(struct mg_connection* c, int ev, void* ev_data, vo
         {
             ESP_LOGI(TAG, "Connection established for request ID: %u", request->request_id);
 
+            // Initialize TLS if the URL uses https://
+            if (mg_url_is_ssl(request->request.url.c_str()))
+            {
+                struct mg_str host = mg_url_host(request->request.url.c_str());
+
+                struct mg_tls_opts opts = {};
+                opts.ca = nullptr;  // Skip certificate verification
+                opts.srvname = host;  // Set SNI hostname for reverse proxies (e.g. HAProxy)
+                mg_tls_init(c, &opts);
+                ESP_LOGD(TAG, "TLS initialized for HTTPS connection (SNI: %.*s)",
+                         (int) host.len, host.ptr);
+            }
+
             // Build HTTP headers
             std::string extra_headers;
             for (const auto& header : request->request.headers)
@@ -517,7 +530,45 @@ void HttpClient::eventHandler(struct mg_connection* c, int ev, void* ev_data, vo
         {
             ESP_LOGD(TAG, "Connection closed for request ID: %u", request->request_id);
 
-            // If not completed yet and not already handled by timeout, it's an unexpected close
+            // mongoose calls user handler (us) before protocol handler (http_cb).
+            // On close, http_cb may parse remaining recv data and fire MG_EV_HTTP_MSG,
+            // but it hasn't run yet. Parse the recv buffer here to capture the response.
+            if (!request->completed && !request->timeout_triggered && c->recv.len > 0)
+            {
+                struct mg_http_message hm;
+                int hlen = mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
+                if (hlen > 0)
+                {
+                    // For close events, set message/body length to remaining data
+                    hm.message.len = c->recv.len;
+                    hm.body.len = hm.message.len - (size_t)(hm.body.ptr - hm.message.ptr);
+
+                    int status_code = mg_http_status(&hm);
+                    request->response->status_code = client->intToHttpStatus(status_code);
+
+                    ESP_LOGI(TAG, "HTTP status: %d (parsed from recv buffer on close)", status_code);
+
+                    if (hm.body.len > 0)
+                    {
+                        request->response->body.data.assign(hm.body.ptr, hm.body.ptr + hm.body.len);
+                        request->response->body.size = hm.body.len;
+                    }
+
+                    for (int i = 0; i < MG_MAX_HTTP_HEADERS && hm.headers[i].name.len > 0; i++)
+                    {
+                        std::string name(hm.headers[i].name.ptr, hm.headers[i].name.len);
+                        std::string value(hm.headers[i].value.ptr, hm.headers[i].value.len);
+                        request->response->headers[name] = value;
+                    }
+
+                    if (request->callback)
+                    {
+                        request->callback(*request->response);
+                        request->completed = true;
+                    }
+                }
+            }
+
             if (!request->completed && !request->timeout_triggered)
             {
                 request->response->error_message = "Connection closed unexpectedly";

@@ -77,6 +77,8 @@ struct NetworkIpAssignedData
 struct CalaosServerFoundData
 {
     std::string serverIp;
+    uint16_t serverPort = 5454;
+    bool serverSsl = false;
 };
 
 struct ProvisioningCodeGeneratedData

@@ -40,13 +40,15 @@ struct CalaosServerState
     std::vector<std::string> discoveredServers;
     std::string selectedServer;
     std::string forcedServerIp;  // Set via CALAOS_SERVER_IP env var to skip discovery
+    uint16_t serverPort = 5454;
+    bool serverSsl = false;
 
     bool hasServers() const
     {
         return !discoveredServers.empty();
     }
 
-    void addServer(const std::string& serverIp)
+    void addServer(const std::string& serverIp, uint16_t port = 5454, bool ssl = false)
     {
         // Avoid duplicates
         for (const auto& server : discoveredServers)
@@ -56,9 +58,13 @@ struct CalaosServerState
         }
         discoveredServers.push_back(serverIp);
 
-        // Auto-select first server found
+        // Auto-select first server found and store port/ssl
         if (selectedServer.empty())
+        {
             selectedServer = serverIp;
+            serverPort = port;
+            serverSsl = ssl;
+        }
     }
 };
 

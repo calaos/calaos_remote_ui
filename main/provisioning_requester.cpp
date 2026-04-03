@@ -23,7 +23,9 @@ ProvisioningRequester::~ProvisioningRequester()
 }
 
 bool ProvisioningRequester::startRequesting(const std::string& serverIp,
-                                           const std::string& provisioningCode)
+                                           const std::string& provisioningCode,
+                                           uint16_t serverPort,
+                                           bool serverSsl)
 {
     std::lock_guard<std::mutex> lock(request_mutex_);
 
@@ -40,11 +42,13 @@ bool ProvisioningRequester::startRequesting(const std::string& serverIp,
         return false;
     }
 
-    ESP_LOGI(TAG, "Starting provisioning requests to server: %s with code: %s",
-             serverIp.c_str(), provisioningCode.c_str());
+    ESP_LOGI(TAG, "Starting provisioning requests to server: %s:%u (ssl=%s) with code: %s",
+             serverIp.c_str(), serverPort, serverSsl ? "true" : "false", provisioningCode.c_str());
 
     server_ip_ = serverIp;
     provisioning_code_ = provisioningCode;
+    server_port_ = serverPort;
+    server_ssl_ = serverSsl;
 
     requesting_.store(true);
     running_.store(true);
@@ -152,9 +156,9 @@ void ProvisioningRequester::sendProvisioningRequest()
         return;
     }
 
-    // Build URL
+    // Build URL using configured protocol, host, and port
     std::ostringstream url;
-    url << "http://" << server_ip_ << ":" << SERVER_PORT << "/api/v3/provision/request";
+    url << (server_ssl_ ? "https://" : "http://") << server_ip_ << ":" << server_port_ << "/api/v3/provision/request";
 
     // Build request body
     std::string body = buildProvisioningRequestBody();
@@ -344,9 +348,12 @@ nlohmann::json ProvisioningRequester::buildDeviceCapabilities() const
 
 VerifyResult ProvisioningRequester::verifyProvisioning(const std::string& serverIp,
                                                        const std::string& deviceId,
-                                                       const std::string& authToken)
+                                                       const std::string& authToken,
+                                                       uint16_t serverPort,
+                                                       bool serverSsl)
 {
-    ESP_LOGI(TAG, "Verifying provisioning with server: %s for device: %s", serverIp.c_str(), deviceId.c_str());
+    ESP_LOGI(TAG, "Verifying provisioning with server: %s:%u (ssl=%s) for device: %s",
+             serverIp.c_str(), serverPort, serverSsl ? "true" : "false", deviceId.c_str());
 
     // Check if network is initialized
     if (!CalaosNet::instance().isInitialized())
@@ -357,7 +364,7 @@ VerifyResult ProvisioningRequester::verifyProvisioning(const std::string& server
 
     // Build URL for dedicated verify endpoint
     std::ostringstream url;
-    url << "http://" << serverIp << ":" << SERVER_PORT << "/api/v3/provision/verify";
+    url << (serverSsl ? "https://" : "http://") << serverIp << ":" << serverPort << "/api/v3/provision/verify";
 
     // Build verification request body with stored credentials (no provisioning code)
     json j;

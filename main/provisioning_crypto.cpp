@@ -10,8 +10,8 @@
 
 static const char* TAG = "provisioning.crypto";
 
-// Base32 alphabet without ambiguous characters (0/O, 1/I/L removed)
-const char ProvisioningCrypto::BASE32_ALPHABET[] = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+// Base32 alphabet: 32 unambiguous characters (O and I/L removed, 0 kept since O is excluded)
+const char ProvisioningCrypto::BASE32_ALPHABET[] = "023456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
 std::vector<uint8_t> ProvisioningCrypto::generateRandomSalt(size_t size)
 {

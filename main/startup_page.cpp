@@ -593,9 +593,11 @@ void StartupPage::onStateChanged(const AppState& state)
                         }
                     }
 
-                    // Dispatch server found directly
+                    // Dispatch server found directly with full config (host, port, ssl)
                     CalaosServerFoundData serverData;
                     serverData.serverIp = devCfg.getServerHost();
+                    serverData.serverPort = devCfg.getServerPort();
+                    serverData.serverSsl = devCfg.getServerSsl();
                     AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::CalaosDiscoveryStarted));
                     AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::CalaosServerFound, serverData));
                     AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::CalaosDiscoveryStopped));
@@ -708,12 +710,14 @@ void StartupPage::onStateChanged(const AppState& state)
                 {
                     std::string serverIp = state.calaosServer.selectedServer;
                     std::string code = state.provisioning.provisioningCode;
+                    uint16_t port = state.calaosServer.serverPort;
+                    bool ssl = state.calaosServer.serverSsl;
 
                     // Start requester in a deferred callback (after display unlock)
-                    LvglTimer::createOneShot([this, serverIp, code]()
+                    LvglTimer::createOneShot([this, serverIp, code, port, ssl]()
                     {
                         ESP_LOGI(TAG, "Starting provisioning requests (deferred)");
-                        provisioningRequester->startRequesting(serverIp, code);
+                        provisioningRequester->startRequesting(serverIp, code, port, ssl);
                     }, 10);  // 10ms delay
                 }
             }
@@ -798,12 +802,14 @@ void StartupPage::onStateChanged(const AppState& state)
                         {
                             std::string serverIp = state.calaosServer.selectedServer;
                             std::string code = state.provisioning.provisioningCode;
+                            uint16_t port = state.calaosServer.serverPort;
+                            bool ssl = state.calaosServer.serverSsl;
 
                             // Start requester in a deferred callback (after display unlock)
-                            LvglTimer::createOneShot([this, serverIp, code]()
+                            LvglTimer::createOneShot([this, serverIp, code, port, ssl]()
                             {
                                 ESP_LOGI(TAG, "Starting provisioning requests (deferred)");
-                                provisioningRequester->startRequesting(serverIp, code);
+                                provisioningRequester->startRequesting(serverIp, code, port, ssl);
                             }, 10);  // 10ms delay
                         }
                     }

@@ -38,7 +38,8 @@ public:
      * @param provisioningCode The 6-character provisioning code
      * @return true if started successfully
      */
-    bool startRequesting(const std::string& serverIp, const std::string& provisioningCode);
+    bool startRequesting(const std::string& serverIp, const std::string& provisioningCode,
+                         uint16_t serverPort = 5454, bool serverSsl = false);
 
     /**
      * @brief Stop sending provisioning requests
@@ -63,7 +64,9 @@ public:
      */
     VerifyResult verifyProvisioning(const std::string& serverIp,
                                     const std::string& deviceId,
-                                    const std::string& authToken);
+                                    const std::string& authToken,
+                                    uint16_t serverPort = 5454,
+                                    bool serverSsl = false);
 
 private:
     void requestThread();
@@ -80,11 +83,13 @@ private:
 
     std::string server_ip_;
     std::string provisioning_code_;
+    uint16_t server_port_ = 5454;
+    bool server_ssl_ = false;
     std::chrono::steady_clock::time_point last_request_time_;
 
     static constexpr uint32_t REQUEST_INTERVAL_MS = 10000;  // 10 seconds
     static constexpr uint32_t REQUEST_TIMEOUT_MS = 5000;    // 5 seconds
-    static constexpr uint16_t SERVER_PORT = 5454;
+    static constexpr uint16_t DEFAULT_SERVER_PORT = 5454;
     static constexpr int VERIFY_MAX_RETRIES = 3;
     static constexpr uint32_t VERIFY_INITIAL_BACKOFF_MS = 1000;  // 1 second
 };
