@@ -51,7 +51,7 @@ ClockWidget::ClockWidget(lv_obj_t* parent,
     // Parse clock options from params
     auto it = config.params.find("clock_timezone");
     if (it != config.params.end())
-        timezoneOffsetSeconds = parseTimezoneOffset(it->second);
+        posixTz = it->second;
 
     it = config.params.find("clock_format");
     if (it != config.params.end())
@@ -69,8 +69,8 @@ ClockWidget::ClockWidget(lv_obj_t* parent,
     if (it != config.params.end())
         showSeconds = (it->second == "true");
 
-    ESP_LOGI(TAG, "Clock options: tz_offset=%ds, 24h=%d, show_date=%d, seconds=%d, date_fmt=%s",
-             timezoneOffsetSeconds, use24hFormat, showDate, showSeconds, dateFormat.c_str());
+    ESP_LOGI(TAG, "Clock options: tz=%s, 24h=%d, show_date=%d, seconds=%d, date_fmt=%s",
+             posixTz.c_str(), use24hFormat, showDate, showSeconds, dateFormat.c_str());
 
     createUI();
 
@@ -89,48 +89,6 @@ void ClockWidget::onStateUpdate(const CalaosProtocol::IoState& state)
 {
     // No-op: Clock widget has no IO
     (void)state;
-}
-
-int ClockWidget::parseTimezoneOffset(const std::string& tz)
-{
-    if (tz.empty() || tz == "UTC")
-        return 0;
-
-    // Expected format: "UTC+N", "UTC-N", "UTC+N:MM", "UTC-N:MM"
-    if (tz.size() < 4 || tz.substr(0, 3) != "UTC")
-    {
-        ESP_LOGW(TAG, "Invalid timezone format: %s, defaulting to UTC", tz.c_str());
-        return 0;
-    }
-
-    char sign = tz[3];
-    if (sign != '+' && sign != '-')
-    {
-        ESP_LOGW(TAG, "Invalid timezone sign in: %s, defaulting to UTC", tz.c_str());
-        return 0;
-    }
-
-    std::string remainder = tz.substr(4);
-    int hours = 0;
-    int minutes = 0;
-
-    size_t colonPos = remainder.find(':');
-    if (colonPos != std::string::npos)
-    {
-        hours = std::atoi(remainder.substr(0, colonPos).c_str());
-        minutes = std::atoi(remainder.substr(colonPos + 1).c_str());
-    }
-    else
-    {
-        hours = std::atoi(remainder.c_str());
-    }
-
-    int totalSeconds = (hours * 3600) + (minutes * 60);
-    if (sign == '-')
-        totalSeconds = -totalSeconds;
-
-    ESP_LOGI(TAG, "Parsed timezone '%s' -> offset %d seconds", tz.c_str(), totalSeconds);
-    return totalSeconds;
 }
 
 const lv_font_t* ClockWidget::selectFont(int availableHeight, int availableWidth,
@@ -250,11 +208,14 @@ std::string ClockWidget::formatDate(const struct tm& tm)
 
 void ClockWidget::updateTime()
 {
+    // Set POSIX timezone for DST-aware local time conversion
+    setenv("TZ", posixTz.c_str(), 1);
+    tzset();
+
     time_t now = time(nullptr);
-    now += timezoneOffsetSeconds;
 
     struct tm timeinfo;
-    gmtime_r(&now, &timeinfo);
+    localtime_r(&now, &timeinfo);
 
     // Format time
     char timeBuf[32];

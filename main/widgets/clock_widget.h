@@ -14,7 +14,7 @@
  * Not linked to any IO - self-updates every second using LvglTimer.
  *
  * Configurable options via widget params:
- * - clock_timezone: UTC offset string (e.g., "UTC+1", "UTC-5:30")
+ * - clock_timezone: POSIX TZ string (e.g., "CET-1CEST,M3.5.0,M10.5.0/3")
  * - clock_format: "24" or "12"
  * - clock_show_date: "true" or "false"
  * - clock_date_format: "DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD MMM YYYY", "MMM DD YYYY"
@@ -47,13 +47,6 @@ private:
     void updateTime();
 
     /**
-     * @brief Parse timezone string (e.g., "UTC+5:30") into offset in seconds
-     * @param tz Timezone string
-     * @return Offset in seconds from UTC
-     */
-    static int parseTimezoneOffset(const std::string& tz);
-
-    /**
      * @brief Select the best font that fits both available height and width
      * @param availableHeight Available height in pixels
      * @param availableWidth Available width in pixels
@@ -81,7 +74,7 @@ private:
     std::unique_ptr<LvglTimer> updateTimer;
 
     // Clock configuration
-    int timezoneOffsetSeconds = 0;
+    std::string posixTz = "UTC0";
     bool use24hFormat = true;
     bool showDate = true;
     bool showSeconds = false;
