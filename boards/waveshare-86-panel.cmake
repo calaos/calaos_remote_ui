@@ -18,6 +18,11 @@ set(BOARD_HAS_TOUCHSCREEN true)
 set(BOARD_HAS_WIFI true)
 set(BOARD_HAS_ETHERNET true)
 
+# Relay configuration
+set(BOARD_RELAY_COUNT 2)
+set(BOARD_RELAY_1_GPIO 32)
+set(BOARD_RELAY_2_GPIO 46)
+
 # Device provisioning config path (ESP32 uses partition table, not a file path)
 set(BOARD_DEVICE_CONFIG_PATH "")
 

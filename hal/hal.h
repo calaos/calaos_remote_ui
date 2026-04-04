@@ -5,6 +5,7 @@
 #include "hal_input.h"
 #include "hal_network.h"
 #include "hal_system.h"
+#include "hal_relay.h"
 #include <memory>
 
 class HAL
@@ -23,6 +24,7 @@ public:
     virtual HalInput& getInput() = 0;
     virtual HalNetwork& getNetwork() = 0;
     virtual HalSystem& getSystem() = 0;
+    virtual HalRelay& getRelay() = 0;
 
     virtual bool isNetworkReady() const = 0;
 

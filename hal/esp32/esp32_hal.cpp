@@ -82,6 +82,13 @@ HalResult Esp32HAL::initEssentials()
         return HalResult::ERROR;
     }
 
+    relay = std::make_unique<Esp32HalRelay>();
+    if (relay->init() != HalResult::OK)
+    {
+        ESP_LOGE(TAG, "Failed to init relay HAL");
+        return HalResult::ERROR;
+    }
+
     ESP_LOGI(TAG, "ESP32 HAL essentials initialized successfully");
     return HalResult::OK;
 }
@@ -174,4 +181,9 @@ HalNetwork& Esp32HAL::getNetwork()
 HalSystem& Esp32HAL::getSystem()
 {
     return *system;
+}
+
+HalRelay& Esp32HAL::getRelay()
+{
+    return *relay;
 }

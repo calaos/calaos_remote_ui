@@ -331,6 +331,12 @@ void ScreenSaver::applyConfig(const CalaosProtocol::RemoteUIConfig& config)
         ESP_LOGD(TAG, "Screensaver active, updating dimming to %d", screensaverDimming_);
         HAL::getInstance().getDisplay().setBacklight(static_cast<uint8_t>(screensaverDimming_));
     }
+    else
+    {
+        // Apply brightness immediately when screensaver is not active
+        ESP_LOGD(TAG, "Screensaver inactive, applying brightness %d", normalBrightness_);
+        HAL::getInstance().getDisplay().setBacklight(static_cast<uint8_t>(normalBrightness_));
+    }
 }
 
 void ScreenSaver::updateClock()

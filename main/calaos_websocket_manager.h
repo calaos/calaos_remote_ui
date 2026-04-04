@@ -59,6 +59,14 @@ public:
      */
     bool requestConfig();
 
+    /**
+     * @brief Send relay state to server
+     * @param relay Relay number (1-indexed)
+     * @param state Relay state
+     * @return true if message sent successfully
+     */
+    bool sendRelayState(int relay, bool state);
+
 private:
     /**
      * @brief Build WebSocket URL from server URL
@@ -119,6 +127,26 @@ private:
      * @brief Handle remote_ui_fw_update_available message
      */
     void handleFirmwareUpdateAvailable(const nlohmann::json& data);
+
+    /**
+     * @brief Handle remote_ui_set_brightness message
+     */
+    void handleSetBrightness(const nlohmann::json& data);
+
+    /**
+     * @brief Handle remote_ui_set_page message
+     */
+    void handleSetPage(const nlohmann::json& data);
+
+    /**
+     * @brief Handle remote_ui_notification message
+     */
+    void handleNotification(const nlohmann::json& data);
+
+    /**
+     * @brief Handle remote_ui_set_relay message
+     */
+    void handleSetRelay(const nlohmann::json& data);
 
     /**
      * @brief Check if error indicates authentication failure

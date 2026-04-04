@@ -18,6 +18,11 @@ set(BOARD_HAS_TOUCHSCREEN true)
 set(BOARD_HAS_WIFI true)
 set(BOARD_HAS_ETHERNET true)
 
+# Relay configuration
+set(BOARD_RELAY_COUNT 2)
+set(BOARD_RELAY_1_GPIO 0)  # TODO: Set correct GPIO pin from hardware schematic
+set(BOARD_RELAY_2_GPIO 0)  # TODO: Set correct GPIO pin from hardware schematic
+
 # Device provisioning config path (raw partition on eMMC/SD)
 set(BOARD_DEVICE_CONFIG_PATH "/dev/mmcblk0p3")
 

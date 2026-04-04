@@ -17,6 +17,11 @@ inline constexpr const char* MSG_SET_STATE = "set_state";
 inline constexpr const char* MSG_GET_CONFIG = "remote_ui_get_config";
 inline constexpr const char* MSG_EVENT = "event";
 inline constexpr const char* MSG_FW_UPDATE_AVAILABLE = "remote_ui_fw_update_available";
+inline constexpr const char* MSG_SET_BRIGHTNESS = "remote_ui_set_brightness";
+inline constexpr const char* MSG_SET_PAGE = "remote_ui_set_page";
+inline constexpr const char* MSG_NOTIFICATION = "remote_ui_notification";
+inline constexpr const char* MSG_SET_RELAY = "remote_ui_set_relay";
+inline constexpr const char* MSG_RELAY_STATE = "remote_ui_relay_state";
 
 // WebSocket endpoint
 inline constexpr const char* WS_ENDPOINT = "/api/v3/remote_ui/ws";

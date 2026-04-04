@@ -16,11 +16,11 @@ LinuxHAL& LinuxHAL::getInstance()
 HalResult LinuxHAL::init()
 {
     ESP_LOGI(TAG, "Initializing Linux HAL (legacy mode)");
-    
+
     // Legacy init - initialize everything sequentially
     if (initEssentials() != HalResult::OK)
         return HalResult::ERROR;
-        
+
     // Initialize network synchronously in legacy mode
     network_ = std::make_unique<LinuxHalNetwork>();
     if (network_->init() != HalResult::OK)
@@ -88,6 +88,12 @@ HalResult LinuxHAL::initEssentials()
         ESP_LOGW(TAG, "No input device found, continuing without separate input HAL");
     }
 
+    relay_ = std::make_unique<LinuxHalRelay>();
+    if (relay_->init() != HalResult::OK)
+    {
+        ESP_LOGW(TAG, "Failed to init relay HAL, continuing without relay support");
+    }
+
     ESP_LOGI(TAG, "Linux HAL essentials initialized successfully");
     return HalResult::OK;
 }
@@ -95,11 +101,11 @@ HalResult LinuxHAL::initEssentials()
 HalResult LinuxHAL::initNetworkAsync()
 {
     ESP_LOGI(TAG, "Starting network initialization thread");
-    
+
     // Create std::thread for network initialization on Linux
     std::thread networkThread([this]() {
         ESP_LOGI(TAG, "Network init thread started");
-        
+
         // Initialize network in background
         network_ = std::make_unique<LinuxHalNetwork>();
         if (network_->init() != HalResult::OK)
@@ -112,10 +118,10 @@ HalResult LinuxHAL::initNetworkAsync()
             networkReady_ = true;
         }
     });
-    
+
     // Detach thread to let it run independently
     networkThread.detach();
-    
+
     ESP_LOGI(TAG, "Network initialization thread started");
     return HalResult::OK;
 }
@@ -162,4 +168,9 @@ HalNetwork& LinuxHAL::getNetwork()
 HalSystem& LinuxHAL::getSystem()
 {
     return *system_;
+}
+
+HalRelay& LinuxHAL::getRelay()
+{
+    return *relay_;
 }

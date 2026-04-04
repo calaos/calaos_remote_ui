@@ -501,6 +501,51 @@ void AppStore::handleEvent(const AppEvent& event)
                 ESP_LOGI(TAG, "Screensaver deactivated");
                 break;
             }
+
+            case AppEventType::BrightnessChanged:
+            {
+                if (auto* data = event.getData<BrightnessChangedData>())
+                {
+                    state_.config.brightness = data->brightness;
+                    stateChanged = true;
+                    ESP_LOGI(TAG, "Brightness changed to %d", data->brightness);
+                }
+                break;
+            }
+
+            case AppEventType::PageChangeRequested:
+            {
+                if (auto* data = event.getData<PageChangeRequestedData>())
+                {
+                    state_.requestedPageId = data->pageId;
+                    stateChanged = true;
+                    ESP_LOGI(TAG, "Page change requested: %s", data->pageId.c_str());
+                }
+                break;
+            }
+
+            case AppEventType::NotificationReceived:
+            {
+                if (auto* data = event.getData<NotificationReceivedData>())
+                {
+                    state_.notificationMessage = data->message;
+                    state_.notificationVersion++;
+                    stateChanged = true;
+                    ESP_LOGI(TAG, "Notification received: %s", data->message.c_str());
+                }
+                break;
+            }
+
+            case AppEventType::RelayStateChanged:
+            {
+                if (auto* data = event.getData<RelayStateChangedData>())
+                {
+                    state_.relayStates[data->relay] = data->state;
+                    stateChanged = true;
+                    ESP_LOGI(TAG, "Relay %d state changed to %s", data->relay, data->state ? "ON" : "OFF");
+                }
+                break;
+            }
         }
     }
 

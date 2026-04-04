@@ -26,6 +26,7 @@ set(MAIN_SOURCES
     main/image_sequence_animator.cpp
     main/ota_manager.cpp
     main/ota_update_screen.cpp
+    main/notification_toast.cpp
     main/about_page.cpp
     main/screensaver.cpp
     main/widgets/widget_error.cpp
@@ -62,6 +63,7 @@ set(ESP32_HAL_SOURCES
     hal/esp32/esp32_hal_input.cpp
     hal/esp32/esp32_hal_network.cpp
     hal/esp32/esp32_hal_system.cpp
+    hal/esp32/esp32_hal_relay.cpp
     hal/esp32/esp32_ota.cpp
     hal/calaos_config/calaos_config.cpp
 )
@@ -74,6 +76,7 @@ set(LINUX_HAL_SOURCES
     hal/linux/linux_hal_input.cpp
     hal/linux/linux_hal_network.cpp
     hal/linux/linux_hal_system.cpp
+    hal/linux/linux_hal_relay.cpp
     hal/linux/linux_ota.cpp
     hal/linux/display_backend_selector.cpp
     hal/linux/logging.cpp

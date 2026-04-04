@@ -7,6 +7,7 @@
 #include "provisioning_manager.h"
 #include "ota_manager.h"
 #include "ota_update_screen.h"
+#include "notification_toast.h"
 #include "screensaver.h"
 
 #ifdef ESP_PLATFORM
@@ -235,6 +236,9 @@ void AppMain::createBasicUi()
 
     // Create screensaver overlay on top layer (hidden by default, below OTA screen due to creation order)
     screenSaver = std::make_unique<ScreenSaver>(lv_layer_top());
+
+    // Create notification toast overlay on top layer
+    notificationToast = std::make_unique<NotificationToast>(lv_layer_top());
 
     hal->getDisplay().unlock();
 

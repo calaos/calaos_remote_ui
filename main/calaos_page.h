@@ -35,6 +35,7 @@ private:
     // State management
     CalaosWebSocketState lastWebSocketState;
     std::string lastConfigJson;  // NEW: Detect config changes
+    std::string lastRequestedPageId_;  // Track page change requests
     SubscriptionId subscriptionId_;  // NEW: Track AppStore subscription
 
     void createTabView();

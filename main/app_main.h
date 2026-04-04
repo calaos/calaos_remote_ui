@@ -7,6 +7,7 @@
 
 class OtaUpdateScreen;
 class ScreenSaver;
+class NotificationToast;
 
 class AppMain
 {
@@ -34,4 +35,5 @@ private:
     std::unique_ptr<StackView> stackView;
     std::unique_ptr<OtaUpdateScreen> otaScreen;
     std::unique_ptr<ScreenSaver> screenSaver;
+    std::unique_ptr<NotificationToast> notificationToast;
 };

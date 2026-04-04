@@ -5,6 +5,7 @@
 #include "linux_hal_input.h"
 #include "linux_hal_network.h"
 #include "linux_hal_system.h"
+#include "linux_hal_relay.h"
 #include <memory>
 
 class LinuxHAL : public HAL {
@@ -20,6 +21,7 @@ public:
     HalInput& getInput() override;
     HalNetwork& getNetwork() override;
     HalSystem& getSystem() override;
+    HalRelay& getRelay() override;
 
     bool isNetworkReady() const override;
 
@@ -30,5 +32,6 @@ private:
     std::unique_ptr<LinuxHalInput> input_;
     std::unique_ptr<LinuxHalNetwork> network_;
     std::unique_ptr<LinuxHalSystem> system_;
+    std::unique_ptr<LinuxHalRelay> relay_;
     bool networkReady_ = false;
 };

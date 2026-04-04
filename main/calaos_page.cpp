@@ -399,4 +399,40 @@ void CalaosPage::onStateChanged(const AppState& state)
             ESP_LOGW(TAG, "Failed to acquire display lock for config update");
         }
     }
+
+    // Check for page change request
+    if (!state.requestedPageId.empty() && state.requestedPageId != lastRequestedPageId_)
+    {
+        lastRequestedPageId_ = state.requestedPageId;
+
+        if (tabview)
+        {
+            // Parse page index from page_id (format: "<id>" where id is 0-based index)
+            int pageIndex = -1;
+            try
+            {
+                pageIndex = std::stoi(state.requestedPageId);
+            }
+            catch (const std::exception&)
+            {
+                ESP_LOGW(TAG, "Invalid page_id format: %s", state.requestedPageId.c_str());
+            }
+
+            if (pageIndex >= 0 && pageIndex < static_cast<int>(tabContent.size()))
+            {
+                if (HAL::getInstance().getDisplay().tryLock(100))
+                {
+                    lv_tabview_set_active(tabview, pageIndex, LV_ANIM_ON);
+                    updatePageIndicator(pageIndex);
+                    HAL::getInstance().getDisplay().unlock();
+                    ESP_LOGI(TAG, "Switched to page %d (%s)", pageIndex, state.requestedPageId.c_str());
+                }
+            }
+            else if (pageIndex >= 0)
+            {
+                ESP_LOGW(TAG, "Page index %d out of range (have %zu tabs)",
+                         pageIndex, tabContent.size());
+            }
+        }
+    }
 }

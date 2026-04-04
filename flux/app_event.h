@@ -52,6 +52,12 @@ enum class AppEventType
     // Screensaver events
     ScreenSaverActivated,
     ScreenSaverDeactivated,
+
+    // Remote UI commands
+    BrightnessChanged,
+    PageChangeRequested,
+    NotificationReceived,
+    RelayStateChanged,
 };
 
 enum class NetworkConnectionType
@@ -206,6 +212,27 @@ struct OtaErrorData
     std::string errorMessage;
 };
 
+struct BrightnessChangedData
+{
+    int brightness;
+};
+
+struct PageChangeRequestedData
+{
+    std::string pageId;
+};
+
+struct NotificationReceivedData
+{
+    std::string message;
+};
+
+struct RelayStateChangedData
+{
+    int relay;
+    bool state;
+};
+
 using AppEventData = std::variant<
     std::monostate,  // For events without data
     NetworkStatusChangedData,
@@ -223,7 +250,11 @@ using AppEventData = std::variant<
     ConfigUpdateReceivedData,
     OtaUpdateAvailableData,
     OtaProgressData,
-    OtaErrorData
+    OtaErrorData,
+    BrightnessChangedData,
+    PageChangeRequestedData,
+    NotificationReceivedData,
+    RelayStateChangedData
 >;
 
 class AppEvent

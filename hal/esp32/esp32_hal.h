@@ -5,6 +5,7 @@
 #include "esp32_hal_input.h"
 #include "esp32_hal_network.h"
 #include "esp32_hal_system.h"
+#include "esp32_hal_relay.h"
 #include <memory>
 
 class Esp32HAL : public HAL
@@ -21,6 +22,7 @@ public:
     HalInput& getInput() override;
     HalNetwork& getNetwork() override;
     HalSystem& getSystem() override;
+    HalRelay& getRelay() override;
 
     bool isNetworkReady() const override;
 
@@ -32,5 +34,6 @@ private:
     std::unique_ptr<Esp32HalInput> input;
     std::unique_ptr<Esp32HalNetwork> network;
     std::unique_ptr<Esp32HalSystem> system;
+    std::unique_ptr<Esp32HalRelay> relay;
     bool networkReady = false;
 };

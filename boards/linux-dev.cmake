@@ -18,6 +18,11 @@ set(BOARD_HAS_TOUCHSCREEN true)
 set(BOARD_HAS_WIFI false)
 set(BOARD_HAS_ETHERNET true)
 
+# Relay configuration (no relays on dev board)
+set(BOARD_RELAY_COUNT 0)
+set(BOARD_RELAY_1_GPIO -1)
+set(BOARD_RELAY_2_GPIO -1)
+
 # Device provisioning config path
 # For development: read from a regular file in the user config directory
 set(BOARD_DEVICE_CONFIG_PATH "")

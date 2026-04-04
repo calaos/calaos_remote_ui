@@ -183,6 +183,10 @@ struct AppState
     std::map<std::string, CalaosProtocol::IoState> ioStates;
     CalaosProtocol::RemoteUIConfig config;
     bool screensaverActive = false;
+    std::string requestedPageId;
+    std::string notificationMessage;
+    uint32_t notificationVersion = 0;
+    std::map<int, bool> relayStates;
 
     bool operator==(const AppState& other) const
     {

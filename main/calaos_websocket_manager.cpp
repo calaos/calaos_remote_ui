@@ -309,6 +309,36 @@ bool CalaosWebSocketManager::requestConfig()
     }
 }
 
+bool CalaosWebSocketManager::sendRelayState(int relay, bool state)
+{
+    if (!isConnected())
+    {
+        ESP_LOGW(TAG, "Cannot send relay state: not connected");
+        return false;
+    }
+
+    try
+    {
+        json j;
+        j["msg"] = CalaosProtocol::MSG_RELAY_STATE;
+        j["data"]["relay"] = relay;
+        j["data"]["state"] = state;
+
+        std::string message = j.dump();
+        ESP_LOGD(TAG, "Sending relay state: %s", message.c_str());
+
+        WebSocketClient& wsClient = CalaosNet::instance().webSocketClient();
+        NetworkResult result = wsClient.sendJson(message);
+
+        return result == NetworkResult::OK;
+    }
+    catch (const std::exception& e)
+    {
+        ESP_LOGE(TAG, "Failed to build relay_state message: %s", e.what());
+        return false;
+    }
+}
+
 std::string CalaosWebSocketManager::buildWebSocketUrl(const std::string& serverUrl, uint16_t port, bool ssl)
 {
     std::ostringstream oss;
@@ -373,6 +403,14 @@ void CalaosWebSocketManager::onMessage(const WebSocketMessage& message)
             handleEvent(j.value("data", json::object()));
         else if (msgType == CalaosProtocol::MSG_FW_UPDATE_AVAILABLE)
             handleFirmwareUpdateAvailable(j.value("data", json::object()));
+        else if (msgType == CalaosProtocol::MSG_SET_BRIGHTNESS)
+            handleSetBrightness(j.value("data", json::object()));
+        else if (msgType == CalaosProtocol::MSG_SET_PAGE)
+            handleSetPage(j.value("data", json::object()));
+        else if (msgType == CalaosProtocol::MSG_NOTIFICATION)
+            handleNotification(j.value("data", json::object()));
+        else if (msgType == CalaosProtocol::MSG_SET_RELAY)
+            handleSetRelay(j.value("data", json::object()));
         else
             ESP_LOGW(TAG, "Unknown message type: %s", msgType.c_str());
     }
@@ -835,6 +873,14 @@ void CalaosWebSocketManager::handleConfigUpdate(const json& data)
             AppEvent(AppEventType::ConfigUpdateReceived,
                     ConfigUpdateReceivedData{config})
         );
+
+        // Send initial relay states to server
+        int relayCount = HAL::getInstance().getRelay().getRelayCount();
+        for (int i = 1; i <= relayCount; i++)
+        {
+            bool relayState = HAL::getInstance().getRelay().getRelayState(i);
+            sendRelayState(i, relayState);
+        }
     }
     catch (const std::exception& e)
     {
@@ -973,6 +1019,117 @@ void CalaosWebSocketManager::handleFirmwareUpdateAvailable(const json& data)
     catch (const std::exception& e)
     {
         ESP_LOGE(TAG, "Error parsing firmware update available: %s", e.what());
+    }
+}
+
+void CalaosWebSocketManager::handleSetBrightness(const json& data)
+{
+    try
+    {
+        int brightness = data.value("brightness", -1);
+        if (brightness < 0 || brightness > 100)
+        {
+            ESP_LOGW(TAG, "Invalid brightness value: %d", brightness);
+            return;
+        }
+
+        ESP_LOGI(TAG, "Set brightness: %d", brightness);
+
+        AppDispatcher::getInstance().dispatch(
+            AppEvent(AppEventType::BrightnessChanged,
+                    BrightnessChangedData{brightness})
+        );
+    }
+    catch (const std::exception& e)
+    {
+        ESP_LOGE(TAG, "Error parsing set_brightness: %s", e.what());
+    }
+}
+
+void CalaosWebSocketManager::handleSetPage(const json& data)
+{
+    try
+    {
+        std::string pageId = data.value("page_id", "");
+        if (pageId.empty())
+        {
+            ESP_LOGW(TAG, "Missing page_id in set_page");
+            return;
+        }
+
+        ESP_LOGI(TAG, "Set page: %s", pageId.c_str());
+
+        AppDispatcher::getInstance().dispatch(
+            AppEvent(AppEventType::PageChangeRequested,
+                    PageChangeRequestedData{pageId})
+        );
+    }
+    catch (const std::exception& e)
+    {
+        ESP_LOGE(TAG, "Error parsing set_page: %s", e.what());
+    }
+}
+
+void CalaosWebSocketManager::handleNotification(const json& data)
+{
+    try
+    {
+        std::string message = data.value("message", "");
+        if (message.empty())
+        {
+            ESP_LOGW(TAG, "Empty notification message");
+            return;
+        }
+
+        ESP_LOGI(TAG, "Notification: %s", message.c_str());
+
+        AppDispatcher::getInstance().dispatch(
+            AppEvent(AppEventType::NotificationReceived,
+                    NotificationReceivedData{message})
+        );
+    }
+    catch (const std::exception& e)
+    {
+        ESP_LOGE(TAG, "Error parsing notification: %s", e.what());
+    }
+}
+
+void CalaosWebSocketManager::handleSetRelay(const json& data)
+{
+    try
+    {
+        int relay = data.value("relay", 0);
+        int relayCount = HAL::getInstance().getRelay().getRelayCount();
+
+        if (relay < 1 || relay > relayCount)
+        {
+            ESP_LOGW(TAG, "Invalid relay number: %d (board has %d relays)", relay, relayCount);
+            return;
+        }
+
+        bool state = data.value("state", false);
+
+        ESP_LOGI(TAG, "Set relay %d to %s", relay, state ? "ON" : "OFF");
+
+        HalResult result = HAL::getInstance().getRelay().setRelay(relay, state);
+        if (result != HalResult::OK)
+        {
+            ESP_LOGE(TAG, "Failed to set relay %d", relay);
+            return;
+        }
+
+        // Read back actual state and confirm to server
+        bool actualState = HAL::getInstance().getRelay().getRelayState(relay);
+        sendRelayState(relay, actualState);
+
+        AppDispatcher::getInstance().dispatch(
+            AppEvent(AppEventType::RelayStateChanged,
+                    RelayStateChangedData{relay, actualState})
+        );
+    }
+    catch (const std::exception& e)
+    {
+        ESP_LOGE(TAG, "Error parsing set_relay: %s", e.what());
     }
 }
 
