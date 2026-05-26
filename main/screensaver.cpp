@@ -129,6 +129,9 @@ void ScreenSaver::rebuildClockUI()
         timeRef = clockShowSeconds_ ? "12:59:59 PM" : "12:59 PM";
 
     const lv_font_t* timeFont = selectFont(timeFontHeight, innerW, timeRef);
+    ESP_LOGD(TAG, "rebuildClockUI: screen=%dx%d inner=%dx%d timeFontHeight=%d → timeFont line_height=%d",
+             screenW, screenH, innerW, innerH, timeFontHeight,
+             timeFont ? (int)timeFont->line_height : -1);
 
     timeLabel = lv_label_create(get());
     lv_label_set_text(timeLabel, "--:--");
@@ -145,6 +148,8 @@ void ScreenSaver::rebuildClockUI()
         const lv_font_t* dateFont = selectFont(dateFontHeight, innerW, dateRef);
         if (!dateFont)
             dateFont = &roboto_regular_24;
+        ESP_LOGD(TAG, "rebuildClockUI: dateFontHeight=%d → dateFont line_height=%d",
+                 dateFontHeight, dateFont ? (int)dateFont->line_height : -1);
 
         dateLabel = lv_label_create(get());
         lv_label_set_text(dateLabel, "");

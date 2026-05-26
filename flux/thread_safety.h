@@ -12,37 +12,39 @@ namespace flux
 {
 
 #ifdef ESP_PLATFORM
-    // FreeRTOS-based implementation for ESP32
+    // FreeRTOS-based implementation for ESP32.
+    // Recursive so a task can re-enter critical sections it already owns
+    // (e.g. an AppStore callback that calls AppStore::getState()).
     class Mutex
     {
     public:
         Mutex()
         {
-            mutexHandle = xSemaphoreCreateMutex();
+            mutexHandle = xSemaphoreCreateRecursiveMutex();
         }
-        
+
         ~Mutex()
         {
             if (mutexHandle)
                 vSemaphoreDelete(mutexHandle);
         }
-        
+
         void lock()
         {
             if (mutexHandle)
-                xSemaphoreTake(mutexHandle, portMAX_DELAY);
+                xSemaphoreTakeRecursive(mutexHandle, portMAX_DELAY);
         }
-        
+
         void unlock()
         {
             if (mutexHandle)
-                xSemaphoreGive(mutexHandle);
+                xSemaphoreGiveRecursive(mutexHandle);
         }
-        
+
         bool tryLock()
         {
             if (mutexHandle)
-                return xSemaphoreTake(mutexHandle, 0) == pdTRUE;
+                return xSemaphoreTakeRecursive(mutexHandle, 0) == pdTRUE;
             return false;
         }
         
@@ -97,9 +99,9 @@ namespace flux
     };
 
 #else
-    // Standard C++ implementation for Linux
-    using Mutex = std::mutex;
-    using LockGuard = std::lock_guard<std::mutex>;
+    // Standard C++ implementation for Linux (recursive to match ESP32 side)
+    using Mutex = std::recursive_mutex;
+    using LockGuard = std::lock_guard<std::recursive_mutex>;
     
 #endif
 

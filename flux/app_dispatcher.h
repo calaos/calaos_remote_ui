@@ -88,7 +88,8 @@ private:
     // Linux/std implementation
     std::queue<AppEvent> eventQueue_;
     flux::Mutex queueMutex_;
-    std::condition_variable queueCondition_;
+    // condition_variable_any: works with std::recursive_mutex (flux::Mutex is recursive)
+    std::condition_variable_any queueCondition_;
     std::thread workerThread_;
     std::atomic<bool> shouldStop_;
 #endif

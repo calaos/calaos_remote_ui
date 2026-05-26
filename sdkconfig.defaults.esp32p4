@@ -41,3 +41,22 @@ CONFIG_ESP_HOSTED_PRIV_SDIO_PIN_D2_4BIT_BUS_SLOT_1=16
 CONFIG_ESP_HOSTED_PRIV_SDIO_PIN_D3_4BIT_BUS_SLOT_1=17
 CONFIG_ESP_HOSTED_SDIO_GPIO_RESET_SLAVE=54
 CONFIG_ESP_HOSTED_GPIO_SLAVE_RESET_SLAVE=54
+
+# Hardware-accelerated screen rotation via Pixel Processing Accelerator (P4-only).
+# Used by esp_lvgl_port when sw_rotate=true; off-loads the rotation from CPU,
+# critical for landscape boards (touchlcd-7/8/10) where the panel is portrait-native.
+CONFIG_LVGL_PORT_ENABLE_PPA=y
+
+# LVGL PPA draw unit: accelerates fill / blit / image draws via PPA.
+# Requires the local patch in components/lvgl/src/draw/espressif/ppa/ that
+# adds an explicit esp_cache_msync(C2M) before each PPA op — LVGL 9.5's
+# single invalidate_cache_cb doesn't run between interleaved SW and PPA
+# draw tasks, which otherwise leaves SW-drawn glyphs stale in cache and
+# produces vertical streaks in dynamic text labels.
+CONFIG_LV_USE_PPA=y
+CONFIG_LV_USE_PPA_IMG=y
+
+# LVGL 9.5+ with PPA requires buffers aligned to ESP32-P4 L2 cache line (128 bytes).
+CONFIG_LV_DRAW_BUF_ALIGN=128
+CONFIG_LV_DRAW_BUF_STRIDE_ALIGN=1
+CONFIG_LV_ATTRIBUTE_MEM_ALIGN_SIZE=128

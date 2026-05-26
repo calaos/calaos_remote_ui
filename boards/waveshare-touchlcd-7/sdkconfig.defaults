@@ -1,0 +1,19 @@
+# Board-specific sdkconfig for Waveshare Touch LCD 7"
+# Loaded after sdkconfig.defaults and sdkconfig.defaults.esp32p4.
+
+# Custom partition table with dual OTA
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="boards/waveshare-touchlcd-7/partitions.csv"
+
+# Enable OTA support
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# WiFi via ESP-Hosted on C6
+CONFIG_ESP_HOSTED_IDF_SLAVE_TARGET="esp32c6"
+
+# 32 MB flash
+CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="32MB"
+
+# Panel selection: 7" ILI9881C (720x1280)
+CONFIG_BSP_LCD_TYPE_720_1280_7_INCH=y

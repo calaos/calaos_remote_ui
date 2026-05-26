@@ -1,0 +1,10 @@
+# Partition table for Waveshare ESP32-P4 Touch LCD 10.1"
+# 32MB flash with dual OTA layout
+#
+# Name,   Type, SubType, Offset,    Size,      Flags
+nvs,      data, nvs,     0xD000,    0x6000,
+otadata,  data, ota,     0x13000,   0x2000,
+phy_init, data, phy,     0x15000,   0x1000,
+ota_0,    app,  ota_0,   0x20000,   0xF00000,
+ota_1,    app,  ota_1,   0xF20000,  0xF00000,
+config,   data, 0x40,    0x1E20000, 0x10000,

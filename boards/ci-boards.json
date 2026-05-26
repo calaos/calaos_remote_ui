@@ -11,6 +11,39 @@
     "description": "Waveshare ESP32-P4 86-Panel firmware"
   },
   {
+    "name": "waveshare-touchlcd-7",
+    "platform": "ESP32",
+    "dockerfile": "boards/waveshare-touchlcd-7/Dockerfile",
+    "docker_image": "ghcr.io/calaos/calaos-build-waveshare-touchlcd-7:latest",
+    "build_script": "boards/waveshare-touchlcd-7/build.sh",
+    "bin_path": "build/calaos-remote-ui.bin",
+    "flash_package": true,
+    "partition_table": "boards/waveshare-touchlcd-7/partitions.csv",
+    "description": "Waveshare ESP32-P4 Touch LCD 7\" firmware"
+  },
+  {
+    "name": "waveshare-touchlcd-8",
+    "platform": "ESP32",
+    "dockerfile": "boards/waveshare-touchlcd-8/Dockerfile",
+    "docker_image": "ghcr.io/calaos/calaos-build-waveshare-touchlcd-8:latest",
+    "build_script": "boards/waveshare-touchlcd-8/build.sh",
+    "bin_path": "build/calaos-remote-ui.bin",
+    "flash_package": true,
+    "partition_table": "boards/waveshare-touchlcd-8/partitions.csv",
+    "description": "Waveshare ESP32-P4 Touch LCD 8\" firmware"
+  },
+  {
+    "name": "waveshare-touchlcd-10",
+    "platform": "ESP32",
+    "dockerfile": "boards/waveshare-touchlcd-10/Dockerfile",
+    "docker_image": "ghcr.io/calaos/calaos-build-waveshare-touchlcd-10:latest",
+    "build_script": "boards/waveshare-touchlcd-10/build.sh",
+    "bin_path": "build/calaos-remote-ui.bin",
+    "flash_package": true,
+    "partition_table": "boards/waveshare-touchlcd-10/partitions.csv",
+    "description": "Waveshare ESP32-P4 Touch LCD 10.1\" firmware"
+  },
+  {
     "name": "luckfox-86-panel",
     "platform": "linux",
     "dockerfile": "boards/luckfox-86-panel/Dockerfile",

@@ -54,7 +54,7 @@ typedef union {
 /**
  * The Subject (an observable value)
  */
-typedef struct {
+struct _lv_subject_t {
     lv_ll_t subs_ll;                     /**< Subscribers */
     lv_subject_value_t value;            /**< Current value */
     lv_subject_value_t prev_value;       /**< Previous value */
@@ -65,7 +65,7 @@ typedef struct {
     uint32_t size                 : 24;  /**< String buffer size or group length */
     uint32_t notify_restart_query :  1;  /**< If an Observer was deleted during notification,
                                           * start notifying from the beginning. */
-} lv_subject_t;
+};
 
 /**
   * Callback called to notify Observer that Subject's value has changed

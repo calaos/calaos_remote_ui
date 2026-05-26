@@ -10,9 +10,21 @@ static const char* TAG = "hal.display";
 
 HalResult Esp32HalDisplay::init()
 {
+    // Panel native (pre-rotation) dimensions, derived from BOARD_DISPLAY_* + rotation.
+    // We don't read BSP_LCD_H_RES/V_RES: two BSPs export bsp/display.h and the 4b
+    // (managed) one always defines 720x720, which wins the include search even when
+    // EXCLUDE_COMPONENTS removes its sources.
+    #if BOARD_DISPLAY_ROTATION == 90 || BOARD_DISPLAY_ROTATION == 270
+        constexpr int kPanelHRes = BOARD_DISPLAY_HEIGHT;
+        constexpr int kPanelVRes = BOARD_DISPLAY_WIDTH;
+    #else
+        constexpr int kPanelHRes = BOARD_DISPLAY_WIDTH;
+        constexpr int kPanelVRes = BOARD_DISPLAY_HEIGHT;
+    #endif
+
     bsp_display_cfg_t cfg = {
         .lvgl_port_cfg = ESP_LVGL_PORT_INIT_CONFIG(),
-        .buffer_size = BSP_LCD_H_RES * 100, // Increase buffer to 100 lines instead of 50
+        .buffer_size = kPanelHRes * 200, // 200 lines: large partial buffer to amortize PPA rotation overhead
         .double_buffer = true, // Enable double buffering to prevent tearing
         .flags = {
             .buff_dma = false,
@@ -20,6 +32,9 @@ HalResult Esp32HalDisplay::init()
             .sw_rotate = true,
         }
     };
+    // Default LVGL task stack (7168 B) overflows on LVGL 9.5 + PPA when
+    // building deep widget trees (CalaosPage + tabs + AboutPage). Bump to 16 KB.
+    cfg.lvgl_port_cfg.task_stack = 16384;
 
     // Initialize LVGL port
     if (lvgl_port_init(&cfg.lvgl_port_cfg) != ESP_OK)
@@ -51,8 +66,8 @@ HalResult Esp32HalDisplay::init()
         .buffer_size = cfg.buffer_size,
         .double_buffer = cfg.double_buffer,
         .trans_size = 0,
-        .hres = BSP_LCD_H_RES,
-        .vres = BSP_LCD_V_RES,
+        .hres = kPanelHRes,
+        .vres = kPanelVRes,
         .monochrome = false,
         .rotation = {
             .swap_xy = false,
@@ -91,14 +106,31 @@ HalResult Esp32HalDisplay::init()
 
     lv_display_set_dpi(display, 180);
 
-    // lv_display_set_rotation(display, LV_DISP_ROTATION_90);
+#if BOARD_DISPLAY_ROTATION != 0
+    if (lvgl_port_lock(0))
+    {
+    #if BOARD_DISPLAY_ROTATION == 90
+        lv_display_set_rotation(display, LV_DISPLAY_ROTATION_90);
+    #elif BOARD_DISPLAY_ROTATION == 180
+        lv_display_set_rotation(display, LV_DISPLAY_ROTATION_180);
+    #elif BOARD_DISPLAY_ROTATION == 270
+        lv_display_set_rotation(display, LV_DISPLAY_ROTATION_270);
+    #endif
+        lvgl_port_unlock();
+    }
+#endif
 
     displayInfo.width = BOARD_DISPLAY_WIDTH;
     displayInfo.height = BOARD_DISPLAY_HEIGHT;
-    displayInfo.colorDepth = lv_display_get_dpi(display);
+    displayInfo.colorDepth = BOARD_DISPLAY_COLOR_DEPTH;
 
-    ESP_LOGI(TAG, "Display initialized: %dx%d, %d-bit",
-             displayInfo.width, displayInfo.height, displayInfo.colorDepth);
+    ESP_LOGI(TAG, "Display initialized: %dx%d, %d-bit (rot=%d, lv hres=%d vres=%d, scr=%dx%d)",
+             displayInfo.width, displayInfo.height, displayInfo.colorDepth,
+             (int)lv_display_get_rotation(display),
+             (int)lv_display_get_horizontal_resolution(display),
+             (int)lv_display_get_vertical_resolution(display),
+             (int)lv_obj_get_width(lv_screen_active()),
+             (int)lv_obj_get_height(lv_screen_active()));
 
     return HalResult::OK;
 }
@@ -153,7 +185,7 @@ void Esp32HalDisplay::lock(uint32_t timeoutMs)
 
 bool Esp32HalDisplay::tryLock(uint32_t timeoutMs)
 {
-    return bsp_display_lock(timeoutMs);
+    return bsp_display_lock(timeoutMs) == ESP_OK;
 }
 
 void Esp32HalDisplay::unlock()

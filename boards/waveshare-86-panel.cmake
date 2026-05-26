@@ -10,6 +10,7 @@ set(BOARD_MANUFACTURER "Waveshare")
 set(BOARD_DISPLAY_WIDTH 720)
 set(BOARD_DISPLAY_HEIGHT 720)
 set(BOARD_DISPLAY_COLOR_DEPTH 16)
+set(BOARD_DISPLAY_ROTATION 0)
 set(BOARD_PREFERED_GRID_HEIGHT 3)
 set(BOARD_PREFERED_GRID_WIDTH 3)
 
@@ -42,5 +43,9 @@ set(BOARD_SDKCONFIG_DEFAULTS
 
 # Custom partition table with dual OTA
 set(BOARD_PARTITION_TABLE "${CMAKE_SOURCE_DIR}/boards/waveshare-86-panel/partitions.csv")
+
+# Exclude the local BSP used by other Waveshare boards (touchlcd-7/8/10).
+# Both BSPs export the same bsp_display_* symbols; only one can be linked.
+set(EXCLUDE_COMPONENTS esp32_p4_wifi6_touch_lcd_x)
 
 message(STATUS "Board config: ${BOARD_NAME} (${BOARD_DISPLAY_WIDTH}x${BOARD_DISPLAY_HEIGHT}, OTA: ${BOARD_OTA_BACKEND})")

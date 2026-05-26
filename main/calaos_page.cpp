@@ -4,6 +4,7 @@
 #include "hal.h"
 #include "logging.h"
 #include "widget_factory.h"
+#include "board_config.h"
 
 static const char* TAG = "CalaosPage";
 extern AppMain* g_appMain;
@@ -241,8 +242,8 @@ void CalaosPage::createPagesFromConfig(const CalaosProtocol::PagesConfig& config
     GridLayoutInfo gridInfo;
     gridInfo.gridWidth = config.grid_width;
     gridInfo.gridHeight = config.grid_height;
-    gridInfo.screenWidth = 720;
-    gridInfo.screenHeight = 720;
+    gridInfo.screenWidth = BOARD_DISPLAY_WIDTH;
+    gridInfo.screenHeight = BOARD_DISPLAY_HEIGHT;
     gridInfo.cellWidth = gridInfo.screenWidth / gridInfo.gridWidth;
     gridInfo.cellHeight = gridInfo.screenHeight / gridInfo.gridHeight;
     gridInfo.padding = 8;

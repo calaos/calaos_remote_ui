@@ -53,7 +53,7 @@ if(EXISTS "${BOARD_CONFIG_FILE}")
     message(STATUS "Loaded board configuration: ${BOARD}")
 else()
     message(FATAL_ERROR "Board configuration not found: ${BOARD_CONFIG_FILE}\n"
-                        "Available boards: waveshare-86-panel, luckfox-86-panel, linux-dev")
+                        "Available boards: waveshare-86-panel, waveshare-touchlcd-7, waveshare-touchlcd-8, waveshare-touchlcd-10, luckfox-86-panel, linux-dev")
 endif()
 
 # Validate board platform matches detected platform
@@ -67,6 +67,14 @@ if(NOT DEFINED BOARD_DISPLAY_COLOR_DEPTH)
     set(BOARD_DISPLAY_COLOR_DEPTH 16)
 elseif(NOT BOARD_DISPLAY_COLOR_DEPTH MATCHES "^(16|24|32)$")
     message(FATAL_ERROR "Invalid BOARD_DISPLAY_COLOR_DEPTH=${BOARD_DISPLAY_COLOR_DEPTH}. Must be 16, 24, or 32")
+endif()
+
+# Validate BOARD_DISPLAY_ROTATION
+if(NOT DEFINED BOARD_DISPLAY_ROTATION)
+    message(WARNING "BOARD_DISPLAY_ROTATION not set in board config, defaulting to 0")
+    set(BOARD_DISPLAY_ROTATION 0)
+elseif(NOT BOARD_DISPLAY_ROTATION MATCHES "^(0|90|180|270)$")
+    message(FATAL_ERROR "Invalid BOARD_DISPLAY_ROTATION=${BOARD_DISPLAY_ROTATION}. Must be 0, 90, 180, or 270")
 endif()
 
 # ESP-IDF setup (only if targeting ESP32)

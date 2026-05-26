@@ -118,10 +118,13 @@
  *========================*/
 
 /*Align the stride of all layers and images to this bytes*/
+/*Keep at 1: panel framebuffer stride is hres*bpp (e.g. 720*2=1440 bytes,
+ *not a 128-multiple); padding rows would cause display striping.*/
 #define LV_DRAW_BUF_STRIDE_ALIGN                1
 
 /*Align the start address of draw_buf addresses to this bytes*/
-#define LV_DRAW_BUF_ALIGN                       4
+/*128 = ESP32-P4 L2 cache line; required by LVGL 9.5+ when LV_USE_PPA=1*/
+#define LV_DRAW_BUF_ALIGN                       128
 
 /*Using matrix for transformations.
  *Requirements:
@@ -446,7 +449,8 @@
 #define LV_ATTRIBUTE_FLUSH_READY
 
 /*Required alignment size for buffers*/
-#define LV_ATTRIBUTE_MEM_ALIGN_SIZE 1
+/*128 = ESP32-P4 L2 cache line; required by LVGL 9.5+ when LV_USE_PPA=1*/
+#define LV_ATTRIBUTE_MEM_ALIGN_SIZE 128
 
 /*Will be added where memories needs to be aligned (with -Os data might not be aligned to boundary by default).
  * E.g. __attribute__((aligned(4)))*/

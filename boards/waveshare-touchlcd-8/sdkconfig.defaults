@@ -1,0 +1,19 @@
+# Board-specific sdkconfig for Waveshare Touch LCD 8"
+# Loaded after sdkconfig.defaults and sdkconfig.defaults.esp32p4.
+
+# Custom partition table with dual OTA
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="boards/waveshare-touchlcd-8/partitions.csv"
+
+# Enable OTA support
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# WiFi via ESP-Hosted on C6
+CONFIG_ESP_HOSTED_IDF_SLAVE_TARGET="esp32c6"
+
+# 32 MB flash
+CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="32MB"
+
+# Panel selection: 8" JD9365 (800x1280)
+CONFIG_BSP_LCD_TYPE_800_1280_8_INCH=y

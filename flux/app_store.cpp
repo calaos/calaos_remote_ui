@@ -562,18 +562,26 @@ void AppStore::handleEvent(const AppEvent& event)
 
 void AppStore::notifyStateChange()
 {
-    // Copy subscribers and state under lock, then notify without holding the lock.
-    // This prevents deadlock when subscriber callbacks try to acquire the display lock
-    // (which may already be held by the main render thread that needs mutex_ for getState()).
-    std::map<SubscriptionId, StateChangeCallback> subscribersCopy;
-    AppState stateCopy;
-    {
-        flux::LockGuard lock(mutex_);
-        if (shuttingDown_)
-            return;
-        subscribersCopy = subscribers_;
-        stateCopy = state_;
-    }
+    // Hold the mutex for the ENTIRE callback iteration (copy + invocation):
+    // another task's unsubscribe (e.g. ~CalaosWidget destructed by app_main
+    // under the LVGL lock) will block until the iteration completes, so the
+    // lambda's captured `this` stays alive while we invoke it.
+    //
+    // Previously we released the mutex between copy and invocation, which
+    // opened a window where a destructor could free the subscriber before its
+    // copied lambda fired — manifesting as use-after-free crashes in LVGL
+    // (lv_event_mark_deleted walking a corrupted list, function pointers
+    // jumping into RAM, etc.).
+    //
+    // mutex_ is recursive (flux::Mutex), so a callback that re-enters AppStore
+    // via getState() / subscribe() / unsubscribe() does not self-deadlock. We
+    // iterate over a copy so an unsubscribe from inside a callback (same task,
+    // recursive) cannot invalidate the iterator.
+    flux::LockGuard lock(mutex_);
+    if (shuttingDown_)
+        return;
+    auto subscribersCopy = subscribers_;
+    auto stateCopy = state_;
     for (auto& [id, callback] : subscribersCopy)
         callback(stateCopy);
 }

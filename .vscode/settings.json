@@ -90,5 +90,6 @@
     "ranges": "cpp",
     "valarray": "cpp"
   },
-  "mesonbuild.configureOnOpen": false
+  "mesonbuild.configureOnOpen": false,
+  "idf.currentSetup": "/opt/esp/idf"
 }

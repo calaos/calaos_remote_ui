@@ -136,9 +136,27 @@ HalResult Esp32HalNetwork::init()
                  devCfg.hasServerHost() ? "true" : "false");
     }
 
-    // Decide which interface to initialize based on DeviceConfig
+    // Decide which interface to initialize based on DeviceConfig and board capabilities
+    bool boardHasEthernet = HAL::getInstance().getSystem().hasEthernet();
+    bool boardHasWifi = HAL::getInstance().getSystem().hasWifi();
+
     bool useWifi = devCfg.isLoaded() && devCfg.isWifi();
     bool useEthernet = !useWifi; // Default: ethernet if no config or config=ethernet
+
+    // Override: if board has no ethernet HW, force WiFi
+    if (useEthernet && !boardHasEthernet)
+    {
+        ESP_LOGW(TAG, "Board has no Ethernet hardware, falling back to WiFi");
+        useEthernet = false;
+        useWifi = boardHasWifi;
+    }
+    // Override: if board has no WiFi HW, force Ethernet (if available)
+    if (useWifi && !boardHasWifi)
+    {
+        ESP_LOGW(TAG, "Board has no WiFi hardware, falling back to Ethernet");
+        useWifi = false;
+        useEthernet = boardHasEthernet;
+    }
 
     ESP_LOGI(TAG, "Network mode: %s", useWifi ? "WiFi" : "Ethernet");
 
