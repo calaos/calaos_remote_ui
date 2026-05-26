@@ -16,6 +16,16 @@ public:
 
     void update();
 
+    struct FontEntry
+    {
+        const lv_font_t* font;
+        int lineHeight;
+    };
+
+    static const lv_font_t* selectFont(int availableHeight, int availableWidth,
+                                       const char* referenceText,
+                                       const FontEntry* fonts, int count);
+
 private:
     void createUI();
     void activate();
@@ -25,9 +35,6 @@ private:
     void rebuildClockUI();
 
     std::string formatDate(const struct tm& tm);
-
-    static const lv_font_t* selectFont(int availableHeight, int availableWidth,
-                                       const char* referenceText);
 
     static void onClicked(lv_event_t* e);
 

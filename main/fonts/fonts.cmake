@@ -15,6 +15,9 @@ set(FONT_SOURCES
     main/fonts/roboto_regular_32.c
     main/fonts/roboto_regular_48.c
     main/fonts/roboto_regular_60.c
+    main/fonts/roboto_regular_80.c
+    main/fonts/roboto_regular_100.c
+    main/fonts/roboto_regular_120.c
     main/fonts/roboto_medium_22.c
     main/fonts/roboto_medium_24.c
     main/fonts/roboto_medium_26.c
@@ -33,5 +36,8 @@ set(FONT_SOURCES
     main/fonts/roboto_bold_96.c
     main/fonts/roboto_bold_120.c
     main/fonts/roboto_bold_150.c
+    main/fonts/roboto_bold_200.c
+    main/fonts/roboto_bold_250.c
+    main/fonts/roboto_bold_300.c
 )
 

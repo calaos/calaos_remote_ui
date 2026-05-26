@@ -536,6 +536,9 @@
    LV_FONT_DECLARE(roboto_regular_32) \
    LV_FONT_DECLARE(roboto_regular_48) \
    LV_FONT_DECLARE(roboto_regular_60) \
+   LV_FONT_DECLARE(roboto_regular_80) \
+   LV_FONT_DECLARE(roboto_regular_100) \
+   LV_FONT_DECLARE(roboto_regular_120) \
    LV_FONT_DECLARE(roboto_medium_22) \
    LV_FONT_DECLARE(roboto_medium_24) \
    LV_FONT_DECLARE(roboto_medium_26) \
@@ -553,7 +556,10 @@
    LV_FONT_DECLARE(roboto_bold_72) \
    LV_FONT_DECLARE(roboto_bold_96) \
    LV_FONT_DECLARE(roboto_bold_120) \
-   LV_FONT_DECLARE(roboto_bold_150)
+   LV_FONT_DECLARE(roboto_bold_150) \
+   LV_FONT_DECLARE(roboto_bold_200) \
+   LV_FONT_DECLARE(roboto_bold_250) \
+   LV_FONT_DECLARE(roboto_bold_300)
 
 /*Always set a default font*/
 #define LV_FONT_DEFAULT &roboto_regular_24

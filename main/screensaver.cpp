@@ -9,31 +9,31 @@
 
 static const char* TAG = "screensaver";
 
-struct FontEntry
-{
-    const lv_font_t* font;
-    int lineHeight;
-};
-
-static const FontEntry timeFonts[] = {
+static const ScreenSaver::FontEntry timeFonts[] = {
+    { &roboto_bold_300, 300 },
+    { &roboto_bold_250, 250 },
+    { &roboto_bold_200, 200 },
     { &roboto_bold_150, 150 },
     { &roboto_bold_120, 120 },
-    { &roboto_bold_96, 96 },
-    { &roboto_bold_72, 72 },
-    { &roboto_bold_60, 60 },
-    { &roboto_bold_50, 50 },
-    { &roboto_bold_48, 48 },
-    { &roboto_bold_32, 32 },
-    { &roboto_bold_28, 28 },
+    { &roboto_bold_96,   96 },
+    { &roboto_bold_72,   72 },
+    { &roboto_bold_60,   60 },
+    { &roboto_bold_50,   50 },
+    { &roboto_bold_48,   48 },
+    { &roboto_bold_32,   32 },
+    { &roboto_bold_28,   28 },
 };
 
-static const FontEntry dateFonts[] = {
-    { &roboto_regular_60, 60 },
-    { &roboto_regular_48, 48 },
-    { &roboto_regular_32, 32 },
-    { &roboto_regular_28, 28 },
-    { &roboto_regular_26, 26 },
-    { &roboto_regular_24, 24 },
+static const ScreenSaver::FontEntry dateFonts[] = {
+    { &roboto_regular_120, 120 },
+    { &roboto_regular_100, 100 },
+    { &roboto_regular_80,   80 },
+    { &roboto_regular_60,   60 },
+    { &roboto_regular_48,   48 },
+    { &roboto_regular_32,   32 },
+    { &roboto_regular_28,   28 },
+    { &roboto_regular_26,   26 },
+    { &roboto_regular_24,   24 },
 };
 
 ScreenSaver::ScreenSaver(lv_obj_t* parent):
@@ -128,7 +128,8 @@ void ScreenSaver::rebuildClockUI()
     else
         timeRef = clockShowSeconds_ ? "12:59:59 PM" : "12:59 PM";
 
-    const lv_font_t* timeFont = selectFont(timeFontHeight, innerW, timeRef);
+    const lv_font_t* timeFont = selectFont(timeFontHeight, innerW, timeRef,
+                                            timeFonts, sizeof(timeFonts) / sizeof(timeFonts[0]));
     ESP_LOGD(TAG, "rebuildClockUI: screen=%dx%d inner=%dx%d timeFontHeight=%d → timeFont line_height=%d",
              screenW, screenH, innerW, innerH, timeFontHeight,
              timeFont ? (int)timeFont->line_height : -1);
@@ -145,7 +146,8 @@ void ScreenSaver::rebuildClockUI()
     {
         int dateFontHeight = (innerH * 35) / 100 - 8;
         const char* dateRef = "24/02/2026";
-        const lv_font_t* dateFont = selectFont(dateFontHeight, innerW, dateRef);
+        const lv_font_t* dateFont = selectFont(dateFontHeight, innerW, dateRef,
+                                                dateFonts, sizeof(dateFonts) / sizeof(dateFonts[0]));
         if (!dateFont)
             dateFont = &roboto_regular_24;
         ESP_LOGD(TAG, "rebuildClockUI: dateFontHeight=%d → dateFont line_height=%d",
@@ -162,21 +164,21 @@ void ScreenSaver::rebuildClockUI()
 }
 
 const lv_font_t* ScreenSaver::selectFont(int availableHeight, int availableWidth,
-                                          const char* referenceText)
+                                          const char* referenceText,
+                                          const FontEntry* fonts, int count)
 {
-    int fontCount = sizeof(timeFonts) / sizeof(timeFonts[0]);
-    for (int i = 0; i < fontCount; i++)
+    for (int i = 0; i < count; i++)
     {
-        if (timeFonts[i].lineHeight > availableHeight)
+        if (fonts[i].lineHeight > availableHeight)
             continue;
 
         lv_point_t textSize;
-        lv_txt_get_size(&textSize, referenceText, timeFonts[i].font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        lv_txt_get_size(&textSize, referenceText, fonts[i].font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
 
         if (textSize.x <= availableWidth)
-            return timeFonts[i].font;
+            return fonts[i].font;
     }
-    return timeFonts[fontCount - 1].font;
+    return fonts[count - 1].font;
 }
 
 void ScreenSaver::onClicked(lv_event_t* e)

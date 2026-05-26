@@ -3,16 +3,18 @@
 set -e
 
 # Font configuration
-# Format: "TTF_FILENAME:OUTPUT_NAME:SIZE1,SIZE2,SIZE3,..."
+# Format: "TTF_FILENAME:OUTPUT_NAME:SIZE1,SIZE2,...[:ASCII_THRESHOLD]"
 # TTF_FILENAME: Name of the TTF file in fonts/ directory (without .ttf extension)
-# OUTPUT_NAME: Base name for output file (e.g., "roboto_light" will generate "roboto_light_22.c")
+# OUTPUT_NAME: Base name for output file (e.g., "roboto_light" → "roboto_light_22.c")
 # SIZES: Comma-separated list of font sizes to generate
+# ASCII_THRESHOLD (optional): sizes >= this value use ASCII-only range (0x0020-0x007F)
+#   to keep binary size manageable for large screensaver fonts
 
 FONT_CONFIGS=(
     "Roboto-Light:roboto_light:22,24,26,28,32,48"
-    "Roboto-Regular:roboto_regular:22,24,26,28,32,48,60"
+    "Roboto-Regular:roboto_regular:22,24,26,28,32,48,60,80,100,120:80"
     "Roboto-Medium:roboto_medium:22,24,26,28,32,48"
-    "Roboto-Bold:roboto_bold:22,24,26,28,32,48,50,60,72,96,120,150"
+    "Roboto-Bold:roboto_bold:22,24,26,28,32,48,50,60,72,96,120,150,200,250,300:80"
 )
 
 # Output directory
@@ -20,11 +22,17 @@ OUTPUT_DIR="../main/fonts"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FONT_DIR="${SCRIPT_DIR}"
 
-# Character ranges to include
-CHAR_RANGES=(
+# Character ranges to include (full set for small fonts)
+CHAR_RANGES_FULL=(
     "-r" "0x0020-0x007F"  # ASCII
     "-r" "0x00A0-0x00FF"  # Latin-1 Supplement
     "-r" "0x0100-0x017F"  # Latin Extended-A (for polish)
+)
+
+# ASCII-only range for large fonts (digits, letters, punctuation — enough for clock/date display)
+# Keeps binary size manageable: ~15x smaller than full range at 300px
+CHAR_RANGES_ASCII=(
+    "-r" "0x0020-0x007F"  # ASCII only
 )
 
 # LVGL font conversion options
@@ -73,7 +81,7 @@ GENERATED_FILES=()
 # Process each font configuration
 for config in "${FONT_CONFIGS[@]}"
 do
-    IFS=':' read -r ttf_name output_name sizes <<< "$config"
+    IFS=':' read -r ttf_name output_name sizes ascii_threshold <<< "$config"
 
     # Split sizes by comma
     IFS=',' read -ra SIZE_ARRAY <<< "$sizes"
@@ -96,7 +104,14 @@ do
         TOTAL_FONTS=$((TOTAL_FONTS + 1))
         OUTPUT_FILE="${SCRIPT_DIR}/${OUTPUT_DIR}/${output_name}_${size}.c"
 
-        echo "  Generating ${output_name}_${size}.c (size: ${size}px)..."
+        # Pick character range: ASCII-only for large fonts (above threshold), full range otherwise
+        if [ -n "${ascii_threshold}" ] && [ "${size}" -ge "${ascii_threshold}" ]; then
+            CHAR_RANGES=("${CHAR_RANGES_ASCII[@]}")
+            echo "  Generating ${output_name}_${size}.c (size: ${size}px, ASCII-only)..."
+        else
+            CHAR_RANGES=("${CHAR_RANGES_FULL[@]}")
+            echo "  Generating ${output_name}_${size}.c (size: ${size}px)..."
+        fi
 
         # Build lv_font_conv command
         if lv_font_conv \
