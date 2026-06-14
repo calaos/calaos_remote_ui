@@ -798,21 +798,31 @@ void CalaosWebSocketManager::handleConfigUpdate(const json& data)
 
         config.timeout = data.value("timeout", 30);
 
-        // Screensaver configuration (values can be int or string from server)
+        // Screensaver configuration (values can be int or string from server
         if (data.contains("screensaver_timeout"))
         {
-            if (data["screensaver_timeout"].is_string())
-                config.screensaver_timeout = std::stoi(data["screensaver_timeout"].get<std::string>());
+            const auto& value = data["screensaver_timeout"];
+            if (value.is_string())
+            {
+                const std::string& str = value.get<std::string>();
+                if (!str.empty())
+                    config.screensaver_timeout = std::stoi(str);
+            }
             else
-                config.screensaver_timeout = data["screensaver_timeout"].get<int>();
+                config.screensaver_timeout = value.get<int>();
         }
 
         if (data.contains("screensaver_dimming"))
         {
-            if (data["screensaver_dimming"].is_string())
-                config.screensaver_dimming = std::stoi(data["screensaver_dimming"].get<std::string>());
+            const auto& value = data["screensaver_dimming"];
+            if (value.is_string())
+            {
+                const std::string& str = value.get<std::string>();
+                if (!str.empty())
+                    config.screensaver_dimming = std::stoi(str);
+            }
             else
-                config.screensaver_dimming = data["screensaver_dimming"].get<int>();
+                config.screensaver_dimming = value.get<int>();
         }
 
         config.screensaver_mode = data.value("screensaver_mode", "black");
