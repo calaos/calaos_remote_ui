@@ -30,6 +30,7 @@ RUN apt-get update \
   libx11-dev \
   libsdl2-dev \
   libwebsockets-dev \
+  udev \
   && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --break-system-packages pypng
@@ -96,6 +97,16 @@ RUN echo 'eval "$(starship init bash)"' >> ~/.bashrc
 
 RUN IDF_PATH_FORCE=1 . /opt/esp/idf/export.sh IDF_PATH=/opt/esp/idf && \
     pip3 install pypng lz4
+
+RUN python3 -m pip install --break-system-packages "headroom-ai[proxy,mcp,code]"
+
+# Install uv/uvx (required by serena)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH=/home/${CONTAINER_USER}/.local/bin:${PATH}
+
+# Configure serena: disable auto-opening the web dashboard on launch
+RUN mkdir -p ~/.serena \
+  && printf 'web_dashboard_open_on_launch: false\n' >> ~/.serena/serena_config.yml
 
 ENTRYPOINT [ "/opt/esp/entrypoint.sh" ]
 

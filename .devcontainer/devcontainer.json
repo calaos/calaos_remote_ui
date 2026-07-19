@@ -6,8 +6,19 @@
 	},
 
 	"mounts": [
-		"source=extensionCache,target=/root/.vscode-server/extensions,type=volume"
+		"source=extensionCache,target=/root/.vscode-server/extensions,type=volume",
+		"source=claude-config-espidf,target=/home/esp/.claude,type=volume"
 	],
+
+	"containerEnv": {
+        	"ANTHROPIC_BASE_URL": "http://127.0.0.1:8787",
+
+			"ESPPORT": "rfc2217://host.docker.internal:4000?ign_set_control"
+            // "ESPBAUD": "460800"   // optionnel : flash plus rapide
+        },
+
+	"postCreateCommand": "sudo chown -R esp:esp /home/esp/.claude && headroom mcp install --proxy-url http://127.0.0.1:8787 --force",
+	"postStartCommand": "bash ${containerWorkspaceFolder}/.devcontainer/start-headroom.sh",
 
 	"customizations": {
 		"vscode": {
@@ -26,7 +37,8 @@
 				"ms-vscode.cmake-tools",
 				"espressif.esp-idf-extension",
 				"Vue.volar",
-				"golang.go"
+				"golang.go",
+				"Anthropic.claude-code"
 			]
 		},
 		"codespaces": {
@@ -49,14 +61,9 @@
 	},
 	"runArgs": [
 		"--privileged",
-		"-p", "3333:3333",
-		"-p", "3000:3000",
 		"--network=host",
-		"--group-add=18",
-		"--device=/dev/ttyACM0:/dev/ttyACM0",
-		"--device=/dev/ttyUSB0:/dev/ttyUSB0",
-		"--device=/dev/ttyACM1:/dev/ttyACM1",
-		"--device=/dev/ttyUSB1:/dev/ttyUSB1",
+		"-e DISPLAY=192.168.64.3:0",
+		"-v", "/tmp/.X11-unix:/tmp/.X11-unix"
 	]
 }
 
