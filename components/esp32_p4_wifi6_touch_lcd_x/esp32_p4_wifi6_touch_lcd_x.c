@@ -1097,6 +1097,11 @@ esp_err_t bsp_display_new_with_handles(const bsp_display_config_t *config, bsp_l
     esp_lcd_dpi_panel_config_t dpi_config = JD9365_800_1280_PANEL_60HZ_DPI_CONFIG(LCD_COLOR_PIXEL_FORMAT_RGB565);
 #endif
     dpi_config.num_fbs = CONFIG_BSP_LCD_DPI_BUFFER_NUMS;
+    /* PERF-01: offload the draw_bitmap frame-buffer copy to DMA2D (async) instead
+     * of the blocking CPU PSRAM->PSRAM memcpy. Same landscape-rotation flush-path
+     * win measured on the 7" ILI9881C; applied here for the 8"/10.1" JD9365 panels
+     * (hardware-unverified but identical code path). */
+    dpi_config.flags.use_dma2d = true;
 
     jd9365_vendor_config_t vendor_config = {
         .init_cmds = jd9365_vendor_specific_init_default,
@@ -1134,10 +1139,17 @@ esp_err_t bsp_display_new_with_handles(const bsp_display_config_t *config, bsp_l
 #else
         .pixel_format = LCD_COLOR_PIXEL_FORMAT_RGB565,                   
 #endif
-        .num_fbs = CONFIG_BSP_LCD_DPI_BUFFER_NUMS,                                      
-        .video_timing = {                                  
-            .h_size = 720,                                 
-            .v_size = 1280,                                
+        .num_fbs = CONFIG_BSP_LCD_DPI_BUFFER_NUMS,
+        /* PERF-01: offload the draw_bitmap frame-buffer copy to the DMA2D engine.
+         * Without this the DPI driver falls back to a blocking CPU memcpy
+         * (PSRAM->PSRAM, ~50 MB/s) for every flushed strip — ~5 ms/strip and the
+         * dominant half of the landscape-rotation flush cost. */
+        .flags = {
+            .use_dma2d = true,
+        },
+        .video_timing = {
+            .h_size = 720,
+            .v_size = 1280,
             .hsync_back_porch = 239,                       
             .hsync_pulse_width = 50,                       
             .hsync_front_porch = 33,                       

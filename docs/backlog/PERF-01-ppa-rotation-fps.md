@@ -6,7 +6,7 @@
 - **Depends on:** —
 - **Blocks:** —
 - **Boards:** waveshare-touchlcd-7 / -8 / -10 (ESP32-P4)
-- **Status:** backlog
+- **Status:** implemented (7" measured; 8"/10"/86 build-verified, hardware-untested) — see Resolution
 
 ## Objective
 Bring landscape rendering on the portrait-native touchlcd panels from <5-10 FPS to interactive
@@ -94,3 +94,84 @@ idf.py -DBOARD=waveshare-touchlcd-10 build
 idf.py -DBOARD=waveshare-86-panel build                   # regression
 ./build_linux.sh                                          # host build stays green
 ```
+
+## Resolution (implemented)
+
+### Measured root cause (Phase 1)
+Instrumented the flush callback (esp_timer brackets: rotate / draw_bitmap / total) + an app-side
+FPS counter, driven by a temporary on-boot benchmark harness (`main/perf_bench.cpp`, gated by
+`-DPERF_BENCH=1`; four full-screen scenes: solid fill / rounded-rect SW draw / big clock / swipe).
+
+- The flush path (PPA 90° rotate + framebuffer copy) dominates every scene (63–87% of wall time);
+  SW render is secondary. Confirmed hypotheses **#1 (PSRAM bandwidth)** + **#4 (blocking, serialized
+  rotate→scanout)**. **Rejected by A/B:** #5 (PPA path does run), rotation-strip expansion (rotates
+  the exact dirty sub-rect), and **XIP-from-PSRAM off** (no change → XIP contention is NOT the cause).
+- Effective flush throughput ~43–52 MB/s — the ESP32-P4 PSRAM wall for a strided 90° transpose
+  (read row-major / write column-major destroys burst locality); matches Espressif's published
+  P4 PSRAM→PSRAM memcpy (~51 MB/s). This is the FPS floor and it is **hardware physics**, not tuning.
+- The `draw_bitmap` copy was a **blocking CPU PSRAM→PSRAM memcpy** (~5 ms/strip) because the DPI
+  panel config never set `use_dma2d`.
+
+### Fixes shipped
+1. **`use_dma2d = true`** on the DPI panel configs (`components/esp32_p4_wifi6_touch_lcd_x/…c`, 7"
+   ILI9881C + 8"/10" JD9365) → the framebuffer copy moves from a 5 ms blocking CPU memcpy to an
+   async DMA2D 2D-copy (~0.05 ms).
+2. **Custom tear-free rotating flush** (`hal/esp32/esp32_hal_display.cpp`, rotated boards only;
+   the non-rotated 86-panel keeps `esp_lvgl_port`'s `lvgl_port_add_disp_dsi` unchanged). We keep
+   esp_lvgl_port for the LVGL task/tick/lock/touch plumbing but replace only the display registration
+   with our own `lv_display_create` + flush callback. It:
+   - **H1** — PPA-rotates each dirty LVGL stripe **directly into the back DPI framebuffer**
+     (`ppa_do_scale_rotate_mirror` with `.out.buffer` = the framebuffer, `.out.block_offset` = the
+     rotated dest) — no intermediate PPA buffer, no second copy. Rotation coord math copied from the
+     HW-verified `esp_lvgl_adapter` bridge.
+   - **H8** — 2 DPI framebuffers + a **vsync-latched page flip** (draw_bitmap with a pointer inside
+     the fb hits the DPI no-copy path; scanout switches at the frame boundary) → **tear-free**.
+     `CONFIG_BSP_LCD_DPI_BUFFER_NUMS=2` (also fixed the stray non-`CONFIG_` no-op).
+   - **Static correctness** — LVGL PARTIAL mode only flushes dirty sub-rects; before the first stripe
+     of a frame we replay the **previous frame's dirty union** (front→back, `esp_async_fbcpy` 2D-DMA
+     sub-rect), and **skip** the replay when that union ≥90% of the screen (full-screen animation
+     overwrites everything anyway). This is what the esp_lvgl_adapter's TRIPLE_PARTIAL got wrong
+     (black backgrounds on static UIs — see Rejected).
+   - **H3** — non-blocking PPA (`PPA_TRANS_MODE_NON_BLOCKING` + `on_trans_done`), so LVGL renders the
+     next stripe while the PPA rotates the current one. (The done-cb needs `oper.user_data = ctx`, or
+     it faults — noted here because it is easy to miss.)
+3. **DIG-734 PPA-hang workaround** (the custom flush uses PPA SRM): reproducible patch under
+   `patches/`, auto-applied from `CMakeLists.txt` for rotated boards.
+4. The vendored LVGL PPA draw unit (`CONFIG_LV_USE_PPA=y`) + its local msync streak-fix are **kept**
+   (they work fine with a custom flush — the flush uses a separate PPA client).
+
+### Tried and rejected after measurement
+- **`espressif/esp_lvgl_adapter` (v0.6.2)** — evaluated as a ready-made alternative. `TRIPLE_PARTIAL`
+  was fast (~37/32/15 FPS) but showed **black backgrounds on static UIs** (framebuffers never
+  converge); `TRIPLE_FULL` rendered correctly but gave **no FPS gain** (~14/14/9.9, full-renders
+  every update). Its own PPA draw unit also conflicted with our vendored one. Abandoned for the
+  custom flush, which we control. (Also: the adapter/IDF6 rotate opposite chirality — 90↔270.)
+- `LV_DRAW_SW_DRAW_UNIT_CNT 2` (2nd core): **no gain** — SW render is PSRAM-bandwidth-bound.
+- **H2 (LVGL draw buffer in internal SRAM)** — *infeasible on this app*: only ~256 KB internal RAM,
+  mostly consumed by WiFi/ESP-Hosted + LVGL by display-init time; 120–160 KB buffers don't fit, so it
+  falls back to PSRAM. This is the main reason full-screen FPS didn't reach the ~25-35 estimate — the
+  PPA input stays in PSRAM so the rotate stays PSRAM-bound (~43 ms/full frame).
+- IDF 6 / LVGL upgrade: **neither lifts the FPS floor** (PPA non-blocking already in 5.5; the floor is
+  PSRAM physics). Native landscape scanout: ILI9881C supports mirror only, **not** hardware swap_xy.
+
+### Result (waveshare-touchlcd-7, hardware, bench FPS; all tear-free + correct)
+| Scene | before (esp_lvgl_port) | + use_dma2d | **custom flush (final)** |
+|-------|-----------------------|-------------|--------------------------|
+| FILL (full-screen)  | ~11  | ~15.7 | ~14.4 |
+| SWDRAW (SW draw)    | ~7   | ~7    | **~14.4** (2×) |
+| CLOCK (partial)     | ~7.5 | ~9.5  | **~28.8** (3×) |
+| SWIPE (full-screen) | ~8   | ~11.5 | **~13.4** |
+
+Net: **tear-free**, with large gains on partial/moderate scenes (typical UI + the clock screensaver)
+and a modest full-screen swipe gain. Static UI, rotation + touch verified correct on the 7".
+
+### Residual / follow-ups
+- **Full-screen swipe is at the PSRAM-transpose floor (~14 FPS).** The only remaining lever that
+  changes the physics is a **portrait-native UI** (author the app in portrait, rotate only touch
+  coords → deletes the transpose → est. ~35-50 FPS). Deferred as a product decision / separate ticket.
+- The custom flush increments H2 (SRAM) / deeper H3 pipelining are diminishing returns here (H2 blocked
+  by internal-RAM budget).
+- 8"/10"/86-panel are build-verified only; need on-hardware validation (rotation sense, touch).
+- The H2 SRAM attempt logs two boot warnings then falls back to PSRAM (cosmetic; left in for boards
+  with more free internal RAM).
+- `main/perf_bench.*` (the `-DPERF_BENCH` harness) is retained as a reusable perf tool, off by default.

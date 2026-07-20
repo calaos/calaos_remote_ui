@@ -8,6 +8,7 @@ cmake_policy(SET CMP0054 NEW)
 set(MAIN_SOURCES
     main/main.cpp
     main/app_main.cpp
+    main/perf_bench.cpp
     main/startup_page.cpp
     main/page_base.cpp
     main/stack_view.cpp

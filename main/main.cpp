@@ -14,8 +14,13 @@ static AppMain* app = nullptr;
 extern "C" void app_main(void)
 {
     app = new AppMain();
+#ifdef PERF_BENCH
+    if (app->initBenchmark())  // PERF-01: boot straight into the benchmark harness
+        app->run();
+#else
     if (app->initFast())  // Use fast initialization for better UX
         app->run();
+#endif
 
     // Stop the dispatcher worker thread before cleanup to avoid deadlock
     AppDispatcher::getInstance().shutdown();

@@ -95,6 +95,23 @@ if(DETECTED_PLATFORM STREQUAL "ESP32")
         message(STATUS "Using board partition table: ${BOARD_PARTITION_TABLE}")
     endif()
 
+    # DIG-734: rotated boards drive a PPA SRM rotation in the custom display flush
+    # (PERF-01 H1), which trips an ESP32-P4 PPA hardware hang unless the mb-order
+    # workaround in esp_driver_ppa is bypassed. Apply the (idempotent) patch to
+    # $IDF_PATH here. See patches/README.md for details.
+    if(NOT BOARD_DISPLAY_ROTATION EQUAL 0)
+        execute_process(
+            COMMAND bash "${CMAKE_SOURCE_DIR}/patches/apply_ppa_hang_fix.sh"
+            RESULT_VARIABLE _ppa_patch_result
+            OUTPUT_VARIABLE _ppa_patch_output
+            ERROR_VARIABLE _ppa_patch_output
+        )
+        message(STATUS "PPA DIG-734 hang fix: ${_ppa_patch_output}")
+        if(NOT _ppa_patch_result EQUAL 0)
+            message(WARNING "PPA DIG-734 hang fix could not be applied (see patches/README.md)")
+        endif()
+    endif()
+
     # ESP-IDF build - must include project.cmake before project()
     include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 

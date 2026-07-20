@@ -64,6 +64,21 @@ idf_component_register(
     LDFRAGMENTS "linker.lf"
 )
 
+# PERF-01: opt-in benchmark harness. `idf.py -DPERF_BENCH=1 ...` boots straight
+# into a looping sequence of deterministic full-screen workloads instead of the
+# normal UI, to measure/A-B the landscape-rotation pipeline. Off by default.
+if(PERF_BENCH)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE PERF_BENCH)
+    message(STATUS "PERF-01: PERF_BENCH benchmark harness ENABLED")
+endif()
+
+# PERF-01 custom rotating flush needs esp_async_fbcpy.h, which lives in esp_lcd's
+# priv_include (not a public header). Add that directory like esp_lvgl_adapter does.
+idf_component_get_property(ESP_LCD_DIR esp_lcd COMPONENT_DIR)
+if(EXISTS "${ESP_LCD_DIR}/priv_include")
+    target_include_directories(${COMPONENT_LIB} PRIVATE "${ESP_LCD_DIR}/priv_include")
+endif()
+
 # Add generated board_config.h to include paths
 target_include_directories(${COMPONENT_LIB} PUBLIC ${CMAKE_BINARY_DIR}/generated)
 

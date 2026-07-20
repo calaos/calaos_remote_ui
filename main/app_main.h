@@ -17,6 +17,7 @@ public:
 
     bool init();
     bool initFast();
+    bool initBenchmark(); // PERF-01: boot into the perf_bench harness (PERF_BENCH builds)
     void run();
     void deinit();
     void stop();

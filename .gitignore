@@ -21,3 +21,5 @@ remote-ui.md
 remote-ui-client.md
 esp-hosted-c6-slave
 .serena
+.headroom
+build_*

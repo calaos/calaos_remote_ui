@@ -9,6 +9,7 @@
 #include "ota_update_screen.h"
 #include "notification_toast.h"
 #include "screensaver.h"
+#include "perf_bench.h"
 
 #ifdef ESP_PLATFORM
 #include "freertos/FreeRTOS.h"
@@ -132,6 +133,38 @@ bool AppMain::initFast()
     ESP_LOGI(TAG, "Application initialized successfully (network initializing in background)");
 
     return true;
+}
+
+bool AppMain::initBenchmark()
+{
+#ifdef PERF_BENCH
+    ESP_LOGI(TAG, "PERF_BENCH build: booting into benchmark harness (no network, no app UI)");
+
+    initFlux();
+    hal = &HAL::getInstance();
+
+    if (hal->initEssentials() != HalResult::OK)
+    {
+        ESP_LOGE(TAG, "Failed to initialize HAL essentials");
+        return false;
+    }
+
+    hal->getDisplay().backlightOn();
+    hal->getDisplay().setBacklight(100);
+
+    logSystemInfo();
+
+    hal->getDisplay().lock(0);
+    perfBenchStart();
+    hal->getDisplay().unlock();
+
+    initialized = true;
+    running = true;
+    return true;
+#else
+    ESP_LOGE(TAG, "initBenchmark() called but PERF_BENCH not defined");
+    return false;
+#endif
 }
 
 bool AppMain::isNetworkReady() const
