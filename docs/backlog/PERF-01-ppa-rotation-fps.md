@@ -165,12 +165,20 @@ FPS counter, driven by a temporary on-boot benchmark harness (`main/perf_bench.c
 Net: **tear-free**, with large gains on partial/moderate scenes (typical UI + the clock screensaver)
 and a modest full-screen swipe gain. Static UI, rotation + touch verified correct on the 7".
 
-### Residual / follow-ups
-- **Full-screen swipe is at the PSRAM-transpose floor (~14 FPS).** The only remaining lever that
-  changes the physics is a **portrait-native UI** (author the app in portrait, rotate only touch
-  coords → deletes the transpose → est. ~35-50 FPS). Deferred as a product decision / separate ticket.
-- The custom flush increments H2 (SRAM) / deeper H3 pipelining are diminishing returns here (H2 blocked
-  by internal-RAM budget).
+### Residual / ceiling
+- **Full-screen swipe is at the PSRAM-transpose floor (~14 FPS) and that is the practical ceiling on
+  this hardware.** A 90° mismatch between the panel's fixed portrait scan and the required landscape
+  UI can only be resolved by a per-frame transpose; there is no software escape.
+- **Portrait-native UI is NOT applicable:** the 7"/8"/10" are landscape-mandatory products (the
+  portrait 720×1280 panel is mounted rotated 90° in the enclosure; the user sees 1280 wide).
+  Rendering native (no rotation) would display the UI sideways. So the transpose cannot be removed in
+  software. (The 86-panel avoids all of this only because it is a square 720×720, rotation 0 panel —
+  native orientation == UI orientation.)
+- The only remaining levers are **hardware**, out of scope here: a panel that supports a hardware
+  landscape scan (MADCTL swap_xy — the ILI9881C does not, mirror only), or a P4 variant with enough
+  free internal SRAM to make H2 (SRAM draw buffer) fit.
+- Custom-flush increments H2 (SRAM) / deeper H3 pipelining are diminishing returns here (H2 blocked by
+  the internal-RAM budget: WiFi/ESP-Hosted + LVGL leave < ~120 KB contiguous by display-init time).
 - 8"/10"/86-panel are build-verified only; need on-hardware validation (rotation sense, touch).
 - The H2 SRAM attempt logs two boot warnings then falls back to PSRAM (cosmetic; left in for boards
   with more free internal RAM).
