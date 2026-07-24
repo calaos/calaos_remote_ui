@@ -89,13 +89,6 @@ static const char* TAG = "hal.display";
 #define HAL_DRAW_BUF_LINES_SRAM2  48   // smaller SRAM attempt (1280*48*2 = 120 KB each)
 #define HAL_DRAW_BUF_LINES_PSRAM 120   // PSRAM fallback
 
-// Skip the per-frame front->back replay when the previous frame's dirty union
-// covers at least this fraction of the panel (full-screen animation overwrites
-// everything anyway, so the replay is pure PSRAM-bandwidth waste). Numerator/
-// denominator to avoid float. 90%.
-#define HAL_REPLAY_SKIP_NUM 9
-#define HAL_REPLAY_SKIP_DEN 10
-
 // Force a full (whole-screen) replay for the first few frames so BOTH
 // framebuffers converge to complete frames regardless of the dirty pattern.
 #define HAL_WARMUP_FRAMES 3
@@ -212,22 +205,21 @@ static void hal_custom_flush_cb(lv_display_t* disp, const lv_area_t* area, uint8
     //    Full-screen frames overwrite the whole back fb anyway, so when the
     //    previous dirty union covers ~the whole panel we SKIP the replay.
     if (!ctx->frame_active) {
-        const int64_t total = (int64_t)ctx->panel_w * ctx->panel_h;
         if (ctx->warmup > 0 || !ctx->prev_valid) {
             // Force whole-screen convergence early / when we have no history.
             hal_replay_region(ctx, ctx->scan_index, ctx->draw_index,
                               0, 0, ctx->panel_w - 1, ctx->panel_h - 1);
         } else {
-            const int64_t parea = (int64_t)(ctx->prev_x2 - ctx->prev_x1 + 1) *
-                                  (ctx->prev_y2 - ctx->prev_y1 + 1);
-            if (parea * HAL_REPLAY_SKIP_DEN < total * HAL_REPLAY_SKIP_NUM) {
-                // Partial previous frame: replay just its dirty region (cheap).
-                hal_replay_region(ctx, ctx->scan_index, ctx->draw_index,
-                                  ctx->prev_x1, ctx->prev_y1, ctx->prev_x2, ctx->prev_y2);
-            }
-            // else: near-full-screen previous frame => skip (this frame's own
-            // rotates will overwrite it). Worst case a one-frame artifact that
-            // self-corrects on the next (partial) frame's replay.
+            // Always replay the previous frame's dirty union front->back so the
+            // back fb catches up to the last displayed frame before this frame's
+            // dirty is applied. For a full-screen previous frame this is a full
+            // replay — that is REQUIRED for correctness: a former ">=90% => skip"
+            // optimization caused a 1 Hz flicker where, after a full-screen change
+            // (e.g. the screensaver turning on), the next partial frame (clock
+            // tick) skipped the replay and the alternate framebuffer still showed
+            // the stale Calaos page. Correctness wins over the full-screen cost.
+            hal_replay_region(ctx, ctx->scan_index, ctx->draw_index,
+                              ctx->prev_x1, ctx->prev_y1, ctx->prev_x2, ctx->prev_y2);
         }
         // Begin accumulating this frame's dirty union.
         ctx->cur_x1 = ctx->cur_y1 = INT32_MAX;
