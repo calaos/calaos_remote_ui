@@ -1,7 +1,14 @@
 ## IDF Component Manager Manifest File
 dependencies:
+  # Required by components/smooth_ui_toolkit_esp32. It used to arrive as a
+  # transitive dependency of the waveshare BSP; declared here so the build no
+  # longer relies on the BSP happening to pull it in.
+  espressif/esp_lvgl_port: "^2"
   espressif/esp_wifi_remote: ^1.3.2
   espressif/esp_hosted: ^2.11.5
   espressif/ethernet_init: ^1.3.0
   cesanta/mongoose: ^7.8.2
-  waveshare/esp32_p4_wifi6_touch_lcd_4b: "*"
+  # Stay on 2.x. The BSP 3.0.0 switched its display path to esp_lvgl_adapter;
+  # this project uses esp_lvgl_port, so 3.x is not compatible. dependencies.lock
+  # is git-ignored, so without this bound CI silently picks up new majors.
+  waveshare/esp32_p4_wifi6_touch_lcd_4b: "^2.0.0"

@@ -11,6 +11,7 @@
 // init_custom_rotating_display() below and docs/backlog/PERF-01-ppa-rotation-fps.md.
 #include <cstdint>
 #include "esp_attr.h"
+#include "esp_idf_version.h"
 #include "esp_heap_caps.h"
 #include "esp_cache.h"
 #include "freertos/FreeRTOS.h"
@@ -388,8 +389,14 @@ static lv_display_t* init_custom_rotating_display(const bsp_lcd_handles_t& lcd,
     }
 
     // Frame-boundary callback for the vsync-latched flip wait.
+    // IDF 5.5.5 renamed on_refresh_done to on_frame_buf_complete (same union
+    // slot, same signature); 5.5.4 and older only have the old name.
     esp_lcd_dpi_panel_event_callbacks_t cbs = {};
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 5)
     cbs.on_frame_buf_complete = hal_on_frame_buf_complete;
+#else
+    cbs.on_refresh_done = hal_on_frame_buf_complete;
+#endif
     if (esp_lcd_dpi_panel_register_event_callbacks(ctx->panel, &cbs, ctx) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to register DPI event callbacks");
         esp_async_fbcpy_uninstall(ctx->fbcpy);
