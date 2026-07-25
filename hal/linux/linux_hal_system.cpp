@@ -226,6 +226,43 @@ HalResult LinuxHalSystem::loadDeviceConfig(DeviceConfig &devCfg)
     return devCfg.isLoaded() ? HalResult::OK : HalResult::ERROR;
 }
 
+HalResult LinuxHalSystem::saveDeviceConfig(const CalaosConfig &cfg)
+{
+    std::vector<uint8_t> blob;
+    if (!calaosConfigSerialize(cfg, blob))
+    {
+        ESP_LOGE(TAG, "Failed to serialize device config");
+        return HalResult::ERROR;
+    }
+
+    // Mirror loadDeviceConfig(): BOARD_DEVICE_CONFIG_PATH if set,
+    // otherwise a regular file in the user config directory.
+    std::string configPath(BOARD_DEVICE_CONFIG_PATH);
+    if (configPath.empty())
+        configPath = config_dir_path_ + "/device_config.bin";
+
+    ESP_LOGI(TAG, "Saving device config (%zu bytes) to: %s", blob.size(), configPath.c_str());
+
+    std::ofstream file(configPath, std::ios::binary | std::ios::trunc);
+    if (!file.is_open())
+    {
+        ESP_LOGE(TAG, "Failed to open device config for writing: %s", configPath.c_str());
+        return HalResult::ERROR;
+    }
+
+    file.write(reinterpret_cast<const char *>(blob.data()), blob.size());
+    file.close();
+
+    if (!file)
+    {
+        ESP_LOGE(TAG, "Failed to write device config to: %s", configPath.c_str());
+        return HalResult::ERROR;
+    }
+
+    ESP_LOGI(TAG, "Device config saved successfully");
+    return HalResult::OK;
+}
+
 // ============================================================================
 // NTP Time Synchronization (simulated on Linux - system handles NTP)
 // ============================================================================

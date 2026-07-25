@@ -2,6 +2,7 @@
 #include "theme.h"
 #include "images_generated.h"
 #include "calaos_page.h"
+#include "network_settings_page.h"
 #include "app_main.h"
 #include "logging.h"
 #include "version.h"
@@ -79,6 +80,9 @@ StartupPage::StartupPage(lv_obj_t *parent):
 
     // Provisioning UI elements (initially hidden)
     createProvisioningUI();
+
+    // "Configuration réseau" button (initially hidden, shown on connection failures)
+    createNetworkConfigButton();
 
     // Network status animation (pulsing effect)
     networkStatusAnimation.start = 128;
@@ -180,6 +184,53 @@ void StartupPage::createProvisioningUI()
     lv_obj_set_style_text_font(provisioningInstructionLabel->get(), &roboto_medium_24, LV_PART_MAIN);
     lv_obj_set_style_text_align(provisioningInstructionLabel->get(), LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_add_flag(provisioningInstructionLabel->get(), LV_OBJ_FLAG_HIDDEN); // Initially hidden
+}
+
+void StartupPage::createNetworkConfigButton()
+{
+    // Pill-style button, echoing the provisioning code box styling
+    networkConfigButton = lv_button_create(get());
+    lv_obj_set_size(networkConfigButton, LV_SIZE_CONTENT, 56);
+    lv_obj_align(networkConfigButton, LV_ALIGN_BOTTOM_MID, 0, -30);
+    lv_obj_set_style_bg_color(networkConfigButton, theme_color_blue, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(networkConfigButton, LV_OPA_20, LV_PART_MAIN);
+    lv_obj_set_style_border_width(networkConfigButton, 2, LV_PART_MAIN);
+    lv_obj_set_style_border_color(networkConfigButton, theme_color_blue, LV_PART_MAIN);
+    lv_obj_set_style_radius(networkConfigButton, 15, LV_PART_MAIN);
+    lv_obj_set_style_pad_hor(networkConfigButton, 28, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(networkConfigButton, 0, LV_PART_MAIN);
+    lv_obj_add_flag(networkConfigButton, LV_OBJ_FLAG_HIDDEN); // Initially hidden
+
+    lv_obj_t* label = lv_label_create(networkConfigButton);
+    // Note: custom Roboto fonts have no LV_SYMBOL_* glyphs, text only
+    lv_label_set_text(label, "Network config");
+    lv_obj_set_style_text_color(label, theme_color_white, 0);
+    lv_obj_set_style_text_font(label, &roboto_medium_24, 0);
+    lv_obj_center(label);
+
+    lv_obj_add_event_cb(networkConfigButton, [](lv_event_t* e)
+    {
+        (void)e;
+        if (g_appMain && g_appMain->getStackView() && g_appMain->getStackView()->size() <= 1)
+        {
+            ESP_LOGI(TAG, "Opening network settings page");
+            g_appMain->getStackView()->push(
+                std::make_unique<NetworkSettingsPage>(lv_screen_active()),
+                stack_animation_type::SlideVertical);
+        }
+    }, LV_EVENT_CLICKED, nullptr);
+}
+
+void StartupPage::showNetworkConfigButton()
+{
+    if (networkConfigButton)
+        lv_obj_clear_flag(networkConfigButton, LV_OBJ_FLAG_HIDDEN);
+}
+
+void StartupPage::hideNetworkConfigButton()
+{
+    if (networkConfigButton)
+        lv_obj_add_flag(networkConfigButton, LV_OBJ_FLAG_HIDDEN);
 }
 
 void StartupPage::initProvisioningAnimations()
@@ -292,6 +343,9 @@ void StartupPage::showProvisioningUI(const std::string& code)
     {
         lv_obj_add_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
     }
+
+    // The provisioning code display takes over the screen
+    hideNetworkConfigButton();
 
     // Stop network animation
     networkStatusAnimation.cancel();
@@ -445,6 +499,9 @@ void StartupPage::onStateChanged(const AppState& state)
             lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_white, LV_PART_MAIN);
             lv_obj_clear_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
 
+            // Network is up again - hide the config button
+            hideNetworkConfigButton();
+
             // Restart pulsing animation
             if (networkStatusAnimation.currentPlayingState() != animate_state::playing)
                 networkStatusAnimation.play();
@@ -474,6 +531,9 @@ void StartupPage::onStateChanged(const AppState& state)
 
             // Stop the pulsing animation
             networkStatusAnimation.cancel();
+
+            // Offer on-device reconfiguration after a failed connection
+            showNetworkConfigButton();
         }
         else if (!state.network.isReady)
         {
@@ -630,6 +690,9 @@ void StartupPage::onStateChanged(const AppState& state)
     {
         if (state.calaosServer.isDiscovering)
         {
+            // New discovery attempt - hide the config button while searching
+            hideNetworkConfigButton();
+
             // Show discovery in progress
             networkStatusLabel->setText("Searching for Calaos Server");
             lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_white, LV_PART_MAIN);
@@ -654,6 +717,9 @@ void StartupPage::onStateChanged(const AppState& state)
             networkStatusLabel->setText(serverInfo.c_str());
             lv_obj_set_style_text_color(networkStatusLabel->get(), theme_color_white, LV_PART_MAIN);
             lv_obj_set_style_opa(networkStatusLabel->get(), LV_OPA_COVER, LV_PART_MAIN);
+
+            // Server found - hide the config button
+            hideNetworkConfigButton();
 
             // Hide the spinner when server found
             lv_obj_add_flag(networkSpinner->get(), LV_OBJ_FLAG_HIDDEN);
@@ -734,6 +800,9 @@ void StartupPage::onStateChanged(const AppState& state)
 
             // Stop the pulsing animation
             networkStatusAnimation.cancel();
+
+            // Offer on-device reconfiguration when no server was found
+            showNetworkConfigButton();
         }
     }
 

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <string>
+#include <vector>
 
 // Binary header constants
 constexpr uint8_t CFG_MAGIC_0 = 0x43; // 'C'
@@ -56,6 +57,14 @@ public:
 // Reads only the header (12 bytes) then the exact JSON payload.
 // On failure the output struct is left at defaults.
 CfgError calaosConfigParse(CfgReader &reader, CalaosConfig &cfg);
+
+// Serialize a config into the binary image format understood by
+// calaosConfigParse(): 12-byte header {magic, version, flags, json_len, crc}
+// followed by the JSON payload. Round-trips byte-exactly through
+// calaosConfigParse().
+// Returns true on success, false if the payload cannot be represented
+// (e.g. JSON larger than 64KB).
+bool calaosConfigSerialize(const CalaosConfig &cfg, std::vector<uint8_t> &out);
 
 // CRC-32 (ISO 3309 / zlib compatible)
 uint32_t calaosConfigCrc32(const uint8_t *data, size_t len);

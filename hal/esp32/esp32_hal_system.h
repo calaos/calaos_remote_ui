@@ -21,6 +21,7 @@ public:
 
     // Device provisioning config
     HalResult loadDeviceConfig(DeviceConfig &devCfg) override;
+    HalResult saveDeviceConfig(const CalaosConfig &cfg) override;
 
     // NTP time synchronization
     HalResult initNtp() override;

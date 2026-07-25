@@ -164,3 +164,58 @@ CfgError calaosConfigParse(CfgReader &reader, CalaosConfig &cfg)
 
     return CfgError::Ok;
 }
+
+// ============================================================================
+// Serialize: inverse of calaosConfigParse — same keys, same header layout
+// ============================================================================
+
+bool calaosConfigSerialize(const CalaosConfig &cfg, std::vector<uint8_t> &out)
+{
+    nlohmann::json j;
+    j["network_interface"] = cfg.networkInterface;
+    j["ip_mode"] = cfg.ipMode;
+    j["static_ip"] = cfg.staticIp;
+    j["static_mask"] = cfg.staticMask;
+    j["static_gateway"] = cfg.staticGateway;
+    j["static_dns"] = cfg.staticDns;
+    j["wifi_ssid"] = cfg.wifiSsid;
+    j["wifi_password"] = cfg.wifiPassword;
+    j["server_host"] = cfg.serverHost;
+    // Stored as unsigned so calaosConfigParse's is_number_unsigned() check passes
+    j["server_port"] = static_cast<unsigned>(cfg.serverPort);
+    j["server_ssl"] = cfg.serverSsl;
+
+    std::string json = j.dump();
+    if (json.empty() || json.size() > 0xFFFF)
+    {
+        ESP_LOGE(TAG, "Cannot serialize config: JSON payload size %zu out of range", json.size());
+        return false;
+    }
+
+    const uint16_t jsonLen = static_cast<uint16_t>(json.size());
+    const uint32_t crc = calaosConfigCrc32(reinterpret_cast<const uint8_t *>(json.data()), jsonLen);
+
+    out.clear();
+    out.reserve(CFG_HEADER_SIZE + jsonLen);
+
+    // Header: magic:4 + version:1 + flags:1 + json_len:2 (LE) + crc:4 (LE)
+    out.push_back(CFG_MAGIC_0);
+    out.push_back(CFG_MAGIC_1);
+    out.push_back(CFG_MAGIC_2);
+    out.push_back(CFG_MAGIC_3);
+    out.push_back(CFG_FORMAT_VERSION);
+    out.push_back(0x00); // flags (reserved)
+    out.push_back(static_cast<uint8_t>(jsonLen & 0xFF));
+    out.push_back(static_cast<uint8_t>((jsonLen >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>(crc & 0xFF));
+    out.push_back(static_cast<uint8_t>((crc >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((crc >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((crc >> 24) & 0xFF));
+
+    out.insert(out.end(), json.begin(), json.end());
+
+    ESP_LOGI(TAG, "Serialized config: %zu bytes (json=%u, crc=0x%08X)",
+             out.size(), jsonLen, crc);
+
+    return true;
+}

@@ -29,6 +29,7 @@ set(MAIN_SOURCES
     main/ota_update_screen.cpp
     main/notification_toast.cpp
     main/about_page.cpp
+    main/network_settings_page.cpp
     main/screensaver.cpp
     main/widgets/widget_error.cpp
     main/widgets/light_switch_widget.cpp

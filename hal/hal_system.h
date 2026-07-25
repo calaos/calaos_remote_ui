@@ -6,6 +6,7 @@
 #include "board_config.h"
 
 class DeviceConfig;
+struct CalaosConfig;
 
 class HalSystem
 {
@@ -34,6 +35,13 @@ public:
     // On Linux: reads from BOARD_DEVICE_CONFIG_PATH or config dir fallback.
     // Returns HalResult::OK on success, HalResult::ERROR on failure.
     virtual HalResult loadDeviceConfig(DeviceConfig &devCfg) = 0;
+
+    // Persist a device provisioning config to platform storage.
+    // On ESP32: serializes and writes to the dedicated raw partition "config"
+    //           (erase + write + read-back verification).
+    // On Linux: writes to BOARD_DEVICE_CONFIG_PATH or the config dir fallback.
+    // Returns HalResult::OK on success, HalResult::ERROR on failure.
+    virtual HalResult saveDeviceConfig(const CalaosConfig &cfg) = 0;
 
     // NTP time synchronization
     // Initialize NTP client with multiple servers

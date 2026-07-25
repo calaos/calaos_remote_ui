@@ -30,6 +30,9 @@ private:
     std::unique_ptr<smooth_ui_toolkit::lvgl_cpp::Label> provisioningCodeLabel;
     std::unique_ptr<smooth_ui_toolkit::lvgl_cpp::Label> provisioningInstructionLabel;
 
+    // "Configuration réseau" button, shown on connection failures
+    lv_obj_t* networkConfigButton = nullptr;
+
     // UI elements
     lv_obj_t* spinner = nullptr;
     lv_obj_t* statusLabel = nullptr;
@@ -52,6 +55,9 @@ private:
     void initLogoAnimation();
     void initProvisioningAnimations();
     void createProvisioningUI();
+    void createNetworkConfigButton();
+    void showNetworkConfigButton();
+    void hideNetworkConfigButton();
     void showProvisioningUI(const std::string& code);
     void hideProvisioningUI();
     void showVerifyingUI();

@@ -28,6 +28,19 @@ public:
     // Whether a valid config was loaded
     bool isLoaded() const { return loaded_; }
 
+    // Full config access (e.g. to pre-fill the settings UI)
+    const CalaosConfig& getConfig() const { return config_; }
+
+    // Replace the in-RAM config (used after a successful save to the
+    // config partition so the running app never sees stale values).
+    void setConfig(const CalaosConfig &cfg)
+    {
+        config_ = cfg;
+        config_.hasServerHost = !config_.serverHost.empty();
+        loaded_ = true;
+        parseError_ = CfgError::Ok;
+    }
+
     // Last parse error
     CfgError getParseError() const { return parseError_; }
 

@@ -209,6 +209,74 @@ HalResult Esp32HalSystem::loadDeviceConfig(DeviceConfig &devCfg)
     return devCfg.isLoaded() ? HalResult::OK : HalResult::ERROR;
 }
 
+HalResult Esp32HalSystem::saveDeviceConfig(const CalaosConfig &cfg)
+{
+    std::vector<uint8_t> blob;
+    if (!calaosConfigSerialize(cfg, blob))
+    {
+        ESP_LOGE(TAG, "Failed to serialize device config");
+        return HalResult::ERROR;
+    }
+
+    // Find the "config" partition (type data, subtype 0x40)
+    const esp_partition_t *partition = esp_partition_find_first(
+        ESP_PARTITION_TYPE_DATA, static_cast<esp_partition_subtype_t>(0x40), "config");
+
+    if (!partition)
+    {
+        ESP_LOGE(TAG, "Device config partition 'config' not found");
+        return HalResult::ERROR;
+    }
+
+    if (blob.size() > partition->size)
+    {
+        ESP_LOGE(TAG, "Serialized config (%zu bytes) larger than partition (%lu bytes)",
+                 blob.size(), (unsigned long)partition->size);
+        return HalResult::ERROR;
+    }
+
+    // Erase the needed range, rounded up to the partition erase block size
+    size_t eraseBlock = partition->erase_size ? partition->erase_size : 4096;
+    size_t eraseLen = ((blob.size() + eraseBlock - 1) / eraseBlock) * eraseBlock;
+    if (eraseLen > partition->size)
+        eraseLen = partition->size;
+
+    ESP_LOGI(TAG, "Writing device config: %zu bytes to partition at 0x%lx (erasing %zu bytes)",
+             blob.size(), (unsigned long)partition->address, eraseLen);
+
+    esp_err_t ret = esp_partition_erase_range(partition, 0, eraseLen);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to erase config partition: %s", esp_err_to_name(ret));
+        return HalResult::ERROR;
+    }
+
+    ret = esp_partition_write(partition, 0, blob.data(), blob.size());
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to write config partition: %s", esp_err_to_name(ret));
+        return HalResult::ERROR;
+    }
+
+    // Read-back verification: the flash content must match the blob byte-exactly
+    std::vector<uint8_t> readBack(blob.size());
+    ret = esp_partition_read(partition, 0, readBack.data(), readBack.size());
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to read back config partition: %s", esp_err_to_name(ret));
+        return HalResult::ERROR;
+    }
+
+    if (readBack != blob)
+    {
+        ESP_LOGE(TAG, "Config partition read-back verification failed (content mismatch)");
+        return HalResult::ERROR;
+    }
+
+    ESP_LOGI(TAG, "Device config written and verified successfully");
+    return HalResult::OK;
+}
+
 // ============================================================================
 // NTP Time Synchronization
 // ============================================================================
