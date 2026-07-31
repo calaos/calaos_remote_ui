@@ -1,4 +1,8 @@
-FROM espressif/idf:release-v5.5
+# Pinned, not release-v5.5: that tag is a moving branch and re-resolving it
+# silently changes shipped firmware. Crossing v5.5.4 -> v5.5.5 that way broke the
+# 86-panel's ST7703 bring-up (see patches/README.md) with no commit behind it.
+# Bump this deliberately, and re-check the panels on hardware when you do.
+FROM espressif/idf:v5.5.5
 
 ARG DEBIAN_FRONTEND=nointeractive
 ARG CONTAINER_USER=esp
