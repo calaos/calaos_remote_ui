@@ -9,3 +9,10 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="boards/waveshare-86-panel/partitions.csv
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 
 CONFIG_ESP_HOSTED_IDF_SLAVE_TARGET="esp32c6"
+
+# This board is not rotated, so it stays on esp_lvgl_port partial mode instead
+# of the custom PPA flush that the touchlcd-7/8/10 boards use. The root
+# sdkconfig.defaults asks for 2 DPI framebuffers because that custom flush needs
+# a front/back pair; esp_lvgl_port does not, so keep the single framebuffer this
+# board shipped with.
+CONFIG_BSP_LCD_DPI_BUFFER_NUMS=1
