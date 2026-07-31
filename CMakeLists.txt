@@ -112,6 +112,23 @@ if(DETECTED_PLATFORM STREQUAL "ESP32")
         endif()
     endif()
 
+    # ESP-IDF v5.5.5 (commit f1f2babe06a) brings the MIPI-DSI clock lane up in
+    # AUTO instead of LP, so a panel's DCS init sequence now runs with the clock
+    # lane already active. The 86-panel's ST7703 does not survive that and stays
+    # white. Restore the v5.5.4 sequencing (idempotent, no-op on older IDF).
+    # Not gated on the board: $IDF_PATH is shared, so a per-board gate would only
+    # mean "whichever board configured last wins". See patches/README.md.
+    execute_process(
+        COMMAND bash "${CMAKE_SOURCE_DIR}/patches/apply_dsi_clock_lane_fix.sh"
+        RESULT_VARIABLE _dsi_patch_result
+        OUTPUT_VARIABLE _dsi_patch_output
+        ERROR_VARIABLE _dsi_patch_output
+    )
+    message(STATUS "DSI clock lane fix: ${_dsi_patch_output}")
+    if(NOT _dsi_patch_result EQUAL 0)
+        message(WARNING "DSI clock lane fix could not be applied (see patches/README.md)")
+    endif()
+
     # ESP-IDF build - must include project.cmake before project()
     include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
