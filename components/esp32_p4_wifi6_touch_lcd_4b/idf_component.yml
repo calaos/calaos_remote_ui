@@ -1,0 +1,34 @@
+# Vendored from waveshare/esp32_p4_wifi6_touch_lcd_4b 2.0.0 (registry), same as
+# esp32_p4_wifi6_touch_lcd_x is vendored for the touchlcd-7/8/10 boards. Kept in
+# tree because the upstream Waveshare components are re-published under moving
+# version bounds, which silently changed shipped firmware (dependencies.lock is
+# git-ignored). Update deliberately, not by re-resolving.
+dependencies:
+  esp_codec_dev:
+    public: true
+    version: ~1.5
+  esp_lcd_touch_gt911: ^1
+  espressif/esp_lvgl_port:
+    public: true
+    version: ^2
+  idf: '>=5.4'
+  lvgl/lvgl: '>=8,<10'
+  usb:
+    public: true
+    rules:
+    - if: idf_version >=6.0
+    version: ^1.0.0
+  # esp_lcd_st7703 is vendored too (components/esp_lcd_st7703) and wired through
+  # PRIV_REQUIRES in CMakeLists.txt, so it is deliberately not a registry dep.
+description: Based on ESP32-P4 chip, waveshare electronics designed a 3.4-inch, 4-inch
+  circular screen, highly integrated development board
+repository: git://github.com/waveshareteam/Waveshare-ESP32-components.git
+repository_info:
+  commit_sha: 9daffb7168b3c093a330da700988a22092294eef
+  path: bsp/esp32_p4_wifi6_touch_lcd_4b
+tags:
+- bsp
+targets:
+- esp32p4
+url: https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-3.4c.htm
+version: 2.0.0

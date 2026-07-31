@@ -8,7 +8,9 @@ dependencies:
   espressif/esp_hosted: ^2.11.5
   espressif/ethernet_init: ^1.3.0
   cesanta/mongoose: ^7.8.2
-  # Stay on 2.x. The BSP 3.0.0 switched its display path to esp_lvgl_adapter;
-  # this project uses esp_lvgl_port, so 3.x is not compatible. dependencies.lock
-  # is git-ignored, so without this bound CI silently picks up new majors.
-  waveshare/esp32_p4_wifi6_touch_lcd_4b: "^2.0.0"
+  # The Waveshare 86-panel BSP is no longer pulled from the registry: it is
+  # vendored in components/esp32_p4_wifi6_touch_lcd_4b (with its ST7703 driver
+  # in components/esp_lcd_st7703), like esp32_p4_wifi6_touch_lcd_x is for the
+  # touchlcd-7/8/10 boards. Upstream re-publishes under moving bounds and
+  # dependencies.lock is git-ignored, so re-resolving used to change shipped
+  # firmware with no commit behind it.

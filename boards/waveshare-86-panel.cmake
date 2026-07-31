@@ -44,8 +44,10 @@ set(BOARD_SDKCONFIG_DEFAULTS
 # Custom partition table with dual OTA
 set(BOARD_PARTITION_TABLE "${CMAKE_SOURCE_DIR}/boards/waveshare-86-panel/partitions.csv")
 
-# Exclude the local BSP used by other Waveshare boards (touchlcd-7/8/10).
+# Exclude the BSP used by the other Waveshare boards (touchlcd-7/8/10).
 # Both BSPs export the same bsp_display_* symbols; only one can be linked.
+# This board's own BSP is components/esp32_p4_wifi6_touch_lcd_4b, vendored
+# alongside its ST7703 driver in components/esp_lcd_st7703.
 set(EXCLUDE_COMPONENTS esp32_p4_wifi6_touch_lcd_x)
 
 message(STATUS "Board config: ${BOARD_NAME} (${BOARD_DISPLAY_WIDTH}x${BOARD_DISPLAY_HEIGHT}, OTA: ${BOARD_OTA_BACKEND})")
