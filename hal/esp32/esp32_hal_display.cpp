@@ -637,17 +637,24 @@ HalResult Esp32HalDisplay::displayOff()
 
 void Esp32HalDisplay::lock(uint32_t timeoutMs)
 {
-    bsp_display_lock(timeoutMs);
+    lvgl_port_lock(timeoutMs);
 }
 
 bool Esp32HalDisplay::tryLock(uint32_t timeoutMs)
 {
-    return bsp_display_lock(timeoutMs) == ESP_OK;
+    // Go straight to esp_lvgl_port rather than through bsp_display_lock(): the two
+    // BSPs disagree on the return convention. esp32_p4_wifi6_touch_lcd_x returns
+    // esp_err_t (ESP_OK == 0 on success), esp32_p4_wifi6_touch_lcd_4b returns bool
+    // (true == 1 on success). Comparing against ESP_OK inverted the result on the
+    // 4b/86-panel: callers took the mutex, were told they had failed, and returned
+    // without unlocking, deadlocking the LVGL task for good. lvgl_port_lock() is
+    // what both BSPs delegate to and is unambiguously bool.
+    return lvgl_port_lock(timeoutMs);
 }
 
 void Esp32HalDisplay::unlock()
 {
-    bsp_display_unlock();
+    lvgl_port_unlock();
 }
 
 lv_display_t* Esp32HalDisplay::getLvglDisplay()
