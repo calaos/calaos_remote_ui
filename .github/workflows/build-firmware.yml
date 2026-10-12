@@ -39,9 +39,9 @@ jobs:
         run: |
           SELECTED="${{ github.event.inputs.board || 'all' }}"
           if [[ "${SELECTED}" == "all" ]]; then
-            MATRIX=$(jq -c '.' boards/ci-boards.json)
+            MATRIX=$(jq -c '[.[] | select(.enabled != false)]' boards/ci-boards.json)
           else
-            MATRIX=$(jq -c --arg b "${SELECTED}" '[.[] | select(.name == $b)]' boards/ci-boards.json)
+            MATRIX=$(jq -c --arg b "${SELECTED}" '[.[] | select(.enabled != false and .name == $b)]' boards/ci-boards.json)
           fi
           echo "matrix={\"include\":${MATRIX}}" >> "$GITHUB_OUTPUT"
           echo "Matrix: ${MATRIX}"

@@ -45,6 +45,8 @@
   },
   {
     "name": "luckfox-86-panel",
+    "enabled": false,
+    "disabled_reason": "No Dockerfile in this repo, no published ghcr image, no bin_path and the buildroot submodule is not checked out: the generic build/package pipeline cannot build it.",
     "platform": "linux",
     "dockerfile": "boards/luckfox-86-panel/Dockerfile",
     "docker_image": "ghcr.io/calaos/calaos-build-luckfox-86-panel:latest",
