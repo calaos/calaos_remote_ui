@@ -1,0 +1,69 @@
+name: Pull request checks
+
+on:
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  host-tests:
+    name: Linux simulator build and host tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake build-essential pkg-config \
+            libmbedtls-dev libsdl2-dev libx11-dev libdrm-dev libgbm-dev \
+            python3-png python3-lz4
+
+      - name: Configure (linux-dev)
+        run: cmake -S . -B build_linux -DBUILD_LINUX=ON -DBOARD=linux-dev -DBUILD_HOST_TESTS=ON
+
+      - name: Build simulator and tests
+        run: cmake --build build_linux -j"$(nproc)"
+
+      - name: Run host tests
+        run: ctest --test-dir build_linux --output-on-failure
+
+  # One representative ESP32 board: catches ESP-IDF breakage (API drift, missing
+  # sources in main/CMakeLists.txt) before it reaches main.
+  esp32-build:
+    name: ESP32 build (waveshare-86-panel)
+    runs-on: ubuntu-latest
+    env:
+      BOARD: waveshare-86-panel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve build image
+        id: board
+        run: |
+          jq -r --arg b "${BOARD}" '.[] | select(.name == $b) |
+            "image=\(.docker_image)\ndockerfile=\(.dockerfile)\nscript=\(.build_script)\nbin=\(.bin_path)"' \
+            boards/ci-boards.json >> "$GITHUB_OUTPUT"
+
+      - name: Prepare build image
+        run: |
+          docker pull "${{ steps.board.outputs.image }}" || \
+            docker build -t "${{ steps.board.outputs.image }}" -f "${{ steps.board.outputs.dockerfile }}" .
+
+      - name: Build firmware
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/work" \
+            -w /work \
+            "${{ steps.board.outputs.image }}" \
+            bash "/work/${{ steps.board.outputs.script }}" "${BOARD}" 0.0.0-pr
+
+      - name: Check firmware was produced
+        run: test -s "${{ steps.board.outputs.bin }}"

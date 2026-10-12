@@ -19,6 +19,27 @@ The CI builds firmware for each supported board, packages it into a `.deb`, and 
 | `build` | Pulls the pre-built Docker image and builds the firmware |
 | `package-and-release` | Packages the `.bin` into a `.deb`, creates a git tag and GitHub Release |
 
+### Workflow: `pull-request.yml`
+
+**Trigger:** every pull request targeting `main`. Nothing is released or tagged.
+
+| Job | Purpose |
+|---|---|
+| `host-tests` | Builds the `linux-dev` simulator and the host tests, then runs `ctest` |
+| `esp32-build` | Builds `waveshare-86-panel` in its board image, to catch ESP-IDF breakage before merge |
+
+### Host tests
+
+Characterization tests for the protocol parsing (`PagesConfig::fromJson`, `remote_ui_io_states`, `io_changed`, `remote_ui_config_update`) and for `AppStore`. They compile the real sources with a fake HAL (`tests/support/fake_hal.cpp`), so no display or network is needed. GoogleTest is fetched by CMake.
+
+```bash
+cmake -S . -B build_linux -DBUILD_LINUX=ON -DBOARD=linux-dev -DBUILD_HOST_TESTS=ON
+cmake --build build_linux -j"$(nproc)"
+ctest --test-dir build_linux --output-on-failure
+```
+
+Tests named `*KnownBugs*` pin defects as they behave today; fixing one is expected to flip its assertions.
+
 ### Workflow: `build-docker-images.yml`
 
 **Triggers:**
@@ -57,6 +78,7 @@ All CI-enabled boards are declared in `boards/ci-boards.json`:
 | `flash_package` | (ESP32 only) If `true`, build a flash package `.zip` for initial flashing via esptool |
 | `partition_table` | (ESP32 only) Path to the partition table CSV, used by the flash package script |
 | `description` | Human-readable description used in release notes |
+| `enabled` | Set to `false` to keep the entry but leave the board out of every CI matrix; `disabled_reason` says why |
 
 ## Adding a New Board
 
