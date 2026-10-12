@@ -76,12 +76,9 @@ std::optional<WidgetConfig> parseWidget(const json& widget_json)
         if (isKnown)
             continue;
 
-        if (it.value().is_string())
-            widget.params[key] = it.value().get<std::string>();
-        else if (it.value().is_number())
-            widget.params[key] = std::to_string(it.value().get<int>());
-        else if (it.value().is_boolean())
-            widget.params[key] = it.value().get<bool>() ? "true" : "false";
+        std::string value;
+        if (wire::scalarToString(it.value(), value))
+            widget.params[key] = std::move(value);
     }
 
     return widget;

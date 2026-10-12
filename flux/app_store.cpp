@@ -46,14 +46,17 @@ void AppStore::unsubscribe(SubscriptionId id)
     subscribers_.erase(id);
 }
 
-bool AppStore::mergeIoState(const CalaosProtocol::IoState& update)
+bool AppStore::mergeIoState(const std::string& id, const CalaosProtocol::IoState& update)
 {
-    auto it = state_.ioStates.find(update.id);
+    if (id.empty())
+        return false;
+
+    auto it = state_.ioStates.find(id);
     if (it == state_.ioStates.end())
     {
         CalaosProtocol::IoState fresh = update;
-        fresh.partial = false;
-        state_.ioStates[update.id] = std::move(fresh);
+        fresh.id = id;
+        state_.ioStates[id] = std::move(fresh);
         return true;
     }
 
@@ -62,7 +65,8 @@ bool AppStore::mergeIoState(const CalaosProtocol::IoState& update)
 
     // The state is always taken, even empty. The descriptive fields are only
     // replaced when sent, so a bare io_changed does not blank them.
-    existing.state = update.state;
+    if (update.state_set)
+        existing.state = update.state;
     if (!update.name.empty())
         existing.name = update.name;
     if (!update.type.empty())
@@ -73,11 +77,10 @@ bool AppStore::mergeIoState(const CalaosProtocol::IoState& update)
         existing.brightness = update.brightness;
     if (update.device)
         existing.device = update.device;
-    if (!update.partial)
-    {
+    if (update.visible_set)
         existing.visible = update.visible;
+    if (update.enabled_set)
         existing.enabled = update.enabled;
-    }
 
     return existing != before;
 }
@@ -365,7 +368,7 @@ void AppStore::handleEvent(const AppEvent& event)
             {
                 if (auto* data = event.getData<IoStateReceivedData>())
                 {
-                    if (mergeIoState(data->ioState))
+                    if (mergeIoState(data->ioState.id, data->ioState))
                     {
                         stateChanged = true;
                         ESP_LOGD(TAG, "IO state received: %s = %s",
@@ -380,7 +383,7 @@ void AppStore::handleEvent(const AppEvent& event)
                 if (auto* data = event.getData<IoStatesReceivedData>())
                 {
                     for (const auto& [id, ioState] : data->ioStates)
-                        mergeIoState(ioState);
+                        mergeIoState(id, ioState);
 
                     // A batch is always announced: it is the initial sync, and
                     // subscribers rely on it even when nothing differs.

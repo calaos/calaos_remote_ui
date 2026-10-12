@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "support/ws_harness.h"
 #include "app_store.h"
+#include "protocol_json.h"
 
 using nlohmann::json;
 using CalaosProtocol::MSG_IO_STATES;
@@ -324,4 +325,17 @@ TEST(IoStatesObject, NumericValueUpdatesAnExistingStoredState)
 
     receive(MSG_IO_STATES, json{{"tol_obj_clear", 3}});
     EXPECT_EQ(AppStore::getInstance().getStateCopy().ioStates.at("tol_obj_clear").state, "3");
+}
+
+TEST(WireIdField, LeavesTheOutputUntouchedOnRejection)
+{
+    using CalaosProtocol::wire::idField;
+    std::string out = "keep";
+    EXPECT_FALSE(idField({{"id", ""}}, "id", out));
+    EXPECT_FALSE(idField({{"id", 4}}, "id", out));
+    EXPECT_FALSE(idField({{"other", "x"}}, "id", out));
+    EXPECT_EQ(out, "keep");
+
+    EXPECT_TRUE(idField({{"id", "x"}}, "id", out));
+    EXPECT_EQ(out, "x");
 }
