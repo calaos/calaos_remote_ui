@@ -53,8 +53,10 @@ inline bool idField(const nlohmann::json& obj, const char* key, std::string& out
     const nlohmann::json* v = find(obj, key);
     if (!v || !v->is_string())
         return false;
+    if (v->get<std::string>().empty())
+        return false;
     out = v->get<std::string>();
-    return !out.empty();
+    return true;
 }
 
 // The server sends "true"/"false" strings; any other string is false.
@@ -68,6 +70,17 @@ inline bool flagOr(const nlohmann::json& obj, const char* key, bool def)
     if (v->is_string())
         return v->get<std::string>() == "true";
     return def;
+}
+
+// Unlike flagOr, tells "absent or unusable" apart from false.
+inline std::optional<bool> flagValue(const nlohmann::json& obj, const char* key)
+{
+    const nlohmann::json* v = find(obj, key);
+    if (v && v->is_boolean())
+        return v->get<bool>();
+    if (v && v->is_string())
+        return v->get<std::string>() == "true";
+    return std::nullopt;
 }
 
 inline std::optional<int> toInt(const nlohmann::json& v)
@@ -142,9 +155,12 @@ inline void readIoFields(const nlohmann::json& obj, IoState& io)
     io.state = stringOr(obj, "state");
     io.gui_type = stringOr(obj, "gui_type");
     io.name = stringOr(obj, "name");
-    io.visible = flagOr(obj, "visible", true);
-    io.enabled = flagOr(obj, "enabled", true);
-    io.partial = !find(obj, "visible") && !find(obj, "enabled");
+    const auto visible = flagValue(obj, "visible");
+    const auto enabled = flagValue(obj, "enabled");
+    io.visible = visible.value_or(true);
+    io.enabled = enabled.value_or(true);
+    io.visible_set = visible.has_value();
+    io.enabled_set = enabled.has_value();
     io.device = deviceField(obj);
 }
 

@@ -134,9 +134,12 @@ struct IoState
     bool enabled = true;    // Enabled/disabled flag
     std::optional<DeviceInfo> device;   // Set for typed devices only
 
-    // Update marker, not part of the state: the sender did not say anything about
-    // visible/enabled (io_changed, bare values), so the store must keep its own.
-    bool partial = false;
+    // Update markers, not part of the state: false when the sender said nothing about
+    // that field (io_changed, bare values, an entry carrying a single flag), so the
+    // store keeps its own value.
+    bool visible_set = true;
+    bool enabled_set = true;
+    bool state_set = true;
 
     IoState() = default;
 

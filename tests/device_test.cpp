@@ -97,7 +97,8 @@ TEST(DeviceParsing, IoChangedCarriesTheDeviceAndIsPartial)
     ASSERT_NE(singleOf(events), nullptr);
     const auto& io = singleOf(events)->ioState;
     EXPECT_EQ(io.state, "heat");
-    EXPECT_TRUE(io.partial);
+    EXPECT_FALSE(io.visible_set);
+    EXPECT_FALSE(io.enabled_set);
     expectClimate(io.device);
 }
 
@@ -206,7 +207,8 @@ void storeReceive(const std::string& id, const std::string& state, const json& d
     IoState io;
     io.id = id;
     io.state = state;
-    io.partial = true;
+    io.visible_set = false;
+    io.enabled_set = false;
     io.device = CalaosProtocol::wire::deviceField({{"device", device}});
     AppStore::getInstance().handleEvent(AppEvent(AppEventType::IoStateReceived, IoStateReceivedData{io}));
 }
@@ -239,7 +241,8 @@ TEST(DeviceStore, FirstDeviceOnAnExistingIoNotifies)
     IoState plain;
     plain.id = id;
     plain.state = "cool";
-    plain.partial = true;
+    plain.visible_set = false;
+    plain.enabled_set = false;
     AppStore::getInstance().handleEvent(AppEvent(AppEventType::IoStateReceived, IoStateReceivedData{plain}));
     Subscription sub;
 
@@ -348,11 +351,13 @@ TEST(IoStateEquality, DeviceAndEveryFieldCount)
     EXPECT_NE(a, e);
 }
 
-TEST(IoStateEquality, PartialIsAnUpdateMarkerNotState)
+TEST(IoStateEquality, PresenceMarkersAreNotState)
 {
     IoState a;
     IoState b;
-    b.partial = true;
+    b.visible_set = false;
+    b.enabled_set = false;
+    b.state_set = false;
     EXPECT_EQ(a, b);
 }
 

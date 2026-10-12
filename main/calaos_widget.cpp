@@ -124,14 +124,13 @@ void CalaosWidget::onAppStateChanged(const AppState& appState)
     if (newState == currentState)
         return;
 
-    // Update current state
-    currentState = newState;
-
     ESP_LOGI(TAG, "Widget %s state update: %s", config.io_id.c_str(), newState.state.c_str());
 
     // Acquire display lock before updating UI
     if (HAL::getInstance().getDisplay().tryLock(100))
     {
+        // Only once the UI can follow: a failed lock must leave the change detectable
+        currentState = newState;
         try
         {
             // Call child implementation to update UI
@@ -174,9 +173,9 @@ bool CalaosWidget::sendStateChange(const std::string& newState)
 
 bool CalaosWidget::sendDeviceCommand(const nlohmann::json& command)
 {
-    if (!g_wsManager || !g_wsManager->isConnected())
+    if (!g_wsManager)
     {
-        ESP_LOGW(TAG, "WebSocket not connected - device command not sent");
+        ESP_LOGW(TAG, "WebSocket manager not available - device command not sent");
         return false;
     }
 

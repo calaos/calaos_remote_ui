@@ -709,15 +709,22 @@ void CalaosWebSocketManager::handleIoStates(const json& data)
                 CalaosProtocol::IoState ioState;
                 ioState.id = ioId;
 
+                if (ioId.empty())
+                {
+                    ESP_LOGW(TAG, "IO state with an empty key, skipping");
+                    continue;
+                }
+
+                // The key is the id: it is what widgets look the IO up by
                 if (ioData.is_object())
                 {
-                    wire::idField(ioData, "id", ioState.id);
                     wire::readIoFields(ioData, ioState);
                 }
                 else if (wire::scalarToString(ioData, ioState.state))
                 {
                     // Bare value: nothing is known about visibility
-                    ioState.partial = true;
+                    ioState.visible_set = false;
+                    ioState.enabled_set = false;
                 }
                 else
                 {
@@ -764,7 +771,8 @@ void CalaosWebSocketManager::handleIoState(const json& data)
         ioState.id = ioId;
         ioState.state = wire::stringOr(data, "state");
         ioState.device = wire::deviceField(data);
-        ioState.partial = true;
+        ioState.visible_set = false;
+        ioState.enabled_set = false;
 
         ESP_LOGI(TAG, "IO state update: %s = %s", ioId.c_str(), ioState.state.c_str());
 
@@ -851,7 +859,9 @@ void CalaosWebSocketManager::handleConfigUpdate(const json& data)
                 ioState.name = wire::stringOr(ioItem, "name");
                 ioState.visible = wire::flagOr(ioItem, "visible", true);
                 ioState.enabled = wire::flagOr(ioItem, "rw", true);
-                ioState.state = "false";  // Default state
+                // Default for an IO not seen yet; a known one keeps its state
+                ioState.state = "false";
+                ioState.state_set = false;
 
                 batchData.ioStates[ioState.id] = ioState;
             }
@@ -911,7 +921,8 @@ void CalaosWebSocketManager::handleEvent(const json& data)
             ioState.id = ioId;
             ioState.state = wire::stringOr(eventData, "state");
             ioState.device = wire::deviceField(eventData);
-            ioState.partial = true;
+            ioState.visible_set = false;
+        ioState.enabled_set = false;
 
             ESP_LOGI(TAG, "Event io_changed: %s = %s", ioId.c_str(), ioState.state.c_str());
 
