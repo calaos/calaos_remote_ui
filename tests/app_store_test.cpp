@@ -247,6 +247,27 @@ TEST(AppStoreIo, BatchMergesVisibleEnabledAndBrightness)
     EXPECT_EQ(got.brightness, 30);
 }
 
+TEST(AppStoreIo, BatchStoresUnderTheMapKey)
+{
+    const std::string key = uid("st_key");
+    const std::string other = uid("st_other");
+    IoStatesReceivedData d;
+    d.ioStates[key] = io(other, "a");
+    store().handleEvent(AppEvent(AppEventType::IoStatesReceived, d));
+
+    auto st = store().getStateCopy();
+    EXPECT_EQ(st.ioStates.count(key), 1u);
+    EXPECT_EQ(st.ioStates.count(other), 0u);
+}
+
+TEST(AppStoreIo, UpdateWithoutAnIdIsIgnored)
+{
+    Subscription sub;
+    receiveOne(io("", "a"));
+    EXPECT_EQ(sub.calls, 0);
+    EXPECT_EQ(store().getStateCopy().ioStates.count(""), 0u);
+}
+
 TEST(AppStoreIo, EmptyBatchStillNotifies)
 {
     Subscription sub;

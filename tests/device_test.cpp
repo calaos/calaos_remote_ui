@@ -286,6 +286,36 @@ TEST(PartialUpdates, BatchEntriesWithoutFlagsKeepTheStoredOnes)
     EXPECT_FALSE(stored("part_object").enabled);
 }
 
+TEST(PartialUpdates, AnEntryCarryingOnlyOneFlagLeavesTheOtherAlone)
+{
+    receive(CalaosProtocol::MSG_CONFIG_UPDATE, {{"io_items", json::array({
+        {{"id", "part_only_vis"}, {"visible", "true"}, {"rw", "false"}},
+        {{"id", "part_only_en"}, {"visible", "false"}, {"rw", "true"}},
+        {{"id", "part_only_vis_arr"}, {"visible", "true"}, {"rw", "false"}}})}});
+
+    receive(CalaosProtocol::MSG_IO_STATES, json{{"part_only_vis", {{"visible", "false"}}},
+                                                {"part_only_en", {{"enabled", "false"}}}});
+    receive(CalaosProtocol::MSG_IO_STATES, json::array({{{"io_id", "part_only_vis_arr"}, {"visible", false}}}));
+
+    EXPECT_FALSE(stored("part_only_vis").visible);
+    EXPECT_FALSE(stored("part_only_vis").enabled);
+    EXPECT_FALSE(stored("part_only_en").visible);
+    EXPECT_FALSE(stored("part_only_en").enabled);
+    EXPECT_FALSE(stored("part_only_vis_arr").visible);
+    EXPECT_FALSE(stored("part_only_vis_arr").enabled);
+}
+
+TEST(PartialUpdates, ConfigUpdateKeepsTheStoredStateOfAKnownIo)
+{
+    receive(CalaosProtocol::MSG_IO_STATES, json{{"part_cfg_state", "on"}});
+    receive(CalaosProtocol::MSG_CONFIG_UPDATE, {{"io_items", json::array({
+        {{"id", "part_cfg_state"}, {"name", "Renamed"}}, {{"id", "part_cfg_new"}}})}});
+
+    EXPECT_EQ(stored("part_cfg_state").state, "on");
+    EXPECT_EQ(stored("part_cfg_state").name, "Renamed");
+    EXPECT_EQ(stored("part_cfg_new").state, "false");
+}
+
 TEST(PartialUpdates, ABatchEntryThatSaysVisibleDoesUpdateIt)
 {
     receive(CalaosProtocol::MSG_CONFIG_UPDATE, {{"io_items", json::array({

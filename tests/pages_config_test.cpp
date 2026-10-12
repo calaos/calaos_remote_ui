@@ -111,10 +111,11 @@ TEST(PagesConfig, UnknownScalarKeysBecomeParams)
     EXPECT_EQ(p.size(), 4u);
 }
 
-TEST(PagesConfig, FractionalParamIsTruncatedToInt)
+TEST(PagesConfig, FractionalParamKeepsItsFraction)
 {
-    auto c = PagesConfig::fromJson(R"({"pages": [{"widgets": [{"type": "T", "ratio": 1.9}]}]})");
-    EXPECT_EQ(c.pages.at(0).widgets.at(0).params.at("ratio"), "1");
+    auto c = PagesConfig::fromJson(R"({"pages": [{"widgets": [{"type": "T", "ratio": 1.9, "step": 0.5}]}]})");
+    EXPECT_EQ(c.pages.at(0).widgets.at(0).params.at("ratio"), "1.9");
+    EXPECT_EQ(c.pages.at(0).widgets.at(0).params.at("step"), "0.5");
 }
 
 TEST(PagesConfig, WidgetWithoutTypeIsSkipped)
