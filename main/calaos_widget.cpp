@@ -121,15 +121,8 @@ void CalaosWidget::onAppStateChanged(const AppState& appState)
 
     const CalaosProtocol::IoState& newState = it->second;
 
-    // Check if state actually changed
-    if (newState.state == currentState.state &&
-        newState.name == currentState.name &&
-        newState.enabled == currentState.enabled &&
-        newState.visible == currentState.visible)
-    {
-        // No change
+    if (newState == currentState)
         return;
-    }
 
     // Update current state
     currentState = newState;
@@ -177,4 +170,15 @@ bool CalaosWidget::sendStateChange(const std::string& newState)
 
     // Send state change via WebSocket
     return g_wsManager->setIoState(config.io_id, newState);
+}
+
+bool CalaosWidget::sendDeviceCommand(const nlohmann::json& command)
+{
+    if (!g_wsManager || !g_wsManager->isConnected())
+    {
+        ESP_LOGW(TAG, "WebSocket not connected - device command not sent");
+        return false;
+    }
+
+    return g_wsManager->sendDeviceCommand(config.io_id, command);
 }

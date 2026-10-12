@@ -4,6 +4,7 @@
 #include <map>
 #include <vector>
 #include <memory>
+#include <optional>
 #include "hal.h"
 
 namespace CalaosProtocol
@@ -96,6 +97,29 @@ struct PagesConfig
 };
 
 /**
+ * @brief The `device` object that rides along an IO item (spec 5.3): a typed
+ * device such as a climate. The JSON members are kept serialized (objects with
+ * sorted keys, so equal content compares equal) to keep nlohmann out of this
+ * header; widgets parse what they need.
+ */
+struct DeviceInfo
+{
+    std::string family;                 // e.g. "climate"
+    std::string impl;                   // e.g. "proxy", "thermostat"
+    std::string capabilities = "{}";    // JSON object
+    std::string state = "{}";           // JSON object
+    std::string ios = "{}";             // JSON object, role -> IO id
+
+    bool operator==(const DeviceInfo& o) const
+    {
+        return family == o.family && impl == o.impl && capabilities == o.capabilities &&
+               state == o.state && ios == o.ios;
+    }
+
+    bool operator!=(const DeviceInfo& o) const { return !(*this == o); }
+};
+
+/**
  * @brief Structure representing an IO (Input/Output) object state
  */
 struct IoState
@@ -108,6 +132,11 @@ struct IoState
     int brightness = -1;    // Brightness value (0-100) for light_dimmer, -1 if not applicable
     bool visible = true;    // Visibility flag
     bool enabled = true;    // Enabled/disabled flag
+    std::optional<DeviceInfo> device;   // Set for typed devices only
+
+    // Update marker, not part of the state: the sender did not say anything about
+    // visible/enabled (io_changed, bare values), so the store must keep its own.
+    bool partial = false;
 
     IoState() = default;
 
@@ -123,6 +152,15 @@ struct IoState
         name(name)
     {
     }
+
+    bool operator==(const IoState& o) const
+    {
+        return id == o.id && type == o.type && state == o.state && gui_type == o.gui_type &&
+               name == o.name && brightness == o.brightness && visible == o.visible &&
+               enabled == o.enabled && device == o.device;
+    }
+
+    bool operator!=(const IoState& o) const { return !(*this == o); }
 };
 
 /**

@@ -4,6 +4,7 @@
 #include "lvgl/smooth_lvgl.h"
 #include "calaos_protocol.h"
 #include "app_store.h"
+#include <nlohmann/json.hpp>
 #include <string>
 #include <memory>
 #include <functional>
@@ -81,6 +82,12 @@ protected:
      * @return true if message sent successfully
      */
     bool sendStateChange(const std::string& newState);
+
+    /**
+     * @brief Send a JSON partial update to the device this widget shows
+     * @param command Object with only the fields to change, e.g. {"target_temp": 21.5}
+     */
+    bool sendDeviceCommand(const nlohmann::json& command);
 
     /**
      * @brief Child classes override this to implement widget-specific UI updates
