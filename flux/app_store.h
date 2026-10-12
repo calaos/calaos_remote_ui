@@ -260,6 +260,9 @@ private:
 
     void notifyStateChange();
 
+    // Called with mutex_ held. Returns true when the stored IO is new or differs.
+    bool mergeIoState(const CalaosProtocol::IoState& update);
+
     AppState state_;
     std::map<SubscriptionId, StateChangeCallback> subscribers_;
     SubscriptionId nextSubscriptionId_ = 1;

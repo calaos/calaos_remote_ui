@@ -46,6 +46,42 @@ void AppStore::unsubscribe(SubscriptionId id)
     subscribers_.erase(id);
 }
 
+bool AppStore::mergeIoState(const CalaosProtocol::IoState& update)
+{
+    auto it = state_.ioStates.find(update.id);
+    if (it == state_.ioStates.end())
+    {
+        CalaosProtocol::IoState fresh = update;
+        fresh.partial = false;
+        state_.ioStates[update.id] = std::move(fresh);
+        return true;
+    }
+
+    CalaosProtocol::IoState& existing = it->second;
+    const CalaosProtocol::IoState before = existing;
+
+    // The state is always taken, even empty. The descriptive fields are only
+    // replaced when sent, so a bare io_changed does not blank them.
+    existing.state = update.state;
+    if (!update.name.empty())
+        existing.name = update.name;
+    if (!update.type.empty())
+        existing.type = update.type;
+    if (!update.gui_type.empty())
+        existing.gui_type = update.gui_type;
+    if (update.brightness >= 0)
+        existing.brightness = update.brightness;
+    if (update.device)
+        existing.device = update.device;
+    if (!update.partial)
+    {
+        existing.visible = update.visible;
+        existing.enabled = update.enabled;
+    }
+
+    return existing != before;
+}
+
 void AppStore::handleEvent(const AppEvent& event)
 {
     ESP_LOGD(TAG, "Handling event type: %d", static_cast<int>(event.getType()));
@@ -329,28 +365,7 @@ void AppStore::handleEvent(const AppEvent& event)
             {
                 if (auto* data = event.getData<IoStateReceivedData>())
                 {
-                    auto it = state_.ioStates.find(data->ioState.id);
-                    bool actuallyChanged = (it == state_.ioStates.end() ||
-                                          it->second.state != data->ioState.state);
-
-                    // Merge state: preserve existing fields if new fields are empty
-                    if (it != state_.ioStates.end())
-                    {
-                        CalaosProtocol::IoState& existing = it->second;
-                        existing.state = data->ioState.state;
-                        if (!data->ioState.name.empty())
-                            existing.name = data->ioState.name;
-                        if (!data->ioState.type.empty())
-                            existing.type = data->ioState.type;
-                        if (!data->ioState.gui_type.empty())
-                            existing.gui_type = data->ioState.gui_type;
-                    }
-                    else
-                    {
-                        state_.ioStates[data->ioState.id] = data->ioState;
-                    }
-
-                    if (actuallyChanged)
+                    if (mergeIoState(data->ioState))
                     {
                         stateChanged = true;
                         ESP_LOGD(TAG, "IO state received: %s = %s",
@@ -365,26 +380,10 @@ void AppStore::handleEvent(const AppEvent& event)
                 if (auto* data = event.getData<IoStatesReceivedData>())
                 {
                     for (const auto& [id, ioState] : data->ioStates)
-                    {
-                        auto it = state_.ioStates.find(id);
-                        // Merge state: preserve existing fields if new fields are empty
-                        if (it != state_.ioStates.end())
-                        {
-                            CalaosProtocol::IoState& existing = it->second;
-                            existing.state = ioState.state;
-                            if (!ioState.name.empty())
-                                existing.name = ioState.name;
-                            if (!ioState.type.empty())
-                                existing.type = ioState.type;
-                            if (!ioState.gui_type.empty())
-                                existing.gui_type = ioState.gui_type;
-                        }
-                        else
-                        {
-                            state_.ioStates[id] = ioState;
-                        }
-                    }
+                        mergeIoState(ioState);
 
+                    // A batch is always announced: it is the initial sync, and
+                    // subscribers rely on it even when nothing differs.
                     stateChanged = true;
                     ESP_LOGD(TAG, "IO states received: %zu states", data->ioStates.size());
                 }

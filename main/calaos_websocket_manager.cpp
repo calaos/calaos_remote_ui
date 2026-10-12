@@ -3,6 +3,7 @@
 #include "provisioning_manager.h"
 #include "app_dispatcher.h"
 #include "logging.h"
+#include "protocol_json.h"
 #include "board_config.h"
 #include "version.h"
 #include "../hal/hal.h"
@@ -11,6 +12,7 @@
 #include <sstream>
 
 using json = nlohmann::json;
+namespace wire = CalaosProtocol::wire;
 
 static const char* TAG = "ws.mgr";
 
@@ -251,7 +253,28 @@ bool CalaosWebSocketManager::isConnecting() const
     return isConnecting_;
 }
 
-bool CalaosWebSocketManager::setIoState(const std::string& io_id, const std::string& state)
+std::string CalaosWebSocketManager::buildSetStateMessage(const std::string& io_id, const std::string& value)
+{
+    json j;
+    j["msg"] = CalaosProtocol::MSG_SET_STATE;
+    j["data"]["id"] = io_id;
+    j["data"]["value"] = value;
+    return j.dump(-1, ' ', false, json::error_handler_t::replace);
+}
+
+std::optional<std::string> CalaosWebSocketManager::buildDeviceCommandMessage(const std::string& io_id,
+                                                                            const json& command)
+{
+    // The server reads a JSON object in the value as a partial update of the device;
+    // anything else would be taken for a plain mode string.
+    if (io_id.empty() || !command.is_object() || command.empty())
+        return std::nullopt;
+
+    return buildSetStateMessage(io_id,
+        command.dump(-1, ' ', false, json::error_handler_t::replace));
+}
+
+bool CalaosWebSocketManager::sendMessage(const std::string& message)
 {
     if (!isConnected())
     {
@@ -259,24 +282,41 @@ bool CalaosWebSocketManager::setIoState(const std::string& io_id, const std::str
         return false;
     }
 
+    ESP_LOGD(TAG, "Sending IO state: %s", message.c_str());
+
+    WebSocketClient& wsClient = CalaosNet::instance().webSocketClient();
+    return wsClient.sendJson(message) == NetworkResult::OK;
+}
+
+bool CalaosWebSocketManager::setIoState(const std::string& io_id, const std::string& state)
+{
     try
     {
-        json j;
-        j["msg"] = CalaosProtocol::MSG_SET_STATE;
-        j["data"]["id"] = io_id;
-        j["data"]["value"] = state;
-
-        std::string message = j.dump();
-        ESP_LOGD(TAG, "Sending IO state: %s", message.c_str());
-
-        WebSocketClient& wsClient = CalaosNet::instance().webSocketClient();
-        NetworkResult result = wsClient.sendJson(message);
-
-        return result == NetworkResult::OK;
+        return sendMessage(buildSetStateMessage(io_id, state));
     }
     catch (const std::exception& e)
     {
         ESP_LOGE(TAG, "Failed to build set_state message: %s", e.what());
+        return false;
+    }
+}
+
+bool CalaosWebSocketManager::sendDeviceCommand(const std::string& io_id, const json& command)
+{
+    try
+    {
+        auto message = buildDeviceCommandMessage(io_id, command);
+        if (!message)
+        {
+            ESP_LOGW(TAG, "Refusing device command: needs an io id and a non-empty JSON object");
+            return false;
+        }
+
+        return sendMessage(*message);
+    }
+    catch (const std::exception& e)
+    {
+        ESP_LOGE(TAG, "Failed to build device command: %s", e.what());
         return false;
     }
 }
@@ -636,15 +676,17 @@ void CalaosWebSocketManager::handleIoStates(const json& data)
         // Handle both array format [{io_id: "x", ...}, ...] and object format {id: {...}, ...}
         if (data.is_array())
         {
-            // Array format: each element is an IO state object
             for (const auto& ioData : data)
             {
-                // Try both "io_id" and "id" keys for compatibility
-                std::string ioId = ioData.value("io_id", "");
-                if (ioId.empty())
-                    ioId = ioData.value("id", "");
+                if (!ioData.is_object())
+                {
+                    ESP_LOGW(TAG, "IO state entry is not an object, skipping");
+                    continue;
+                }
 
-                if (ioId.empty())
+                // Try both "io_id" and "id" keys for compatibility
+                std::string ioId;
+                if (!wire::idField(ioData, "io_id", ioId) && !wire::idField(ioData, "id", ioId))
                 {
                     ESP_LOGW(TAG, "IO state missing 'io_id'/'id' field, skipping");
                     continue;
@@ -652,21 +694,7 @@ void CalaosWebSocketManager::handleIoStates(const json& data)
 
                 CalaosProtocol::IoState ioState;
                 ioState.id = ioId;
-                ioState.type = ioData.value("type", "");
-
-                // Handle state which can be string or bool
-                if (ioData.contains("state"))
-                {
-                    if (ioData["state"].is_boolean())
-                        ioState.state = ioData["state"].get<bool>() ? "true" : "false";
-                    else
-                        ioState.state = ioData.value("state", "");
-                }
-
-                ioState.gui_type = ioData.value("gui_type", "");
-                ioState.name = ioData.value("name", "");
-                ioState.visible = ioData.value("visible", true);
-                ioState.enabled = ioData.value("enabled", true);
+                wire::readIoFields(ioData, ioState);
 
                 ioStates[ioId] = ioState;
             }
@@ -681,31 +709,20 @@ void CalaosWebSocketManager::handleIoStates(const json& data)
                 CalaosProtocol::IoState ioState;
                 ioState.id = ioId;
 
-                if (ioData.is_string())
+                if (ioData.is_object())
                 {
-                    ioState.state = ioData.get<std::string>();
+                    wire::idField(ioData, "id", ioState.id);
+                    wire::readIoFields(ioData, ioState);
                 }
-                else if (ioData.is_boolean())
+                else if (wire::scalarToString(ioData, ioState.state))
                 {
-                    ioState.state = ioData.get<bool>() ? "true" : "false";
+                    // Bare value: nothing is known about visibility
+                    ioState.partial = true;
                 }
-                else if (ioData.is_object())
+                else
                 {
-                    ioState.id = ioData.value("id", ioId);
-                    ioState.type = ioData.value("type", "");
-
-                    if (ioData.contains("state"))
-                    {
-                        if (ioData["state"].is_boolean())
-                            ioState.state = ioData["state"].get<bool>() ? "true" : "false";
-                        else
-                            ioState.state = ioData.value("state", "");
-                    }
-
-                    ioState.gui_type = ioData.value("gui_type", "");
-                    ioState.name = ioData.value("name", "");
-                    ioState.visible = ioData.value("visible", true);
-                    ioState.enabled = ioData.value("enabled", true);
+                    ESP_LOGW(TAG, "IO state %s has an unsupported value, skipping", ioId.c_str());
+                    continue;
                 }
 
                 ioStates[ioId] = ioState;
@@ -735,32 +752,22 @@ void CalaosWebSocketManager::handleIoState(const json& data)
 {
     try
     {
-        std::string ioId = data.value("io_id", "");
-
-        // Handle state which can be string or bool
-        std::string state;
-        if (data.contains("state"))
-        {
-            if (data["state"].is_boolean())
-                state = data["state"].get<bool>() ? "true" : "false";
-            else
-                state = data.value("state", "");
-        }
-
-        if (ioId.empty())
+        std::string ioId;
+        if (!wire::idField(data, "io_id", ioId))
         {
             ESP_LOGW(TAG, "IO state update missing io_id");
             return;
         }
 
-        ESP_LOGI(TAG, "IO state update: %s = %s", ioId.c_str(), state.c_str());
-
         // Create IoState with minimal info (will be merged with existing)
         CalaosProtocol::IoState ioState;
         ioState.id = ioId;
-        ioState.state = state;
+        ioState.state = wire::stringOr(data, "state");
+        ioState.device = wire::deviceField(data);
+        ioState.partial = true;
 
-        // Dispatch event
+        ESP_LOGI(TAG, "IO state update: %s = %s", ioId.c_str(), ioState.state.c_str());
+
         AppDispatcher::getInstance().dispatch(
             AppEvent(AppEventType::IoStateReceived,
                     IoStateReceivedData{ioState})
@@ -777,65 +784,40 @@ void CalaosWebSocketManager::handleConfigUpdate(const json& data)
     try
     {
         CalaosProtocol::RemoteUIConfig config;
-        config.name = data.value("name", "");
+        config.name = wire::stringOr(data, "name");
 
         // Handle room (can be string or object)
-        if (data.contains("room"))
+        if (const json* room = wire::find(data, "room"))
         {
-            if (data["room"].is_string())
-                config.room = data["room"].get<std::string>();
-            else if (data["room"].is_object() && data["room"].contains("name"))
-                config.room = data["room"]["name"].get<std::string>();
+            if (room->is_string())
+                config.room = room->get<std::string>();
+            else
+                config.room = wire::stringOr(*room, "name");
         }
 
-        config.theme = data.value("theme", "dark");
+        config.theme = wire::stringOr(data, "theme", "dark");
 
         // Handle brightness typo in server (brigtness instead of brightness)
-        if (data.contains("brigtness"))
-            config.brightness = data["brigtness"].get<int>();
-        else
-            config.brightness = data.value("brightness", 80);
+        config.brightness = wire::intField(data, "brigtness")
+            .value_or(wire::intField(data, "brightness").value_or(80));
 
-        config.timeout = data.value("timeout", 30);
+        config.timeout = wire::intField(data, "timeout").value_or(30);
 
-        // Screensaver configuration (values can be int or string from server
-        if (data.contains("screensaver_timeout"))
-        {
-            const auto& value = data["screensaver_timeout"];
-            if (value.is_string())
-            {
-                const std::string& str = value.get<std::string>();
-                if (!str.empty())
-                    config.screensaver_timeout = std::stoi(str);
-            }
-            else
-                config.screensaver_timeout = value.get<int>();
-        }
+        // Screensaver configuration (values can be int or string from server)
+        config.screensaver_timeout = wire::intField(data, "screensaver_timeout").value_or(0);
+        config.screensaver_dimming = wire::intField(data, "screensaver_dimming").value_or(0);
 
-        if (data.contains("screensaver_dimming"))
-        {
-            const auto& value = data["screensaver_dimming"];
-            if (value.is_string())
-            {
-                const std::string& str = value.get<std::string>();
-                if (!str.empty())
-                    config.screensaver_dimming = std::stoi(str);
-            }
-            else
-                config.screensaver_dimming = value.get<int>();
-        }
-
-        config.screensaver_mode = data.value("screensaver_mode", "black");
-        config.screensaver_clock_timezone = data.value("screensaver_clock_timezone", "");
-        config.screensaver_clock_format = data.value("screensaver_clock_format", "24");
-        config.screensaver_clock_show_date = data.value("screensaver_clock_show_date", "false");
-        config.screensaver_clock_date_format = data.value("screensaver_clock_date_format", "DD/MM/YYYY");
-        config.screensaver_clock_seconds = data.value("screensaver_clock_seconds", "false");
+        config.screensaver_mode = wire::stringOr(data, "screensaver_mode", "black");
+        config.screensaver_clock_timezone = wire::stringOr(data, "screensaver_clock_timezone");
+        config.screensaver_clock_format = wire::stringOr(data, "screensaver_clock_format", "24");
+        config.screensaver_clock_show_date = wire::stringOr(data, "screensaver_clock_show_date", "false");
+        config.screensaver_clock_date_format = wire::stringOr(data, "screensaver_clock_date_format", "DD/MM/YYYY");
+        config.screensaver_clock_seconds = wire::stringOr(data, "screensaver_clock_seconds", "false");
 
         // Build pages_json with grid info from root level
         json pagesConfig;
-        pagesConfig["grid_width"] = data.value("grid_width", 3);
-        pagesConfig["grid_height"] = data.value("grid_height", 3);
+        pagesConfig["grid_width"] = wire::intField(data, "grid_width").value_or(3);
+        pagesConfig["grid_height"] = wire::intField(data, "grid_height").value_or(3);
 
         if (data.contains("pages"))
             pagesConfig["pages"] = data["pages"];
@@ -850,20 +832,25 @@ void CalaosWebSocketManager::handleConfigUpdate(const json& data)
                 pagesConfig["grid_height"].get<int>(),
                 pagesConfig["pages"].size());
 
-        // Handle io_items if present (store IO states)
         // Batch all IO states into a single event to avoid flooding the event queue
-        if (data.contains("io_items") && data["io_items"].is_array())
+        const json* ioItems = wire::find(data, "io_items");
+        if (ioItems && ioItems->is_array())
         {
             IoStatesReceivedData batchData;
-            for (const auto& ioItem : data["io_items"])
+            for (const auto& ioItem : *ioItems)
             {
                 CalaosProtocol::IoState ioState;
-                ioState.id = ioItem.value("id", "");
-                ioState.type = ioItem.value("type", "");
-                ioState.gui_type = ioItem.value("gui_type", "");
-                ioState.name = ioItem.value("name", "");
-                ioState.visible = ioItem.value("visible", "true") == "true";
-                ioState.enabled = ioItem.value("rw", "true") == "true";
+                if (!wire::idField(ioItem, "id", ioState.id))
+                {
+                    ESP_LOGW(TAG, "io_items entry without a string id, skipping");
+                    continue;
+                }
+
+                ioState.type = wire::stringOr(ioItem, "type");
+                ioState.gui_type = wire::stringOr(ioItem, "gui_type");
+                ioState.name = wire::stringOr(ioItem, "name");
+                ioState.visible = wire::flagOr(ioItem, "visible", true);
+                ioState.enabled = wire::flagOr(ioItem, "rw", true);
                 ioState.state = "false";  // Default state
 
                 batchData.ioStates[ioState.id] = ioState;
@@ -902,7 +889,7 @@ void CalaosWebSocketManager::handleEvent(const json& data)
 {
     try
     {
-        std::string typeStr = data.value("type_str", "");
+        std::string typeStr = wire::stringOr(data, "type_str");
 
         if (typeStr == "io_changed")
         {
@@ -913,10 +900,8 @@ void CalaosWebSocketManager::handleEvent(const json& data)
             }
 
             const json& eventData = data["data"];
-            std::string ioId = eventData.value("id", "");
-            std::string state = eventData.value("state", "");
-
-            if (ioId.empty())
+            std::string ioId;
+            if (!wire::idField(eventData, "id", ioId))
             {
                 ESP_LOGW(TAG, "Event io_changed missing id");
                 return;
@@ -924,9 +909,11 @@ void CalaosWebSocketManager::handleEvent(const json& data)
 
             CalaosProtocol::IoState ioState;
             ioState.id = ioId;
-            ioState.state = state;
+            ioState.state = wire::stringOr(eventData, "state");
+            ioState.device = wire::deviceField(eventData);
+            ioState.partial = true;
 
-            ESP_LOGI(TAG, "Event io_changed: %s = %s", ioId.c_str(), state.c_str());
+            ESP_LOGI(TAG, "Event io_changed: %s = %s", ioId.c_str(), ioState.state.c_str());
 
             AppDispatcher::getInstance().dispatch(
                 AppEvent(AppEventType::IoStateReceived,

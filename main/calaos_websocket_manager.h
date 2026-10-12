@@ -4,6 +4,7 @@
 #include "calaos_net.h"
 #include <nlohmann/json.hpp>
 #include <memory>
+#include <optional>
 #include <string>
 
 // Global pointer to WebSocket manager instance (set by StartupPage)
@@ -54,6 +55,17 @@ public:
     bool setIoState(const std::string& io_id, const std::string& state);
 
     /**
+     * @brief Send a JSON partial-update command to a device (e.g. {"target_temp": 21})
+     * Goes out as a set_state whose value is the serialized object.
+     * @return false when not connected or when command is not a non-empty object
+     */
+    bool sendDeviceCommand(const std::string& io_id, const nlohmann::json& command);
+
+    static std::string buildSetStateMessage(const std::string& io_id, const std::string& value);
+    static std::optional<std::string> buildDeviceCommandMessage(const std::string& io_id,
+                                                                const nlohmann::json& command);
+
+    /**
      * @brief Request configuration from server
      * @return true if request sent successfully
      */
@@ -68,6 +80,8 @@ public:
     bool sendRelayState(int relay, bool state);
 
 private:
+    bool sendMessage(const std::string& message);
+
     // Host tests feed raw protocol messages to the private handlers.
     friend struct CalaosWebSocketManagerTestAccess;
 

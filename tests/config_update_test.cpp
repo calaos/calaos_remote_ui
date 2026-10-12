@@ -171,7 +171,8 @@ TEST(ConfigUpdate, ScalarOfTheWrongTypeKeepsItsDefaultAndTheConfig)
 
 TEST(ConfigUpdate, GridGivenAsStringsIsAccepted)
 {
-    auto* c = configOf(receive(MSG_CONFIG_UPDATE, {{"grid_width", "4"}, {"grid_height", "2"}}));
+    auto events = receive(MSG_CONFIG_UPDATE, {{"grid_width", "4"}, {"grid_height", "2"}});
+    auto* c = configOf(events);
     ASSERT_NE(c, nullptr);
     auto pages = c->config.getParsedPages();
     EXPECT_EQ(pages.grid_width, 4);
