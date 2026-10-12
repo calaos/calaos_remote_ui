@@ -1,0 +1,70 @@
+include(FetchContent)
+
+# Pinned by hash so a retagged archive cannot change what CI runs.
+FetchContent_Declare(googletest
+    URL https://github.com/google/googletest/archive/refs/tags/v1.17.0.tar.gz
+    URL_HASH SHA256=65fab701d9829d38cb77c14acdc431d2108bfdbf8979e40eb8ae567edf10b27c
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+set(APP_ROOT ${CMAKE_SOURCE_DIR})
+
+# The real protocol, flux and websocket sources are compiled unchanged; only the
+# HAL is replaced (tests/support/fake_hal.cpp), because the Linux HAL opens a
+# display backend as soon as it is initialised.
+add_executable(host_tests
+    test_main.cpp
+    support/fake_hal.cpp
+    support/event_probe.cpp
+    pages_config_test.cpp
+    io_states_test.cpp
+    config_update_test.cpp
+    io_changed_test.cpp
+    app_store_test.cpp
+
+    ${APP_ROOT}/main/calaos_protocol.cpp
+    ${APP_ROOT}/main/calaos_websocket_manager.cpp
+    ${APP_ROOT}/main/hmac_authenticator.cpp
+    ${APP_ROOT}/main/provisioning_manager.cpp
+    ${APP_ROOT}/main/provisioning_requester.cpp
+    ${APP_ROOT}/main/provisioning_crypto.cpp
+    ${APP_ROOT}/flux/app_dispatcher.cpp
+    ${APP_ROOT}/flux/app_store.cpp
+    ${APP_ROOT}/network/calaos_net.cpp
+    ${APP_ROOT}/network/udp/udp_client.cpp
+    ${APP_ROOT}/network/udp/udp_server.cpp
+    ${APP_ROOT}/network/http/http_client.cpp
+    ${APP_ROOT}/network/websocket/websocket_client.cpp
+    ${APP_ROOT}/hal/calaos_config/calaos_config.cpp
+    ${APP_ROOT}/hal/linux/logging.cpp
+)
+
+target_include_directories(host_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${APP_ROOT}/main
+    ${APP_ROOT}/hal
+    ${APP_ROOT}/hal/linux
+    ${APP_ROOT}/hal/calaos_config
+    ${APP_ROOT}/flux
+    ${APP_ROOT}/network
+    ${CMAKE_BINARY_DIR}/generated
+    ${CMAKE_BINARY_DIR}/hal/linux
+    ${APP_ROOT}/components/nlohmann-json/single_include
+    ${APP_ROOT}/components/mongoose/mongoose
+    ${MBEDTLS_INCLUDE_DIRS}
+)
+
+target_link_libraries(host_tests PRIVATE
+    GTest::gtest
+    lvgl
+    mongoose
+    pthread
+    ${MBEDTLS_LIBRARIES}
+    mbedx509
+)
+
+include(GoogleTest)
+gtest_discover_tests(host_tests DISCOVERY_TIMEOUT 60)
