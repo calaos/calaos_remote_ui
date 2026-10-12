@@ -15,6 +15,12 @@ const IoStateReceivedData* single(const std::vector<AppEvent>& events)
 {
     return firstData<IoStateReceivedData>(events, AppEventType::IoStateReceived);
 }
+
+std::string changedState(const json& eventData)
+{
+    auto* d = single(ioChanged(eventData));
+    return d ? d->ioState.state : "<event lost>";
+}
 }
 
 TEST(IoChanged, DispatchesIdAndStateOnly)
@@ -71,18 +77,37 @@ TEST(IoChanged, UpdatesTheStoredState)
     EXPECT_EQ(AppStore::getInstance().getStateCopy().ioStates.at("ev_store").state, "b");
 }
 
-// ---- Known defects, pinned as they behave today. ----
-
-// BUG: only strings are accepted; json::value(key, "") throws on any other
-// type and the event is lost without a trace beyond the error log.
-TEST(IoChangedKnownBugs, BooleanStateLosesTheEvent)
+TEST(IoChanged, BooleanStateBecomesAString)
 {
-    EXPECT_EQ(single(ioChanged({{"id", "ev_bug_bool"}, {"state", true}})), nullptr);
+    EXPECT_EQ(changedState({{"id", "ev_bool_t"}, {"state", true}}), "true");
+    EXPECT_EQ(changedState({{"id", "ev_bool_f"}, {"state", false}}), "false");
 }
 
-TEST(IoChangedKnownBugs, NumericStateLosesTheEvent)
+TEST(IoChanged, NumericStateBecomesAString)
 {
-    EXPECT_EQ(single(ioChanged({{"id", "ev_bug_num"}, {"state", 21.5}})), nullptr);
+    EXPECT_EQ(changedState({{"id", "ev_num_f"}, {"state", 21.5}}), "21.5");
+    EXPECT_EQ(changedState({{"id", "ev_num_i"}, {"state", 7}}), "7");
+}
+
+TEST(IoChanged, NumericStateReachesTheStore)
+{
+    ioChanged({{"id", "ev_num_store"}, {"state", 18}});
+    const auto st = AppStore::getInstance().getStateCopy();
+    ASSERT_EQ(st.ioStates.count("ev_num_store"), 1u);
+    EXPECT_EQ(st.ioStates.at("ev_num_store").state, "18");
+}
+
+TEST(IoChanged, StateOfAnUnsupportedTypeIsEmptyButTheEventIsKept)
+{
+    auto* d = single(ioChanged({{"id", "ev_state_obj"}, {"state", json::object()}}));
+    ASSERT_NE(d, nullptr);
+    EXPECT_TRUE(d->ioState.state.empty());
+    EXPECT_NE(single(ioChanged({{"id", "ev_state_null"}, {"state", nullptr}})), nullptr);
+}
+
+TEST(IoChanged, NonStringIdIsIgnored)
+{
+    EXPECT_EQ(single(ioChanged({{"id", 12}, {"state", "x"}})), nullptr);
 }
 
 // Contrast with remote_ui_io_states and io_state, which do convert booleans.

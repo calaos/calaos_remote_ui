@@ -178,79 +178,119 @@ TEST(IoStates, MissingDataIsTreatedAsAnEmptyObject)
     EXPECT_TRUE(b->ioStates.empty());
 }
 
-// ---- Known defects, pinned as they behave today. ----
-// RUI-2 fixes these; the expectations below are then expected to flip.
-
-// BUG: json::value(key, bool) throws type_error on a string, the catch-all
-// swallows it and the whole batch is dropped, including the valid entries.
-TEST(IoStatesKnownBugs, StringVisibleDropsTheWholeArrayBatch)
+TEST(IoStatesArray, StringFlagsAreAcceptedAndDoNotLoseTheBatch)
 {
     auto events = receive(MSG_IO_STATES, json::array({
-        {{"io_id", "bug_ok_1"}, {"state", "on"}},
-        {{"io_id", "bug_str_visible"}, {"visible", "true"}},
-        {{"io_id", "bug_ok_2"}, {"state", "on"}}}));
+        {{"io_id", "tol_ok_1"}, {"state", "on"}},
+        {{"io_id", "tol_str_visible"}, {"visible", "true"}, {"enabled", "false"}},
+        {{"io_id", "tol_str_hidden"}, {"visible", "false"}, {"enabled", "true"}},
+        {{"io_id", "tol_ok_2"}, {"state", "on"}}}));
 
-    EXPECT_EQ(countBatches(events), 0);
-    EXPECT_FALSE(storeHas("bug_ok_1"));
-    EXPECT_FALSE(storeHas("bug_str_visible"));
-    EXPECT_FALSE(storeHas("bug_ok_2"));
+    auto* b = batchOf(events);
+    ASSERT_NE(b, nullptr);
+    EXPECT_EQ(b->ioStates.size(), 4u);
+    EXPECT_TRUE(b->ioStates.at("tol_str_visible").visible);
+    EXPECT_FALSE(b->ioStates.at("tol_str_visible").enabled);
+    EXPECT_FALSE(b->ioStates.at("tol_str_hidden").visible);
+    EXPECT_TRUE(b->ioStates.at("tol_str_hidden").enabled);
+    EXPECT_TRUE(storeHas("tol_ok_1"));
+    EXPECT_TRUE(storeHas("tol_ok_2"));
 }
 
-TEST(IoStatesKnownBugs, StringEnabledDropsTheWholeArrayBatch)
+TEST(IoStatesArray, FlagOfAnUnexpectedTypeFallsBackToTrue)
 {
     auto events = receive(MSG_IO_STATES, json::array({
-        {{"io_id", "bug_en_ok"}, {"state", "on"}},
-        {{"io_id", "bug_str_enabled"}, {"enabled", "false"}}}));
-    EXPECT_EQ(countBatches(events), 0);
-    EXPECT_FALSE(storeHas("bug_en_ok"));
+        {{"io_id", "tol_flag_obj"}, {"visible", json::object()}, {"enabled", nullptr}}}));
+    ASSERT_NE(batchOf(events), nullptr);
+    const auto& io = batchOf(events)->ioStates.at("tol_flag_obj");
+    EXPECT_TRUE(io.visible);
+    EXPECT_TRUE(io.enabled);
 }
 
-TEST(IoStatesKnownBugs, StringVisibleDropsTheWholeObjectBatch)
+TEST(IoStatesObject, StringFlagsAreAcceptedAndDoNotLoseTheBatch)
 {
     auto events = receive(MSG_IO_STATES, json{
-        {"bug_obj_ok", {{"state", "on"}}},
-        {"bug_obj_str_visible", {{"visible", "true"}}}});
-    EXPECT_EQ(countBatches(events), 0);
-    EXPECT_FALSE(storeHas("bug_obj_ok"));
-}
-
-// Same mechanism with other non-string/bool types: a numeric state is lost too.
-TEST(IoStatesKnownBugs, NumericStateDropsTheWholeBatch)
-{
-    auto events = receive(MSG_IO_STATES, json::array({
-        {{"io_id", "bug_num_ok"}, {"state", "on"}},
-        {{"io_id", "bug_num_state"}, {"state", 21.5}}}));
-    EXPECT_EQ(countBatches(events), 0);
-    EXPECT_FALSE(storeHas("bug_num_ok"));
-}
-
-TEST(IoStatesKnownBugs, NonObjectArrayElementDropsTheWholeBatch)
-{
-    auto events = receive(MSG_IO_STATES, json::array({
-        {{"io_id", "bug_elem_ok"}, {"state", "on"}}, "stray"}));
-    EXPECT_EQ(countBatches(events), 0);
-    EXPECT_FALSE(storeHas("bug_elem_ok"));
-}
-
-// BUG (RUI-2): a numeric or null value is not a recognised shorthand, so the entry is
-// created with an empty state instead of the value (or being skipped).
-TEST(IoStatesKnownBugs, NumericValueYieldsAnEntryWithEmptyState)
-{
-    auto events = receive(MSG_IO_STATES, json{{"obj_num", 12}, {"obj_null", nullptr}});
+        {"tol_obj_ok", {{"state", "on"}}},
+        {"tol_obj_str_visible", {{"visible", "false"}, {"enabled", "true"}}}});
     auto* b = batchOf(events);
     ASSERT_NE(b, nullptr);
     EXPECT_EQ(b->ioStates.size(), 2u);
-    EXPECT_TRUE(b->ioStates.at("obj_num").state.empty());
-    EXPECT_TRUE(b->ioStates.at("obj_null").state.empty());
+    EXPECT_FALSE(b->ioStates.at("tol_obj_str_visible").visible);
+    EXPECT_TRUE(b->ioStates.at("tol_obj_str_visible").enabled);
 }
 
-// BUG (RUI-2): the empty state then overwrites the one already stored, so a sensor
-// sent as a bare number blanks its widget.
-TEST(IoStatesKnownBugs, NumericValueClearsAnExistingStoredState)
+TEST(IoStatesArray, NumericStateIsConvertedToAString)
 {
-    receive(MSG_IO_STATES, json{{"obj_clear", "on"}});
-    ASSERT_EQ(AppStore::getInstance().getStateCopy().ioStates.at("obj_clear").state, "on");
+    auto events = receive(MSG_IO_STATES, json::array({
+        {{"io_id", "tol_num_ok"}, {"state", "on"}},
+        {{"io_id", "tol_num_float"}, {"state", 21.5}},
+        {{"io_id", "tol_num_int"}, {"state", 7}}}));
+    auto* b = batchOf(events);
+    ASSERT_NE(b, nullptr);
+    EXPECT_EQ(b->ioStates.size(), 3u);
+    EXPECT_EQ(b->ioStates.at("tol_num_float").state, "21.5");
+    EXPECT_EQ(b->ioStates.at("tol_num_int").state, "7");
+}
 
-    receive(MSG_IO_STATES, json{{"obj_clear", 3}});
-    EXPECT_EQ(AppStore::getInstance().getStateCopy().ioStates.at("obj_clear").state, "");
+TEST(IoStatesArray, DescriptiveFieldsOfTheWrongTypeDoNotLoseTheEntry)
+{
+    auto events = receive(MSG_IO_STATES, json::array({
+        {{"io_id", "tol_wrong"}, {"state", "on"}, {"name", json::object()}, {"type", json::array()},
+         {"gui_type", 3}}}));
+    ASSERT_NE(batchOf(events), nullptr);
+    const auto& io = batchOf(events)->ioStates.at("tol_wrong");
+    EXPECT_EQ(io.state, "on");
+    EXPECT_TRUE(io.name.empty());
+    EXPECT_TRUE(io.type.empty());
+    EXPECT_EQ(io.gui_type, "3");
+}
+
+TEST(IoStatesArray, NonObjectElementIsSkippedAndTheRestKept)
+{
+    auto events = receive(MSG_IO_STATES, json::array({
+        {{"io_id", "tol_elem_ok"}, {"state", "on"}}, "stray", 4, nullptr,
+        {{"io_id", "tol_elem_ok2"}, {"state", "off"}}}));
+    auto* b = batchOf(events);
+    ASSERT_NE(b, nullptr);
+    EXPECT_EQ(b->ioStates.size(), 2u);
+    EXPECT_TRUE(storeHas("tol_elem_ok"));
+    EXPECT_TRUE(storeHas("tol_elem_ok2"));
+}
+
+TEST(IoStatesArray, NonStringIdIsSkippedAndTheRestKept)
+{
+    auto events = receive(MSG_IO_STATES, json::array({
+        {{"io_id", 5}, {"state", "x"}}, {{"io_id", "tol_id_ok"}, {"state", "y"}}}));
+    auto* b = batchOf(events);
+    ASSERT_NE(b, nullptr);
+    EXPECT_EQ(b->ioStates.size(), 1u);
+    EXPECT_EQ(b->ioStates.count("tol_id_ok"), 1u);
+}
+
+TEST(IoStatesObject, NumericValueIsConvertedToTheState)
+{
+    auto events = receive(MSG_IO_STATES, json{{"tol_obj_int", 12}, {"tol_obj_float", 3.5}});
+    auto* b = batchOf(events);
+    ASSERT_NE(b, nullptr);
+    EXPECT_EQ(b->ioStates.at("tol_obj_int").state, "12");
+    EXPECT_EQ(b->ioStates.at("tol_obj_float").state, "3.5");
+}
+
+TEST(IoStatesObject, NullAndContainerValuesAreSkipped)
+{
+    auto events = receive(MSG_IO_STATES, json{
+        {"tol_obj_null", nullptr}, {"tol_obj_list", json::array({1})}, {"tol_obj_kept", "on"}});
+    auto* b = batchOf(events);
+    ASSERT_NE(b, nullptr);
+    EXPECT_EQ(b->ioStates.size(), 1u);
+    EXPECT_EQ(b->ioStates.count("tol_obj_kept"), 1u);
+}
+
+TEST(IoStatesObject, NumericValueUpdatesAnExistingStoredState)
+{
+    receive(MSG_IO_STATES, json{{"tol_obj_clear", "on"}});
+    ASSERT_EQ(AppStore::getInstance().getStateCopy().ioStates.at("tol_obj_clear").state, "on");
+
+    receive(MSG_IO_STATES, json{{"tol_obj_clear", 3}});
+    EXPECT_EQ(AppStore::getInstance().getStateCopy().ioStates.at("tol_obj_clear").state, "3");
 }

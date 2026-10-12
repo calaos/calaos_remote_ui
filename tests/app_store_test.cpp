@@ -114,9 +114,7 @@ TEST(AppStoreIo, NonEmptyDescriptiveFieldsReplaceExistingOnes)
     EXPECT_EQ(got.gui_type, "g2");
 }
 
-// BUG (RUI-2): visible, enabled and brightness are copied on first sight only;
-// a later update that changes them is silently ignored (IoStateReceived merge).
-TEST(AppStoreKnownBugs, VisibleEnabledAndBrightnessAreNotMergedIntoAnExistingIo)
+TEST(AppStoreIo, VisibleEnabledAndBrightnessAreMergedIntoAnExistingIo)
 {
     const std::string st_flags = uid("st_flags");
     receiveOne(io(st_flags, "a"));
@@ -128,14 +126,23 @@ TEST(AppStoreKnownBugs, VisibleEnabledAndBrightnessAreNotMergedIntoAnExistingIo)
     receiveOne(update);
 
     const auto got = stored(store().getStateCopy(), st_flags);
-    EXPECT_TRUE(got.visible);
-    EXPECT_TRUE(got.enabled);
-    EXPECT_EQ(got.brightness, -1);
+    EXPECT_FALSE(got.visible);
+    EXPECT_FALSE(got.enabled);
+    EXPECT_EQ(got.brightness, 70);
 }
 
-// BUG (RUI-2): change detection looks at the state string only (app_store.cpp:333),
-// so a change to any other field does not notify subscribers.
-TEST(AppStoreKnownBugs, SingleUpdateNotifiesOnlyWhenTheStateStringChanges)
+TEST(AppStoreIo, UnsetBrightnessDoesNotEraseAStoredOne)
+{
+    const std::string st_bri = uid("st_bri");
+    IoState first = io(st_bri, "a");
+    first.brightness = 40;
+    receiveOne(first);
+
+    receiveOne(io(st_bri, "b"));
+    EXPECT_EQ(stored(store().getStateCopy(), st_bri).brightness, 40);
+}
+
+TEST(AppStoreIo, SingleUpdateNotifiesOnlyWhenSomethingChanged)
 {
     const std::string st_notify = uid("st_notify");
     receiveOne(io(st_notify, "a"));
@@ -148,8 +155,38 @@ TEST(AppStoreKnownBugs, SingleUpdateNotifiesOnlyWhenTheStateStringChanges)
     EXPECT_EQ(sub.calls, 1);
 }
 
-// BUG (RUI-2): consequence of the above; a rename is stored but never pushed to widgets.
-TEST(AppStoreKnownBugs, SingleUpdateThatOnlyRenamesIsStoredButNotNotified)
+TEST(AppStoreIo, SingleUpdateNotifiesOnAnyFieldChange)
+{
+    struct Case
+    {
+        const char* what;
+        void (*mutate)(IoState&);
+    };
+    const Case cases[] = {
+        {"name", [](IoState& s) { s.name = "Renamed"; }},
+        {"type", [](IoState& s) { s.type = "Other"; }},
+        {"gui_type", [](IoState& s) { s.gui_type = "other"; }},
+        {"visible", [](IoState& s) { s.visible = false; }},
+        {"enabled", [](IoState& s) { s.enabled = false; }},
+        {"brightness", [](IoState& s) { s.brightness = 55; }},
+    };
+
+    for (const auto& c : cases)
+    {
+        SCOPED_TRACE(c.what);
+        const std::string id = uid("st_any");
+        receiveOne(io(id, "a", "Name", "Type", "gui"));
+        Subscription sub;
+
+        IoState update = io(id, "a", "Name", "Type", "gui");
+        c.mutate(update);
+        receiveOne(update);
+
+        EXPECT_EQ(sub.calls, 1);
+    }
+}
+
+TEST(AppStoreIo, SingleUpdateThatOnlyRenamesIsStoredAndNotified)
 {
     const std::string st_rename = uid("st_rename");
     receiveOne(io(st_rename, "a", "Before"));
@@ -157,7 +194,7 @@ TEST(AppStoreKnownBugs, SingleUpdateThatOnlyRenamesIsStoredButNotNotified)
 
     receiveOne(io(st_rename, "a", "After"));
 
-    EXPECT_EQ(sub.calls, 0);
+    EXPECT_EQ(sub.calls, 1);
     EXPECT_EQ(stored(store().getStateCopy(), st_rename).name, "After");
 }
 
@@ -193,8 +230,7 @@ TEST(AppStoreIo, BatchNotifiesOnceEvenWhenNothingChanged)
     EXPECT_EQ(sub.calls, 1);
 }
 
-// BUG (RUI-2): same omission in the IoStatesReceived merge.
-TEST(AppStoreKnownBugs, BatchDoesNotMergeVisibleEnabledEither)
+TEST(AppStoreIo, BatchMergesVisibleEnabledAndBrightness)
 {
     const std::string st_bflags = uid("st_bflags");
     receiveBatch({io(st_bflags, "a")});
@@ -202,11 +238,13 @@ TEST(AppStoreKnownBugs, BatchDoesNotMergeVisibleEnabledEither)
     IoState update = io(st_bflags, "a");
     update.visible = false;
     update.enabled = false;
+    update.brightness = 30;
     receiveBatch({update});
 
     const auto got = stored(store().getStateCopy(), st_bflags);
-    EXPECT_TRUE(got.visible);
-    EXPECT_TRUE(got.enabled);
+    EXPECT_FALSE(got.visible);
+    EXPECT_FALSE(got.enabled);
+    EXPECT_EQ(got.brightness, 30);
 }
 
 TEST(AppStoreIo, EmptyBatchStillNotifies)
