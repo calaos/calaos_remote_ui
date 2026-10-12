@@ -30,7 +30,7 @@ The CI builds firmware for each supported board, packages it into a `.deb`, and 
 
 ### Host tests
 
-Characterization tests for the protocol parsing (`PagesConfig::fromJson`, `remote_ui_io_states`, `io_changed`, `remote_ui_config_update`) and for `AppStore`. They compile the real sources with a fake HAL (`tests/support/fake_hal.cpp`), so no display or network is needed. GoogleTest is fetched by CMake.
+Tests for the protocol parsing (`PagesConfig::fromJson`, `remote_ui_io_states`, `io_changed`, `remote_ui_config_update`, the `device` object, JSON device commands) and for `AppStore`. They compile the real sources with a fake HAL (`tests/support/fake_hal.cpp`), so no display or network is needed. GoogleTest is fetched by CMake.
 
 ```bash
 cmake -S . -B build_linux -DBUILD_LINUX=ON -DBOARD=linux-dev -DBUILD_HOST_TESTS=ON
@@ -38,7 +38,7 @@ cmake --build build_linux -j"$(nproc)"
 ctest --test-dir build_linux --output-on-failure
 ```
 
-Tests named `*KnownBugs*` pin defects as they behave today; fixing one is expected to flip its assertions. Each carries a `// BUG (RUI-2)` comment; `grep -rn KnownBugs tests/` lists them.
+A defect that cannot be fixed in the same change is pinned in a suite named `*KnownBugs*`, with a comment saying what is wrong; fixing it flips its assertions. `grep -rn KnownBugs tests/` lists them (none today).
 
 Open point: `esp32-build` in `pull-request.yml` pulls the published `:latest` ghcr image, which can lag behind a Dockerfile changed in the same PR (the image is only rebuilt after merge).
 
