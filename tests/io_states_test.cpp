@@ -141,13 +141,44 @@ TEST(IoStatesObject, NestedObjectParsesAllFields)
     EXPECT_FALSE(io.enabled);
 }
 
-TEST(IoStatesObject, InnerIdOverridesTheMapKeyOnTheStateOnly)
+// The key is what a widget subscribes to; an inner id must not move the entry.
+TEST(IoStatesObject, TheMapKeyIsTheIdAndAnInnerIdIsIgnored)
 {
     auto events = receive(MSG_IO_STATES, json{{"obj_key", {{"id", "obj_inner"}, {"state", "s"}}}});
     auto* b = batchOf(events);
+    ASSERT_NE(b, nullptr);
     ASSERT_EQ(b->ioStates.size(), 1u);
     ASSERT_EQ(b->ioStates.count("obj_key"), 1u);
-    EXPECT_EQ(b->ioStates.at("obj_key").id, "obj_inner");
+    EXPECT_EQ(b->ioStates.at("obj_key").id, "obj_key");
+    EXPECT_TRUE(storeHas("obj_key"));
+    EXPECT_FALSE(storeHas("obj_inner"));
+}
+
+TEST(IoStatesObject, EmptyInnerIdDoesNotCreateAnEmptyKeyedIo)
+{
+    auto events = receive(MSG_IO_STATES, json{{"obj_empty_inner", {{"id", ""}, {"state", "s"}}}});
+    auto* b = batchOf(events);
+    ASSERT_NE(b, nullptr);
+    ASSERT_EQ(b->ioStates.size(), 1u);
+    EXPECT_EQ(b->ioStates.at("obj_empty_inner").id, "obj_empty_inner");
+    EXPECT_FALSE(storeHas(""));
+}
+
+TEST(IoStatesObject, EmptyKeyIsSkipped)
+{
+    auto events = receive(MSG_IO_STATES, json{{"", "x"}, {"obj_after_empty", "y"}});
+    auto* b = batchOf(events);
+    ASSERT_NE(b, nullptr);
+    EXPECT_EQ(b->ioStates.size(), 1u);
+    EXPECT_FALSE(storeHas(""));
+}
+
+TEST(IoStatesArray, EmptyIoIdWithNoIdIsSkipped)
+{
+    auto events = receive(MSG_IO_STATES, json::array({{{"io_id", ""}, {"state", "x"}}}));
+    ASSERT_NE(batchOf(events), nullptr);
+    EXPECT_TRUE(batchOf(events)->ioStates.empty());
+    EXPECT_FALSE(storeHas(""));
 }
 
 TEST(IoStatesObject, BooleanStateInsideObject)
