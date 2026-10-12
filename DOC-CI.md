@@ -38,7 +38,9 @@ cmake --build build_linux -j"$(nproc)"
 ctest --test-dir build_linux --output-on-failure
 ```
 
-Tests named `*KnownBugs*` pin defects as they behave today; fixing one is expected to flip its assertions.
+Tests named `*KnownBugs*` pin defects as they behave today; fixing one is expected to flip its assertions. Each carries a `// BUG (RUI-2)` comment; `grep -rn KnownBugs tests/` lists them.
+
+Open point: `esp32-build` in `pull-request.yml` pulls the published `:latest` ghcr image, which can lag behind a Dockerfile changed in the same PR (the image is only rebuilt after merge).
 
 ### Workflow: `build-docker-images.yml`
 

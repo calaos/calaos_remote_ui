@@ -39,7 +39,7 @@ jobs:
   # sources in main/CMakeLists.txt) before it reaches main.
   esp32-build:
     name: ESP32 build (waveshare-86-panel)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       BOARD: waveshare-86-panel
     steps:
