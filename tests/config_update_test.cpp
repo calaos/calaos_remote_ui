@@ -124,12 +124,56 @@ TEST(ConfigUpdate, EventsArriveInTheStore)
     EXPECT_EQ(st.ioStates.at("cfg_store").name, "Store");
 }
 
-// The mirror image of the io_states defect: here the flags must be strings, and
-// a JSON boolean throws, which drops the config update itself, not only the IOs.
-TEST(ConfigUpdateKnownBugs, BooleanIoItemFlagDropsTheWholeConfigUpdate)
+// The server sends these flags as strings; a JSON boolean must not drop the config update.
+TEST(ConfigUpdate, BooleanIoItemFlagsAreAcceptedAndTheConfigIsKept)
 {
-    auto events = receive(MSG_CONFIG_UPDATE, {{"name", "Lost"},
-        {"io_items", json::array({{{"id", "cfg_bug"}, {"visible", true}}})}});
-    EXPECT_EQ(configOf(events), nullptr);
-    EXPECT_EQ(batchOf(events), nullptr);
+    auto events = receive(MSG_CONFIG_UPDATE, {{"name", "Kept"},
+        {"io_items", json::array({{{"id", "cfg_bool"}, {"visible", true}, {"rw", false}}})}});
+    auto* c = configOf(events);
+    ASSERT_NE(c, nullptr);
+    EXPECT_EQ(c->config.name, "Kept");
+    auto* b = batchOf(events);
+    ASSERT_NE(b, nullptr);
+    EXPECT_TRUE(b->ioStates.at("cfg_bool").visible);
+    EXPECT_FALSE(b->ioStates.at("cfg_bool").enabled);
+}
+
+TEST(ConfigUpdate, BadIoItemIsSkippedAndTheOthersAndTheConfigAreKept)
+{
+    auto events = receive(MSG_CONFIG_UPDATE, {{"name", "Kept"},
+        {"io_items", json::array({
+            "stray", 3, {{"id", 9}, {"name", "numeric id"}},
+            {{"id", "cfg_bad_name"}, {"name", json::object()}, {"type", json::array()}},
+            {{"id", "cfg_good"}, {"name", "Good"}}})}});
+    auto* c = configOf(events);
+    ASSERT_NE(c, nullptr);
+    EXPECT_EQ(c->config.name, "Kept");
+    auto* b = batchOf(events);
+    ASSERT_NE(b, nullptr);
+    EXPECT_EQ(b->ioStates.size(), 2u);
+    EXPECT_TRUE(b->ioStates.at("cfg_bad_name").name.empty());
+    EXPECT_EQ(b->ioStates.at("cfg_good").name, "Good");
+}
+
+TEST(ConfigUpdate, ScalarOfTheWrongTypeKeepsItsDefaultAndTheConfig)
+{
+    auto events = receive(MSG_CONFIG_UPDATE, {{"name", "Kept"}, {"brightness", "abc"},
+        {"timeout", json::object()}, {"screensaver_timeout", "abc"}, {"screensaver_dimming", nullptr},
+        {"theme", 4}});
+    auto* c = configOf(events);
+    ASSERT_NE(c, nullptr);
+    EXPECT_EQ(c->config.name, "Kept");
+    EXPECT_EQ(c->config.brightness, 80);
+    EXPECT_EQ(c->config.timeout, 30);
+    EXPECT_EQ(c->config.screensaver_timeout, 0);
+    EXPECT_EQ(c->config.screensaver_dimming, 0);
+}
+
+TEST(ConfigUpdate, GridGivenAsStringsIsAccepted)
+{
+    auto* c = configOf(receive(MSG_CONFIG_UPDATE, {{"grid_width", "4"}, {"grid_height", "2"}}));
+    ASSERT_NE(c, nullptr);
+    auto pages = c->config.getParsedPages();
+    EXPECT_EQ(pages.grid_width, 4);
+    EXPECT_EQ(pages.grid_height, 2);
 }

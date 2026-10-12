@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 #include "calaos_protocol.h"
 #include "board_config.h"
-#include <stdexcept>
 
 using CalaosProtocol::PagesConfig;
 using CalaosProtocol::RemoteUIConfig;
@@ -164,31 +163,58 @@ TEST(PagesConfig, EmptyStringReturnsBoardDefaults)
     EXPECT_TRUE(c.pages.empty());
 }
 
-// BUG (RUI-2): one mistyped field discards every page already parsed: the
-// json::exception handler returns a fresh default config.
-TEST(PagesConfigKnownBugs, TypeMismatchDiscardsTheWholeConfig)
+TEST(PagesConfig, MistypedWidgetFieldDropsOnlyThatWidget)
 {
-    auto c = PagesConfig::fromJson(R"({"grid_width": 6, "pages": [{"widgets": [
-        {"type": "ok"}, {"type": "T", "io_id": 5}]}]})");
-    EXPECT_EQ(c.grid_width, kBoardGridW);
-    EXPECT_TRUE(c.pages.empty());
+    auto c = PagesConfig::fromJson(R"({"grid_width": 6, "pages": [
+        {"widgets": [{"type": "ok"}, {"type": "T", "io_id": 5}, {"type": "ok2"}]},
+        {"widgets": [{"type": "page2"}]}]})");
+    EXPECT_EQ(c.grid_width, 6);
+    ASSERT_EQ(c.pages.size(), 2u);
+    ASSERT_EQ(c.pages[0].widgets.size(), 2u);
+    EXPECT_EQ(c.pages[0].widgets[0].type, "ok");
+    EXPECT_EQ(c.pages[0].widgets[1].type, "ok2");
+    ASSERT_EQ(c.pages[1].widgets.size(), 1u);
+    EXPECT_EQ(c.pages[1].widgets[0].type, "page2");
 }
 
-// BUG (RUI-2): a grid given as a string drops the whole config, same handler.
-TEST(PagesConfigKnownBugs, GridGivenAsStringDiscardsTheWholeConfig)
+TEST(PagesConfig, WidgetFieldsOfTheWrongTypeAreDropped)
 {
-    auto c = PagesConfig::fromJson(R"({"grid_width": "4", "pages": [{"widgets": [{"type": "ok"}]}]})");
-    EXPECT_EQ(c.grid_width, kBoardGridW);
-    EXPECT_TRUE(c.pages.empty());
+    auto c = PagesConfig::fromJson(R"({"pages": [{"widgets": [
+        {"type": 3}, {"type": "T", "name": []}, {"type": "T", "x": null}, {"type": "T", "w": {}},
+        {"type": "T", "h": true}, "stray", 7, null, {"type": "kept"}]}]})");
+    ASSERT_EQ(c.pages.size(), 1u);
+    ASSERT_EQ(c.pages[0].widgets.size(), 1u);
+    EXPECT_EQ(c.pages[0].widgets[0].type, "kept");
 }
 
-// BUG (RUI-2): std::stoi throws std::invalid_argument, not a json::exception, so it
-// escapes fromJson and would terminate a caller that does not catch it.
-TEST(PagesConfigKnownBugs, NonNumericStringCoordinateEscapesAsInvalidArgument)
+TEST(PagesConfig, GridGivenAsStringIsAccepted)
 {
-    EXPECT_THROW(
-        PagesConfig::fromJson(R"({"pages": [{"widgets": [{"type": "T", "x": "abc"}]}]})"),
-        std::invalid_argument);
+    auto c = PagesConfig::fromJson(R"({"grid_width": "4", "grid_height": " 5", "pages": [{"widgets": [{"type": "ok"}]}]})");
+    EXPECT_EQ(c.grid_width, 4);
+    EXPECT_EQ(c.grid_height, 5);
+    ASSERT_EQ(c.pages.size(), 1u);
+    EXPECT_EQ(c.pages[0].widgets.size(), 1u);
+}
+
+TEST(PagesConfig, UnusableGridKeepsTheBoardDefaultAndThePages)
+{
+    auto c = PagesConfig::fromJson(R"({"grid_width": "abc", "grid_height": [2], "pages": [{"widgets": [{"type": "ok"}]}]})");
+    EXPECT_EQ(c.grid_width, kBoardGridW);
+    EXPECT_EQ(c.grid_height, kBoardGridH);
+    ASSERT_EQ(c.pages.size(), 1u);
+    EXPECT_EQ(c.pages[0].widgets.size(), 1u);
+}
+
+TEST(PagesConfig, NonNumericStringCoordinateDropsOnlyThatWidget)
+{
+    PagesConfig c;
+    ASSERT_NO_THROW(c = PagesConfig::fromJson(R"({"pages": [{"widgets": [
+        {"type": "bad", "x": "abc"}, {"type": "bad", "y": ""}, {"type": "bad", "w": "2x"},
+        {"type": "bad", "height": "99999999999"}, {"type": "ok", "x": "1"}]}]})"));
+    ASSERT_EQ(c.pages.size(), 1u);
+    ASSERT_EQ(c.pages[0].widgets.size(), 1u);
+    EXPECT_EQ(c.pages[0].widgets[0].type, "ok");
+    EXPECT_EQ(c.pages[0].widgets[0].x, 1);
 }
 
 TEST(RemoteUIConfig, EmptyPagesJsonYieldsDefaultPages)
