@@ -385,4 +385,10 @@ if(DETECTED_PLATFORM STREQUAL "LINUX")
 
     # Link libraries
     target_link_libraries(${PROJECT_NAME} lvgl smooth_ui_toolkit mongoose pthread ${LINUX_DISPLAY_LIBS})
+
+    option(BUILD_HOST_TESTS "Build the host unit tests (gtest is fetched by CMake)" OFF)
+    if(BUILD_HOST_TESTS)
+        enable_testing()
+        add_subdirectory(tests)
+    endif()
 endif()

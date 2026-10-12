@@ -68,6 +68,9 @@ public:
     bool sendRelayState(int relay, bool state);
 
 private:
+    // Host tests feed raw protocol messages to the private handlers.
+    friend struct CalaosWebSocketManagerTestAccess;
+
     /**
      * @brief Build WebSocket URL from server URL
      * @param serverUrl Server IP or hostname
