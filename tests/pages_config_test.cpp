@@ -164,9 +164,9 @@ TEST(PagesConfig, EmptyStringReturnsBoardDefaults)
     EXPECT_TRUE(c.pages.empty());
 }
 
-// A single mistyped field discards every page that was already parsed: the
+// BUG (RUI-2): one mistyped field discards every page already parsed: the
 // json::exception handler returns a fresh default config.
-TEST(PagesConfig, TypeMismatchDiscardsTheWholeConfig)
+TEST(PagesConfigKnownBugs, TypeMismatchDiscardsTheWholeConfig)
 {
     auto c = PagesConfig::fromJson(R"({"grid_width": 6, "pages": [{"widgets": [
         {"type": "ok"}, {"type": "T", "io_id": 5}]}]})");
@@ -174,16 +174,17 @@ TEST(PagesConfig, TypeMismatchDiscardsTheWholeConfig)
     EXPECT_TRUE(c.pages.empty());
 }
 
-TEST(PagesConfig, GridGivenAsStringDiscardsTheWholeConfig)
+// BUG (RUI-2): a grid given as a string drops the whole config, same handler.
+TEST(PagesConfigKnownBugs, GridGivenAsStringDiscardsTheWholeConfig)
 {
     auto c = PagesConfig::fromJson(R"({"grid_width": "4", "pages": [{"widgets": [{"type": "ok"}]}]})");
     EXPECT_EQ(c.grid_width, kBoardGridW);
     EXPECT_TRUE(c.pages.empty());
 }
 
-// std::stoi throws std::invalid_argument, which is not a json::exception, so it
+// BUG (RUI-2): std::stoi throws std::invalid_argument, not a json::exception, so it
 // escapes fromJson and would terminate a caller that does not catch it.
-TEST(PagesConfig, NonNumericStringCoordinateEscapesAsInvalidArgument)
+TEST(PagesConfigKnownBugs, NonNumericStringCoordinateEscapesAsInvalidArgument)
 {
     EXPECT_THROW(
         PagesConfig::fromJson(R"({"pages": [{"widgets": [{"type": "T", "x": "abc"}]}]})"),

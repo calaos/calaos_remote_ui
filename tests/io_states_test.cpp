@@ -156,27 +156,6 @@ TEST(IoStatesObject, BooleanStateInsideObject)
     EXPECT_EQ(batchOf(events)->ioStates.at("obj_inner_bool").state, "true");
 }
 
-// A numeric or null value is not a recognised shorthand: the entry is still
-// created, with an empty state, and the store then overwrites the previous state.
-TEST(IoStatesObject, NumericValueYieldsAnEntryWithEmptyState)
-{
-    auto events = receive(MSG_IO_STATES, json{{"obj_num", 12}, {"obj_null", nullptr}});
-    auto* b = batchOf(events);
-    ASSERT_NE(b, nullptr);
-    EXPECT_EQ(b->ioStates.size(), 2u);
-    EXPECT_TRUE(b->ioStates.at("obj_num").state.empty());
-    EXPECT_TRUE(b->ioStates.at("obj_null").state.empty());
-}
-
-TEST(IoStatesObject, NumericValueClearsAnExistingStoredState)
-{
-    receive(MSG_IO_STATES, json{{"obj_clear", "on"}});
-    ASSERT_EQ(AppStore::getInstance().getStateCopy().ioStates.at("obj_clear").state, "on");
-
-    receive(MSG_IO_STATES, json{{"obj_clear", 3}});
-    EXPECT_EQ(AppStore::getInstance().getStateCopy().ioStates.at("obj_clear").state, "");
-}
-
 TEST(IoStatesObject, EmptyObjectDispatchesAnEmptyBatch)
 {
     auto events = receive(MSG_IO_STATES, json::object());
@@ -251,4 +230,27 @@ TEST(IoStatesKnownBugs, NonObjectArrayElementDropsTheWholeBatch)
         {{"io_id", "bug_elem_ok"}, {"state", "on"}}, "stray"}));
     EXPECT_EQ(countBatches(events), 0);
     EXPECT_FALSE(storeHas("bug_elem_ok"));
+}
+
+// BUG (RUI-2): a numeric or null value is not a recognised shorthand, so the entry is
+// created with an empty state instead of the value (or being skipped).
+TEST(IoStatesKnownBugs, NumericValueYieldsAnEntryWithEmptyState)
+{
+    auto events = receive(MSG_IO_STATES, json{{"obj_num", 12}, {"obj_null", nullptr}});
+    auto* b = batchOf(events);
+    ASSERT_NE(b, nullptr);
+    EXPECT_EQ(b->ioStates.size(), 2u);
+    EXPECT_TRUE(b->ioStates.at("obj_num").state.empty());
+    EXPECT_TRUE(b->ioStates.at("obj_null").state.empty());
+}
+
+// BUG (RUI-2): the empty state then overwrites the one already stored, so a sensor
+// sent as a bare number blanks its widget.
+TEST(IoStatesKnownBugs, NumericValueClearsAnExistingStoredState)
+{
+    receive(MSG_IO_STATES, json{{"obj_clear", "on"}});
+    ASSERT_EQ(AppStore::getInstance().getStateCopy().ioStates.at("obj_clear").state, "on");
+
+    receive(MSG_IO_STATES, json{{"obj_clear", 3}});
+    EXPECT_EQ(AppStore::getInstance().getStateCopy().ioStates.at("obj_clear").state, "");
 }
