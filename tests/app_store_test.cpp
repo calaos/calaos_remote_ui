@@ -11,6 +11,13 @@ namespace
 // its own io ids and only asserts on those.
 AppStore& store() { return AppStore::getInstance(); }
 
+// Unique per call so --gtest_repeat does not meet ids stored by a previous pass.
+std::string uid(const std::string& prefix)
+{
+    static int counter = 0;
+    return prefix + "_" + std::to_string(counter++);
+}
+
 IoState io(const std::string& id, const std::string& state = "",
            const std::string& name = "", const std::string& type = "",
            const std::string& guiType = "")
@@ -57,13 +64,14 @@ struct Subscription
 
 TEST(AppStoreIo, NewIoIsInsertedWithAllFields)
 {
-    IoState s = io("st_new", "on", "Lampe", "WODigital", "light");
+    const std::string st_new = uid("st_new");
+    IoState s = io(st_new, "on", "Lampe", "WODigital", "light");
     s.visible = false;
     s.enabled = false;
     s.brightness = 40;
     receiveOne(s);
 
-    const auto got = stored(store().getStateCopy(), "st_new");
+    const auto got = stored(store().getStateCopy(), st_new);
     EXPECT_EQ(got.state, "on");
     EXPECT_EQ(got.name, "Lampe");
     EXPECT_EQ(got.type, "WODigital");
@@ -75,17 +83,19 @@ TEST(AppStoreIo, NewIoIsInsertedWithAllFields)
 
 TEST(AppStoreIo, StateAlwaysOverwritesEvenWithAnEmptyString)
 {
-    receiveOne(io("st_over", "on"));
-    receiveOne(io("st_over", ""));
-    EXPECT_EQ(stored(store().getStateCopy(), "st_over").state, "");
+    const std::string st_over = uid("st_over");
+    receiveOne(io(st_over, "on"));
+    receiveOne(io(st_over, ""));
+    EXPECT_EQ(stored(store().getStateCopy(), st_over).state, "");
 }
 
 TEST(AppStoreIo, EmptyDescriptiveFieldsDoNotEraseExistingOnes)
 {
-    receiveOne(io("st_keep", "a", "Name", "Type", "gui"));
-    receiveOne(io("st_keep", "b"));
+    const std::string st_keep = uid("st_keep");
+    receiveOne(io(st_keep, "a", "Name", "Type", "gui"));
+    receiveOne(io(st_keep, "b"));
 
-    const auto got = stored(store().getStateCopy(), "st_keep");
+    const auto got = stored(store().getStateCopy(), st_keep);
     EXPECT_EQ(got.state, "b");
     EXPECT_EQ(got.name, "Name");
     EXPECT_EQ(got.type, "Type");
@@ -94,96 +104,107 @@ TEST(AppStoreIo, EmptyDescriptiveFieldsDoNotEraseExistingOnes)
 
 TEST(AppStoreIo, NonEmptyDescriptiveFieldsReplaceExistingOnes)
 {
-    receiveOne(io("st_repl", "a", "Old", "T1", "g1"));
-    receiveOne(io("st_repl", "a", "New", "T2", "g2"));
+    const std::string st_repl = uid("st_repl");
+    receiveOne(io(st_repl, "a", "Old", "T1", "g1"));
+    receiveOne(io(st_repl, "a", "New", "T2", "g2"));
 
-    const auto got = stored(store().getStateCopy(), "st_repl");
+    const auto got = stored(store().getStateCopy(), st_repl);
     EXPECT_EQ(got.name, "New");
     EXPECT_EQ(got.type, "T2");
     EXPECT_EQ(got.gui_type, "g2");
 }
 
-// visible, enabled and brightness are copied on first sight only. A later
-// update that changes them is silently ignored.
-TEST(AppStoreIo, VisibleEnabledAndBrightnessAreNotMergedIntoAnExistingIo)
+// BUG (RUI-2): visible, enabled and brightness are copied on first sight only;
+// a later update that changes them is silently ignored (IoStateReceived merge).
+TEST(AppStoreKnownBugs, VisibleEnabledAndBrightnessAreNotMergedIntoAnExistingIo)
 {
-    receiveOne(io("st_flags", "a"));
+    const std::string st_flags = uid("st_flags");
+    receiveOne(io(st_flags, "a"));
 
-    IoState update = io("st_flags", "a");
+    IoState update = io(st_flags, "a");
     update.visible = false;
     update.enabled = false;
     update.brightness = 70;
     receiveOne(update);
 
-    const auto got = stored(store().getStateCopy(), "st_flags");
+    const auto got = stored(store().getStateCopy(), st_flags);
     EXPECT_TRUE(got.visible);
     EXPECT_TRUE(got.enabled);
     EXPECT_EQ(got.brightness, -1);
 }
 
-TEST(AppStoreIo, SingleUpdateNotifiesOnlyWhenTheStateStringChanges)
+// BUG (RUI-2): change detection looks at the state string only (app_store.cpp:333),
+// so a change to any other field does not notify subscribers.
+TEST(AppStoreKnownBugs, SingleUpdateNotifiesOnlyWhenTheStateStringChanges)
 {
-    receiveOne(io("st_notify", "a"));
+    const std::string st_notify = uid("st_notify");
+    receiveOne(io(st_notify, "a"));
     Subscription sub;
 
-    receiveOne(io("st_notify", "a"));
+    receiveOne(io(st_notify, "a"));
     EXPECT_EQ(sub.calls, 0);
 
-    receiveOne(io("st_notify", "b"));
+    receiveOne(io(st_notify, "b"));
     EXPECT_EQ(sub.calls, 1);
 }
 
-// The merge still happens when nobody is notified, so a renamed IO whose state
-// did not move is stored but not pushed to the widgets.
-TEST(AppStoreIo, SingleUpdateThatOnlyRenamesIsStoredButNotNotified)
+// BUG (RUI-2): consequence of the above; a rename is stored but never pushed to widgets.
+TEST(AppStoreKnownBugs, SingleUpdateThatOnlyRenamesIsStoredButNotNotified)
 {
-    receiveOne(io("st_rename", "a", "Before"));
+    const std::string st_rename = uid("st_rename");
+    receiveOne(io(st_rename, "a", "Before"));
     Subscription sub;
 
-    receiveOne(io("st_rename", "a", "After"));
+    receiveOne(io(st_rename, "a", "After"));
 
     EXPECT_EQ(sub.calls, 0);
-    EXPECT_EQ(stored(store().getStateCopy(), "st_rename").name, "After");
+    EXPECT_EQ(stored(store().getStateCopy(), st_rename).name, "After");
 }
 
 TEST(AppStoreIo, NewIoNotifiesEvenWithAnEmptyState)
 {
+    const std::string st_new_empty = uid("st_new_empty");
     Subscription sub;
-    receiveOne(io("st_new_empty", ""));
+    receiveOne(io(st_new_empty, ""));
     EXPECT_EQ(sub.calls, 1);
 }
 
 TEST(AppStoreIo, BatchMergesLikeSingleUpdates)
 {
-    receiveOne(io("st_b1", "a", "Name", "Type", "gui"));
-    receiveBatch({io("st_b1", "z"), io("st_b2", "y", "Two")});
+    const std::string st_b1 = uid("st_b1");
+    const std::string st_b2 = uid("st_b2");
+    receiveOne(io(st_b1, "a", "Name", "Type", "gui"));
+    receiveBatch({io(st_b1, "z"), io(st_b2, "y", "Two")});
 
     auto st = store().getStateCopy();
-    EXPECT_EQ(stored(st, "st_b1").state, "z");
-    EXPECT_EQ(stored(st, "st_b1").name, "Name");
-    EXPECT_EQ(stored(st, "st_b2").state, "y");
-    EXPECT_EQ(stored(st, "st_b2").name, "Two");
+    EXPECT_EQ(stored(st, st_b1).state, "z");
+    EXPECT_EQ(stored(st, st_b1).name, "Name");
+    EXPECT_EQ(stored(st, st_b2).state, "y");
+    EXPECT_EQ(stored(st, st_b2).name, "Two");
 }
 
 TEST(AppStoreIo, BatchNotifiesOnceEvenWhenNothingChanged)
 {
-    receiveBatch({io("st_bn", "a")});
+    const std::string st_bn = uid("st_bn");
+    receiveBatch({io(st_bn, "a")});
     Subscription sub;
 
-    receiveBatch({io("st_bn", "a")});
+    receiveBatch({io(st_bn, "a")});
     EXPECT_EQ(sub.calls, 1);
 }
 
-TEST(AppStoreIo, BatchDoesNotMergeVisibleEnabledEither)
+// BUG (RUI-2): same omission in the IoStatesReceived merge.
+TEST(AppStoreKnownBugs, BatchDoesNotMergeVisibleEnabledEither)
 {
-    receiveBatch({io("st_bflags", "a")});
+    const std::string st_bflags = uid("st_bflags");
+    receiveBatch({io(st_bflags, "a")});
 
-    IoState update = io("st_bflags", "a");
+    IoState update = io(st_bflags, "a");
     update.visible = false;
     update.enabled = false;
     receiveBatch({update});
 
-    const auto got = stored(store().getStateCopy(), "st_bflags");
+    const auto got = stored(store().getStateCopy(), st_bflags);
     EXPECT_TRUE(got.visible);
     EXPECT_TRUE(got.enabled);
 }
@@ -205,32 +226,35 @@ TEST(AppStoreIo, IoStatesAreNotPartOfStateEquality)
 
 TEST(AppStoreSubscribers, UnsubscribeStopsNotifications)
 {
+    const std::string sub_a = uid("sub_a");
     int calls = 0;
     auto id = store().subscribe([&](const AppState&) { calls++; });
-    receiveOne(io("sub_a", "1"));
+    receiveOne(io(sub_a, "1"));
     EXPECT_EQ(calls, 1);
 
     store().unsubscribe(id);
-    receiveOne(io("sub_a", "2"));
+    receiveOne(io(sub_a, "2"));
     EXPECT_EQ(calls, 1);
 }
 
 TEST(AppStoreSubscribers, CallbackReceivesTheUpdatedState)
 {
+    const std::string sub_state = uid("sub_state");
     std::string seen;
     auto id = store().subscribe([&](const AppState& st)
     {
-        auto it = st.ioStates.find("sub_state");
+        auto it = st.ioStates.find(sub_state);
         if (it != st.ioStates.end())
             seen = it->second.state;
     });
-    receiveOne(io("sub_state", "value"));
+    receiveOne(io(sub_state, "value"));
     store().unsubscribe(id);
     EXPECT_EQ(seen, "value");
 }
 
 TEST(AppStoreSubscribers, CallbackMayUnsubscribeItself)
 {
+    const std::string sub_self = uid("sub_self");
     int calls = 0;
     SubscriptionId id = 0;
     id = store().subscribe([&](const AppState&)
@@ -238,21 +262,22 @@ TEST(AppStoreSubscribers, CallbackMayUnsubscribeItself)
         calls++;
         store().unsubscribe(id);
     });
-    receiveOne(io("sub_self", "1"));
-    receiveOne(io("sub_self", "2"));
+    receiveOne(io(sub_self, "1"));
+    receiveOne(io(sub_self, "2"));
     EXPECT_EQ(calls, 1);
 }
 
 TEST(AppStoreSubscribers, CallbackMayReadTheStore)
 {
+    const std::string sub_reenter = uid("sub_reenter");
     std::string seen;
     auto id = store().subscribe([&](const AppState&)
     {
-        auto it = store().getState().ioStates.find("sub_reenter");
+        auto it = store().getState().ioStates.find(sub_reenter);
         if (it != store().getState().ioStates.end())
             seen = it->second.state;
     });
-    receiveOne(io("sub_reenter", "ok"));
+    receiveOne(io(sub_reenter, "ok"));
     store().unsubscribe(id);
     EXPECT_EQ(seen, "ok");
 }
