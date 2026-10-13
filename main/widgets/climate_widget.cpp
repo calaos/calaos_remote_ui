@@ -13,6 +13,10 @@ namespace
 const lv_color_t kChipBg = LV_COLOR_MAKE(0x26, 0x26, 0x26);
 const lv_color_t kCaption = LV_COLOR_MAKE(0x8A, 0x8A, 0x8A);
 
+// Only sizes other screens already link: each new font costs 40-150 KB of flash
+const std::vector<const lv_font_t*> kMidFonts = {&roboto_light_48, &roboto_regular_32, &roboto_regular_28};
+const std::vector<const lv_font_t*> kSmallFonts = {&roboto_regular_32, &roboto_regular_28, &roboto_light_26};
+
 constexpr int kGap = 8;
 constexpr int kChipHeight = 44;
 constexpr int kButton = 44;
@@ -437,13 +441,13 @@ void ClimateWidget::buildCompact(lv_obj_t* body)
     addInfoRow(body);
 
     lv_obj_t* value = box(body, LV_FLEX_FLOW_ROW);
-    singleBox_ = targetLabel_ = label(value, fit({&roboto_light_48, &roboto_light_32}, widest, contentW_),
+    singleBox_ = targetLabel_ = label(value, fit(kMidFonts, widest, contentW_),
                                       theme_color_white, "--");
     noneLabel_ = label(value, &roboto_light_48, theme_color_white, "--");
 
     rangeBox_ = box(value, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_column(rangeBox_, kGap * 2, 0);
-    const lv_font_t* rangeFont = fit({&roboto_light_32, &roboto_light_28, &roboto_light_24}, widest, contentW_, 2);
+    const lv_font_t* rangeFont = fit(kSmallFonts, widest, contentW_, 2);
     lowLabel_ = label(rangeBox_, rangeFont, theme_color_orange, "--");
     highLabel_ = label(rangeBox_, rangeFont, theme_color_blue, "--");
 
@@ -483,13 +487,13 @@ void ClimateWidget::buildWide(lv_obj_t* body)
 
     const int valueW = leftW - 2 * kButton - 2 * kGap;
     singleBox_ = addRangeRow(left, &targetLabel_, Op::TargetDown, Op::TargetUp,
-                             fit({&roboto_light_48, &roboto_light_32}, widest, valueW), kButton);
+                             fit(kMidFonts, widest, valueW), kButton);
     noneLabel_ = label(left, &roboto_light_48, theme_color_white, "--");
 
     rangeBox_ = box(left, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_width(rangeBox_, LV_PCT(100));
     lv_obj_set_style_pad_row(rangeBox_, 6, 0);
-    const lv_font_t* rangeFont = fit({&roboto_light_32, &roboto_light_28}, widest, valueW);
+    const lv_font_t* rangeFont = fit(kSmallFonts, widest, valueW);
     addRangeRow(rangeBox_, &lowLabel_, Op::LowDown, Op::LowUp, rangeFont, kButton);
     addRangeRow(rangeBox_, &highLabel_, Op::HighDown, Op::HighUp, rangeFont, kButton);
 
@@ -528,13 +532,13 @@ void ClimateWidget::buildTall(lv_obj_t* body)
     addInfoRow(body);
 
     singleBox_ = addRangeRow(body, &targetLabel_, Op::TargetDown, Op::TargetUp,
-                             fit({&roboto_light_48, &roboto_light_32, &roboto_light_28}, widest, valueW), kButton);
+                             fit(kMidFonts, widest, valueW), kButton);
     noneLabel_ = label(body, &roboto_light_48, theme_color_white, "--");
 
     rangeBox_ = box(body, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_width(rangeBox_, LV_PCT(100));
     lv_obj_set_style_pad_row(rangeBox_, 6, 0);
-    const lv_font_t* rangeFont = fit({&roboto_light_32, &roboto_light_28, &roboto_light_24}, widest, valueW);
+    const lv_font_t* rangeFont = fit(kSmallFonts, widest, valueW);
     addRangeRow(rangeBox_, &lowLabel_, Op::LowDown, Op::LowUp, rangeFont, kButton);
     addRangeRow(rangeBox_, &highLabel_, Op::HighDown, Op::HighUp, rangeFont, kButton);
 
@@ -590,7 +594,7 @@ void ClimateWidget::buildLarge(lv_obj_t* body)
     lv_obj_set_width(rangeBox_, LV_PCT(100));
     lv_obj_set_flex_align(rangeBox_, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     const int halfW = (contentW_ - 2 * kGap) / 2;
-    const lv_font_t* rangeFont = fit({&roboto_light_48, &roboto_light_32, &roboto_light_28}, widest,
+    const lv_font_t* rangeFont = fit(kMidFonts, widest,
                                      halfW - 2 * kButton - 2 * kGap);
     const struct { const char* caption; lv_obj_t** value; Op down; Op up; } handles[] = {
         {"Heat to", &lowLabel_, Op::LowDown, Op::LowUp},
