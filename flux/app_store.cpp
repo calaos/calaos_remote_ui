@@ -382,6 +382,17 @@ void AppStore::handleEvent(const AppEvent& event)
             {
                 if (auto* data = event.getData<IoStatesReceivedData>())
                 {
+                    if (data->replace)
+                    {
+                        for (auto it = state_.ioStates.begin(); it != state_.ioStates.end();)
+                        {
+                            if (data->ioStates.count(it->first))
+                                ++it;
+                            else
+                                it = state_.ioStates.erase(it);
+                        }
+                    }
+
                     for (const auto& [id, ioState] : data->ioStates)
                         mergeIoState(id, ioState);
 
