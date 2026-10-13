@@ -181,6 +181,8 @@ struct AppState
     CalaosWebSocketState websocket;
     OtaState ota;
     std::map<std::string, CalaosProtocol::IoState> ioStates;
+    // Bumped for an IO each time the server refuses one of its device commands
+    std::map<std::string, uint32_t> ioCommandRefusals;
     CalaosProtocol::RemoteUIConfig config;
     bool screensaverActive = false;
     std::string requestedPageId;

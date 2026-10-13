@@ -32,6 +32,10 @@ CalaosWidget::CalaosWidget(lv_obj_t* parent,
 
         // Try to get initial state from AppStore
         const AppState& state = AppStore::getInstance().getState();
+        auto refusals = state.ioCommandRefusals.find(config.io_id);
+        if (refusals != state.ioCommandRefusals.end())
+            refusalsSeen_ = refusals->second;
+
         auto it = state.ioStates.find(config.io_id);
         if (it != state.ioStates.end())
         {
@@ -42,11 +46,7 @@ CalaosWidget::CalaosWidget(lv_obj_t* parent,
         else
         {
             ESP_LOGW(TAG, "Widget %s: IO state not found in AppStore", config.io_id.c_str());
-            // Set default state
-            currentState.id = config.io_id;
-            currentState.type = config.type;
-            currentState.state = "unknown";
-            currentState.name = config.io_id;
+            currentState = placeholderState();
         }
     }
     else
@@ -109,19 +109,30 @@ void CalaosWidget::subscribeToStateChanges()
     });
 }
 
+CalaosProtocol::IoState CalaosWidget::placeholderState() const
+{
+    CalaosProtocol::IoState placeholder;
+    placeholder.id = config.io_id;
+    placeholder.type = config.type;
+    placeholder.state = "unknown";
+    placeholder.name = config.io_id;
+    return placeholder;
+}
+
 void CalaosWidget::onAppStateChanged(const AppState& appState)
 {
-    // Find our IO state in the map
+    uint32_t refusals = 0;
+    auto r = appState.ioCommandRefusals.find(config.io_id);
+    if (r != appState.ioCommandRefusals.end())
+        refusals = r->second;
+    const bool refused = refusals != refusalsSeen_;
+
+    // An IO dropped by a config update must not keep showing its last state
     auto it = appState.ioStates.find(config.io_id);
-    if (it == appState.ioStates.end())
-    {
-        // IO state not present (yet)
-        return;
-    }
+    const CalaosProtocol::IoState newState = it != appState.ioStates.end() ? it->second : placeholderState();
+    const bool changed = newState != currentState;
 
-    const CalaosProtocol::IoState& newState = it->second;
-
-    if (newState == currentState)
+    if (!changed && !refused)
         return;
 
     ESP_LOGI(TAG, "Widget %s state update: %s", config.io_id.c_str(), newState.state.c_str());
@@ -130,11 +141,18 @@ void CalaosWidget::onAppStateChanged(const AppState& appState)
     if (HAL::getInstance().getDisplay().tryLock(100))
     {
         // Only once the UI can follow: a failed lock must leave the change detectable
-        currentState = newState;
         try
         {
-            // Call child implementation to update UI
-            onStateUpdate(newState);
+            if (refused)
+            {
+                refusalsSeen_ = refusals;
+                onCommandRefused();
+            }
+            if (changed)
+            {
+                currentState = newState;
+                onStateUpdate(newState);
+            }
         }
         catch (const std::exception& e)
         {
@@ -180,4 +198,15 @@ bool CalaosWidget::sendDeviceCommand(const nlohmann::json& command)
     }
 
     return g_wsManager->sendDeviceCommand(config.io_id, command);
+}
+
+bool CalaosWidget::sendDeviceMode(const std::string& mode)
+{
+    if (!g_wsManager)
+    {
+        ESP_LOGW(TAG, "WebSocket manager not available - device mode not sent");
+        return false;
+    }
+
+    return g_wsManager->sendDeviceMode(config.io_id, mode);
 }

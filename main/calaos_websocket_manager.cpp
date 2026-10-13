@@ -253,13 +253,52 @@ bool CalaosWebSocketManager::isConnecting() const
     return isConnecting_;
 }
 
-std::string CalaosWebSocketManager::buildSetStateMessage(const std::string& io_id, const std::string& value)
+namespace
+{
+constexpr const char* kDeviceCommandMsgIdPrefix = "ui_cmd:";
+}
+
+std::string CalaosWebSocketManager::buildSetStateMessage(const std::string& io_id, const std::string& value,
+                                                         const std::string& msg_id)
 {
     json j;
     j["msg"] = CalaosProtocol::MSG_SET_STATE;
+    // The server only answers a set_state that carries a msg_id
+    if (!msg_id.empty())
+        j["msg_id"] = msg_id;
     j["data"]["id"] = io_id;
     j["data"]["value"] = value;
     return j.dump(-1, ' ', false, json::error_handler_t::replace);
+}
+
+std::string CalaosWebSocketManager::deviceCommandMsgId(const std::string& io_id)
+{
+    return kDeviceCommandMsgIdPrefix + io_id;
+}
+
+std::optional<std::string> CalaosWebSocketManager::refusedDeviceCommand(const json& message)
+{
+    const json* msgId = wire::find(message, "msg_id");
+    if (!msgId || !msgId->is_string())
+        return std::nullopt;
+
+    const std::string& id = msgId->get_ref<const std::string&>();
+    const std::string prefix = kDeviceCommandMsgIdPrefix;
+    if (id.size() <= prefix.size() || id.compare(0, prefix.size(), prefix) != 0)
+        return std::nullopt;
+
+    const json* data = wire::find(message, "data");
+    const json* success = data ? wire::find(*data, "success") : nullptr;
+    if (!success)
+        return std::nullopt;
+
+    // The server sends "true"/"false" strings; a real boolean is read the same way
+    const bool refused = (success->is_string() && success->get_ref<const std::string&>() == "false") ||
+                         (success->is_boolean() && !success->get<bool>());
+    if (!refused)
+        return std::nullopt;
+
+    return id.substr(prefix.size());
 }
 
 std::optional<std::string> CalaosWebSocketManager::buildDeviceCommandMessage(const std::string& io_id,
@@ -271,7 +310,17 @@ std::optional<std::string> CalaosWebSocketManager::buildDeviceCommandMessage(con
         return std::nullopt;
 
     return buildSetStateMessage(io_id,
-        command.dump(-1, ' ', false, json::error_handler_t::replace));
+        command.dump(-1, ' ', false, json::error_handler_t::replace), deviceCommandMsgId(io_id));
+}
+
+std::optional<std::string> CalaosWebSocketManager::buildDeviceModeMessage(const std::string& io_id,
+                                                                         const std::string& mode)
+{
+    // A value starting with '{' would be read as a JSON partial update
+    if (io_id.empty() || mode.empty() || mode.front() == '{')
+        return std::nullopt;
+
+    return buildSetStateMessage(io_id, mode, deviceCommandMsgId(io_id));
 }
 
 bool CalaosWebSocketManager::sendMessage(const std::string& message)
@@ -317,6 +366,26 @@ bool CalaosWebSocketManager::sendDeviceCommand(const std::string& io_id, const j
     catch (const std::exception& e)
     {
         ESP_LOGE(TAG, "Failed to build device command: %s", e.what());
+        return false;
+    }
+}
+
+bool CalaosWebSocketManager::sendDeviceMode(const std::string& io_id, const std::string& mode)
+{
+    try
+    {
+        auto message = buildDeviceModeMessage(io_id, mode);
+        if (!message)
+        {
+            ESP_LOGW(TAG, "Refusing device mode: needs an io id and a plain mode");
+            return false;
+        }
+
+        return sendMessage(*message);
+    }
+    catch (const std::exception& e)
+    {
+        ESP_LOGE(TAG, "Failed to build device mode: %s", e.what());
         return false;
     }
 }
@@ -451,6 +520,8 @@ void CalaosWebSocketManager::onMessage(const WebSocketMessage& message)
             handleNotification(j.value("data", json::object()));
         else if (msgType == CalaosProtocol::MSG_SET_RELAY)
             handleSetRelay(j.value("data", json::object()));
+        else if (msgType == CalaosProtocol::MSG_SET_STATE)
+            handleSetStateReply(j);
         else
             ESP_LOGW(TAG, "Unknown message type: %s", msgType.c_str());
     }
@@ -785,6 +856,18 @@ void CalaosWebSocketManager::handleIoState(const json& data)
     {
         ESP_LOGE(TAG, "Error parsing IO state: %s", e.what());
     }
+}
+
+void CalaosWebSocketManager::handleSetStateReply(const json& message)
+{
+    auto ioId = refusedDeviceCommand(message);
+    if (!ioId)
+        return;
+
+    ESP_LOGW(TAG, "Server refused the command for %s", ioId->c_str());
+    AppDispatcher::getInstance().dispatch(
+        AppEvent(AppEventType::IoCommandRefused, IoCommandRefusedData{*ioId})
+    );
 }
 
 void CalaosWebSocketManager::handleConfigUpdate(const json& data)

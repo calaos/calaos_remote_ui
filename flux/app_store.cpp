@@ -404,6 +404,16 @@ void AppStore::handleEvent(const AppEvent& event)
                 break;
             }
 
+            case AppEventType::IoCommandRefused:
+            {
+                if (auto* data = event.getData<IoCommandRefusedData>())
+                {
+                    state_.ioCommandRefusals[data->ioId]++;
+                    stateChanged = true;
+                }
+                break;
+            }
+
             case AppEventType::ConfigUpdateReceived:
             {
                 if (auto* data = event.getData<ConfigUpdateReceivedData>())
