@@ -238,3 +238,30 @@ TEST(ConfigUpdateReset, SubscribersSeeTheDroppedIoGone)
 
     EXPECT_TRUE(sawItGone);
 }
+
+// The io_states batch after a config update is the full truth: an IO it sends
+// without a device is no longer one. A single io_changed keeps the device.
+TEST(ConfigUpdateReset, ABatchEntryWithoutADeviceClearsTheStoredOne)
+{
+    receive(CalaosProtocol::MSG_IO_STATES, {{"reset_was_device", climateItem("reset_was_device")}});
+    ASSERT_TRUE(AppStore::getInstance().getStateCopy().ioStates.at("reset_was_device").device.has_value());
+
+    receive(MSG_CONFIG_UPDATE, {{"io_items", json::array({{{"id", "reset_was_device"}}})}});
+    receive(CalaosProtocol::MSG_IO_STATES, {{"reset_was_device", {{"state", "true"}}}});
+    EXPECT_FALSE(AppStore::getInstance().getStateCopy().ioStates.at("reset_was_device").device.has_value());
+
+    receive(CalaosProtocol::MSG_IO_STATES, {{"reset_bare", climateItem("reset_bare")}});
+    receive(CalaosProtocol::MSG_IO_STATES, {{"reset_bare", "heat"}});
+    EXPECT_FALSE(AppStore::getInstance().getStateCopy().ioStates.at("reset_bare").device.has_value());
+}
+
+TEST(ConfigUpdateReset, AnIoChangedWithoutADeviceKeepsIt)
+{
+    receive(CalaosProtocol::MSG_IO_STATES, {{"reset_partial", climateItem("reset_partial")}});
+    receive(CalaosProtocol::MSG_EVENT, {{"type_str", "io_changed"}, {"data", {{"id", "reset_partial"}, {"state", "off"}}}});
+    receive(CalaosProtocol::MSG_CONFIG_UPDATE, {{"io_items", json::array({{{"id", "reset_partial"}}})}});
+
+    auto io = AppStore::getInstance().getStateCopy().ioStates.at("reset_partial");
+    EXPECT_EQ(io.state, "off");
+    EXPECT_TRUE(io.device.has_value());
+}
