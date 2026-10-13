@@ -318,7 +318,9 @@ TEST(ClimateCommand, ARangeOnlyDeviceNeverSendsTargetTemp)
 {
     for (const char* mode : {"heat", "cool", "auto", "off"})
     {
-        auto c = rangeOnly(mode);
+        // Even with a stray target_temp value in its state
+        auto c = controller(kRangeOnlyCaps, kRangeOnlyIos, {{"mode", mode}, {"target_temp", 21.0},
+            {"target_temp_low", 19.0}, {"target_temp_high", 23.0}});
         EXPECT_FALSE(c.stepTarget(1)) << mode;
         c.shiftRange(1);
         c.stepLow(-1);
