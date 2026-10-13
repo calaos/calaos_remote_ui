@@ -90,6 +90,9 @@ private:
     void flush(bool repaint = true);
 
     climate::Controller controller_;
+    climate::Capabilities caps_;
+    std::string parsedCaps_;
+    std::string parsedIos_;
     climate::Layout layout_;
     bool hasDevice_ = false;
     std::string builtKey_;

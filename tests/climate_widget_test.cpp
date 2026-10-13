@@ -3,6 +3,7 @@
 #include "support/ws_harness.h"
 #include "widget_factory.h"
 #include "widgets/climate_widget.h"
+#include "misc/lv_area_private.h"
 #include <cstdlib>
 #include <functional>
 #include <memory>
@@ -217,6 +218,22 @@ std::vector<std::string> overflows(CalaosWidget& w)
             std::string what = lv_obj_check_type(o, &lv_label_class) ? lv_label_get_text(o) : "box";
             out.push_back(what + " at " + std::to_string(a.x1) + "," + std::to_string(a.y1) + "-" +
                           std::to_string(a.x2) + "," + std::to_string(a.y2));
+        }
+
+        // Laid out side by side, siblings must not cover each other
+        lv_obj_t* parent = lv_obj_get_parent(o);
+        const bool flex = lv_obj_get_style_layout(parent, LV_PART_MAIN) == LV_LAYOUT_FLEX;
+        for (uint32_t i = 0; flex && i < lv_obj_get_child_count(parent); i++)
+        {
+            lv_obj_t* sib = lv_obj_get_child(parent, i);
+            if (sib == o || !shown(sib) || lv_obj_get_index(sib) < lv_obj_get_index(o))
+                continue;
+            lv_area_t b, common;
+            lv_obj_get_coords(sib, &b);
+            if (lv_area_intersect(&common, &a, &b) && lv_area_get_width(&common) > 1 &&
+                lv_area_get_height(&common) > 1)
+                out.push_back(std::string(lv_obj_check_type(o, &lv_label_class) ? lv_label_get_text(o) : "box") +
+                              " overlaps a sibling");
         }
     });
     return out;

@@ -129,7 +129,14 @@ void CalaosWidget::onAppStateChanged(const AppState& appState)
 
     // An IO dropped by a config update must not keep showing its last state
     auto it = appState.ioStates.find(config.io_id);
-    const CalaosProtocol::IoState newState = it != appState.ioStates.end() ? it->second : placeholderState();
+    // No copy of the stored state (it may carry a device's JSON) unless it changed
+    CalaosProtocol::IoState placeholder;
+    const CalaosProtocol::IoState* found = &placeholder;
+    if (it != appState.ioStates.end())
+        found = &it->second;
+    else
+        placeholder = placeholderState();
+    const CalaosProtocol::IoState& newState = *found;
     const bool changed = newState != currentState;
 
     if (!changed && !refused)
