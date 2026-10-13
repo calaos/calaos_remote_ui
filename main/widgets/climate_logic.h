@@ -134,11 +134,15 @@ private:
     struct Field
     {
         std::optional<T> value;
-        bool sent = false;
+        bool sent = false;      // value is the last one sent
+        // A command for this field is on its way: until the echo, the server
+        // value is stale and an edit back to it must still be sent
+        bool inFlight = false;
 
         bool pending() const { return value && !sent; }
         void set(const T& v) { value = v; sent = false; }
-        void clear() { value.reset(); sent = false; }
+        void clear() { value.reset(); sent = false; inFlight = false; }
+        void markSent() { sent = true; inFlight = true; }
     };
 
     bool setMode(const std::string& mode);

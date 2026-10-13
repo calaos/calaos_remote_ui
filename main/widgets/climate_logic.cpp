@@ -189,12 +189,17 @@ double snap(const Bounds& b, double value)
 
 Range moveLow(const Bounds& b, const Range& current, double low)
 {
+    // Clamping the ceiling to min would hand back a pair narrower than min_range
+    if (current.high - b.minRange < b.min - kEpsilon)
+        return current;
     const double ceiling = onGrid(b, current.high - b.minRange, gridDown);
     return {std::min(snap(b, low), ceiling), current.high};
 }
 
 Range moveHigh(const Bounds& b, const Range& current, double high)
 {
+    if (current.low + b.minRange > b.max + kEpsilon)
+        return current;
     const double floor = onGrid(b, current.low + b.minRange, gridUp);
     return {current.low, std::max(snap(b, high), floor)};
 }
@@ -359,7 +364,8 @@ bool Controller::shiftRange(int steps)
     const Values v = view();
     const Bounds& b = caps_.bounds;
     const double low = *v.low + steps * b.step;
-    const double high = *v.high + steps * b.step;
+    // A pair the server sent too narrow leaves widened, not as it came
+    const double high = std::max(*v.high, *v.low + b.minRange) + steps * b.step;
     if (low < b.min - kEpsilon || high > b.max + kEpsilon)
         return false;
 
@@ -374,7 +380,7 @@ bool Controller::setMode(const std::string& mode)
         return false;
 
     // Back to the server's mode before anything left: nothing to send
-    if (mode == server_.mode && !mode_.sent)
+    if (mode == server_.mode && !mode_.inFlight)
         mode_.clear();
     else
         mode_.set(mode);
@@ -402,7 +408,7 @@ bool Controller::selectFan(const std::string& fan)
 {
     if (!contains(caps_.fanModes, fan) || fan == view().fanMode)
         return false;
-    if (fan == server_.fanMode && !fan_.sent)
+    if (fan == server_.fanMode && !fan_.inFlight)
         fan_.clear();
     else
         fan_.set(fan);
@@ -413,7 +419,7 @@ bool Controller::selectSwing(const std::string& swing)
 {
     if (!contains(caps_.swingModes, swing) || swing == view().swingMode)
         return false;
-    if (swing == server_.swingMode && !swing_.sent)
+    if (swing == server_.swingMode && !swing_.inFlight)
         swing_.clear();
     else
         swing_.set(swing);
@@ -439,12 +445,12 @@ std::optional<Command> Controller::takeCommand()
 
     if (target_.pending())
     {
-        if (same(server_.target, *target_.value))
+        if (same(server_.target, *target_.value) && !target_.inFlight)
             target_.clear();
         else
         {
             partial["target_temp"] = *target_.value;
-            target_.sent = true;
+            target_.markSent();
         }
     }
 
@@ -462,7 +468,7 @@ std::optional<Command> Controller::takeCommand()
             else if (high_.value && !low_.value)
                 high = moveHigh(caps_.bounds, {*low, *high}, *high).high;
 
-            if (same(server_.low, *low) && same(server_.high, *high))
+            if (same(server_.low, *low) && same(server_.high, *high) && !low_.inFlight && !high_.inFlight)
             {
                 low_.clear();
                 high_.clear();
@@ -471,8 +477,8 @@ std::optional<Command> Controller::takeCommand()
             {
                 partial["target_temp_low"] = *low;
                 partial["target_temp_high"] = *high;
-                if (low_.value) { low_.value = low; low_.sent = true; }
-                if (high_.value) { high_.value = high; high_.sent = true; }
+                if (low_.value) { low_.value = low; low_.markSent(); }
+                if (high_.value) { high_.value = high; high_.markSent(); }
             }
         }
         else
@@ -485,19 +491,19 @@ std::optional<Command> Controller::takeCommand()
     if (fan_.pending())
     {
         partial["fan_mode"] = *fan_.value;
-        fan_.sent = true;
+        fan_.markSent();
     }
 
     if (swing_.pending())
     {
         partial["swing_mode"] = *swing_.value;
-        swing_.sent = true;
+        swing_.markSent();
     }
 
     Command cmd;
     if (mode_.pending())
     {
-        mode_.sent = true;
+        mode_.markSent();
         if (partial.empty())
             cmd.mode = *mode_.value;
         else
@@ -523,12 +529,14 @@ void Controller::refused()
 
 void Controller::expireSent()
 {
-    if (mode_.sent) mode_.clear();
-    if (target_.sent) target_.clear();
-    if (low_.sent) low_.clear();
-    if (high_.sent) high_.clear();
-    if (fan_.sent) fan_.clear();
-    if (swing_.sent) swing_.clear();
+    // Unanswered: the server value is all there is to go by again
+    auto expire = [](auto& f) { if (f.sent) f.clear(); else f.inFlight = false; };
+    expire(mode_);
+    expire(target_);
+    expire(low_);
+    expire(high_);
+    expire(fan_);
+    expire(swing_);
 }
 
 } // namespace climate
