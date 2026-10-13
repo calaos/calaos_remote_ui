@@ -181,6 +181,8 @@ struct IoStateReceivedData
 struct IoStatesReceivedData
 {
     std::map<std::string, CalaosProtocol::IoState> ioStates;
+    // The batch lists every IO of the panel: the stored ones it omits are dropped
+    bool replace = false;
 };
 
 struct ConfigUpdateReceivedData

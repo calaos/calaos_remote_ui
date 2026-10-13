@@ -844,7 +844,10 @@ void CalaosWebSocketManager::handleConfigUpdate(const json& data)
         const json* ioItems = wire::find(data, "io_items");
         if (ioItems && ioItems->is_array())
         {
+            // The full io_states batch follows: a known IO keeps its state until
+            // then, and one the server no longer sends must not linger.
             IoStatesReceivedData batchData;
+            batchData.replace = true;
             for (const auto& ioItem : *ioItems)
             {
                 CalaosProtocol::IoState ioState;
@@ -866,13 +869,10 @@ void CalaosWebSocketManager::handleConfigUpdate(const json& data)
                 batchData.ioStates[ioState.id] = ioState;
             }
 
-            if (!batchData.ioStates.empty())
-            {
-                ESP_LOGI(TAG, "Dispatching %zu IO states as batch", batchData.ioStates.size());
-                AppDispatcher::getInstance().dispatch(
-                    AppEvent(AppEventType::IoStatesReceived, batchData)
-                );
-            }
+            ESP_LOGI(TAG, "Dispatching %zu IO states as batch", batchData.ioStates.size());
+            AppDispatcher::getInstance().dispatch(
+                AppEvent(AppEventType::IoStatesReceived, batchData)
+            );
         }
 
         // Dispatch config event
