@@ -445,3 +445,70 @@ TEST(ClimateLayout, CellFootprintPicksTheLayout)
     EXPECT_EQ(chooseLayout(2, 2), Layout::Large);
     EXPECT_EQ(chooseLayout(3, 3), Layout::Large);
 }
+
+// A value sent and not yet echoed: going back to what the server still shows
+// must be sent too, or the device ends on the first value.
+TEST(ClimateDraft, StepBackToServerWhileInFlight)
+{
+    auto c = proxy("heat");
+    c.stepTarget(1);
+    ASSERT_EQ(c.takeCommand()->partial, (json{{"target_temp", 21.5}}));
+    c.stepTarget(-1);
+    auto cmd = c.takeCommand();
+    ASSERT_TRUE(cmd.has_value());
+    EXPECT_EQ(cmd->partial, (json{{"target_temp", 21.0}}));
+}
+
+TEST(ClimateDraft, StepBackToServerWhileInFlightRange)
+{
+    auto c = proxy("auto");
+    c.stepHigh(1);
+    ASSERT_TRUE(c.takeCommand().has_value());
+    c.stepHigh(-1);
+    auto cmd = c.takeCommand();
+    ASSERT_TRUE(cmd.has_value());
+    EXPECT_EQ(cmd->partial, (json{{"target_temp_low", 19.0}, {"target_temp_high", 24.0}}));
+}
+
+TEST(ClimateDraft, ModeBackToServerWhileInFlight)
+{
+    auto c = proxy("heat");
+    c.selectMode("cool");
+    ASSERT_TRUE(c.takeCommand().has_value());
+    c.selectMode("dry");
+    c.selectMode("heat");
+    auto cmd = c.takeCommand();
+    ASSERT_TRUE(cmd.has_value());
+    EXPECT_EQ(cmd->mode, "heat");
+}
+
+TEST(ClimateDraft, AnEchoOfTheFirstValueDoesNotCancelTheSecond)
+{
+    auto c = proxy("heat");
+    c.stepTarget(1);
+    c.takeCommand();
+    c.stepTarget(-1);
+    serverSays(c, proxyState(21.5));
+    EXPECT_DOUBLE_EQ(*c.view().target, 21);
+    auto cmd = c.takeCommand();
+    ASSERT_TRUE(cmd.has_value());
+    EXPECT_EQ(cmd->partial, (json{{"target_temp", 21.0}}));
+}
+
+TEST(ClimateSetpoint, NearTheBoundsAHandleNeverBreaksMinRange)
+{
+    Bounds b{10, 30, 0.5, 2, "°C"};
+    // A pair already narrower than min_range against a bound: no legal move,
+    // the handle stays rather than jump to the bound
+    EXPECT_DOUBLE_EQ(moveLow(b, {10.5, 11.5}, 11).low, 10.5);
+    EXPECT_DOUBLE_EQ(moveHigh(b, {28.5, 29.5}, 29).high, 29.5);
+}
+
+TEST(ClimateSetpoint, ShiftingRestoresMinRange)
+{
+    // The server sent a pair closer than min_range (2)
+    auto c = controller(kProxyCaps, kProxyIos, {{"mode", "auto"}, {"target_temp_low", 20.0},
+        {"target_temp_high", 21.0}});
+    EXPECT_TRUE(c.shiftRange(1));
+    EXPECT_GE(*c.view().high - *c.view().low, 2.0);
+}
