@@ -12,6 +12,13 @@ struct CalaosWebSocketManagerTestAccess
     {
         mgr.onMessage(msg);
     }
+
+    // Makes mgr look connected and hands what it sends to sink
+    static void connect(CalaosWebSocketManager& mgr, std::function<bool(const std::string&)> sink)
+    {
+        mgr.currentState_ = WebSocketState::CONNECTED;
+        mgr.sendSink_ = std::move(sink);
+    }
 };
 
 // Sends one server message through the same entry point as the real socket and

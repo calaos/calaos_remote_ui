@@ -6,6 +6,8 @@ extern const lv_color_t theme_color_blue;
 extern const lv_color_t theme_color_yellow;
 extern const lv_color_t theme_color_red;
 extern const lv_color_t theme_color_green;
+extern const lv_color_t theme_color_orange;
+extern const lv_color_t theme_color_grey;
 extern const lv_color_t theme_color_white;
 extern const lv_color_t theme_color_black;
 

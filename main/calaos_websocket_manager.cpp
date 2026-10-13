@@ -333,6 +333,9 @@ bool CalaosWebSocketManager::sendMessage(const std::string& message)
 
     ESP_LOGD(TAG, "Sending IO state: %s", message.c_str());
 
+    if (sendSink_)
+        return sendSink_(message);
+
     WebSocketClient& wsClient = CalaosNet::instance().webSocketClient();
     return wsClient.sendJson(message) == NetworkResult::OK;
 }
