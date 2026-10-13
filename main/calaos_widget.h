@@ -90,6 +90,16 @@ protected:
     bool sendDeviceCommand(const nlohmann::json& command);
 
     /**
+     * @brief Send a plain mode to the device this widget shows, e.g. "off"
+     */
+    bool sendDeviceMode(const std::string& mode);
+
+    /**
+     * @brief Called when the server refused a device command sent for this widget's IO
+     */
+    virtual void onCommandRefused() {}
+
+    /**
      * @brief Child classes override this to implement widget-specific UI updates
      * @param state New IO state
      */
@@ -118,6 +128,11 @@ private:
      * @param appState New application state
      */
     void onAppStateChanged(const AppState& appState);
+
+    // What the widget shows while the server sends nothing for its IO
+    CalaosProtocol::IoState placeholderState() const;
+
+    uint32_t refusalsSeen_ = 0;
 
     // Subscription ID for unsubscribing
     SubscriptionId subscriptionId_;

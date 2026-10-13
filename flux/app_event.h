@@ -39,6 +39,7 @@ enum class AppEventType
     IoStateReceived,
     IoStatesReceived,
     ConfigUpdateReceived,
+    IoCommandRefused,
 
     // OTA update events
     OtaUpdateAvailable,
@@ -185,6 +186,11 @@ struct IoStatesReceivedData
     bool replace = false;
 };
 
+struct IoCommandRefusedData
+{
+    std::string ioId;
+};
+
 struct ConfigUpdateReceivedData
 {
     CalaosProtocol::RemoteUIConfig config;
@@ -250,6 +256,7 @@ using AppEventData = std::variant<
     IoStateReceivedData,
     IoStatesReceivedData,
     ConfigUpdateReceivedData,
+    IoCommandRefusedData,
     OtaUpdateAvailableData,
     OtaProgressData,
     OtaErrorData,

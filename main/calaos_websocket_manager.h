@@ -61,9 +61,24 @@ public:
      */
     bool sendDeviceCommand(const std::string& io_id, const nlohmann::json& command);
 
-    static std::string buildSetStateMessage(const std::string& io_id, const std::string& value);
+    /**
+     * @brief Send a plain mode to a device (e.g. "off"), the short form of {"mode": ...}
+     * @return false when not connected or when the mode is empty or looks like JSON
+     */
+    bool sendDeviceMode(const std::string& io_id, const std::string& mode);
+
+    static std::string buildSetStateMessage(const std::string& io_id, const std::string& value,
+                                            const std::string& msg_id = std::string());
     static std::optional<std::string> buildDeviceCommandMessage(const std::string& io_id,
                                                                 const nlohmann::json& command);
+    static std::optional<std::string> buildDeviceModeMessage(const std::string& io_id,
+                                                             const std::string& mode);
+
+    // Device commands carry this msg_id so that the server's verdict names the IO
+    static std::string deviceCommandMsgId(const std::string& io_id);
+
+    // The IO whose device command the server refused, if message is such a reply
+    static std::optional<std::string> refusedDeviceCommand(const nlohmann::json& message);
 
     /**
      * @brief Request configuration from server
@@ -164,6 +179,7 @@ private:
      * @brief Handle remote_ui_set_relay message
      */
     void handleSetRelay(const nlohmann::json& data);
+    void handleSetStateReply(const nlohmann::json& message);
 
     /**
      * @brief Check if error indicates authentication failure

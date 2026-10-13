@@ -25,6 +25,7 @@ add_executable(host_tests
     io_changed_test.cpp
     app_store_test.cpp
     device_test.cpp
+    command_reply_test.cpp
 
     ${APP_ROOT}/main/calaos_protocol.cpp
     ${APP_ROOT}/main/calaos_websocket_manager.cpp
