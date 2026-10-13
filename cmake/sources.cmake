@@ -41,6 +41,7 @@ set(MAIN_SOURCES
     main/widgets/shutter_wide_widget.cpp
     main/widgets/shutter_large_widget.cpp
     main/widgets/climate_logic.cpp
+    main/widgets/climate_widget.cpp
 )
 
 # Flux architecture sources

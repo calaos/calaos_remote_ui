@@ -5,6 +5,7 @@
 #include <nlohmann/json.hpp>
 #include <memory>
 #include <optional>
+#include <functional>
 #include <string>
 
 // Global pointer to WebSocket manager instance (set by StartupPage)
@@ -99,6 +100,9 @@ private:
 
     // Host tests feed raw protocol messages to the private handlers.
     friend struct CalaosWebSocketManagerTestAccess;
+
+    // Set by host tests only: receives what would go on the socket
+    std::function<bool(const std::string&)> sendSink_;
 
     /**
      * @brief Build WebSocket URL from server URL

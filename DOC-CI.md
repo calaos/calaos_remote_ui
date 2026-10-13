@@ -30,12 +30,18 @@ The CI builds firmware for each supported board, packages it into a `.deb`, and 
 
 ### Host tests
 
-Tests for the protocol parsing (`PagesConfig::fromJson`, `remote_ui_io_states`, `io_changed`, `remote_ui_config_update`, the `device` object, JSON device commands) and for `AppStore`. They compile the real sources with a fake HAL (`tests/support/fake_hal.cpp`), so no display or network is needed. GoogleTest is fetched by CMake.
+Tests for the protocol parsing (`PagesConfig::fromJson`, `remote_ui_io_states`, `io_changed`, `remote_ui_config_update`, the `device` object, JSON device commands and their replies), for `AppStore` and for the Climate widget logic (`main/widgets/climate_logic.cpp`). They compile the real sources with a fake HAL (`tests/support/fake_hal.cpp`), so no display or network is needed. GoogleTest is fetched by CMake.
 
 ```bash
 cmake -S . -B build_linux -DBUILD_LINUX=ON -DBOARD=linux-dev -DBUILD_HOST_TESTS=ON
 cmake --build build_linux -j"$(nproc)"
 ctest --test-dir build_linux --output-on-failure
+```
+
+`widget_tests` builds widgets on an in-memory LVGL display (`tests/support/headless_lvgl.cpp`): they are laid out, clicked and rendered without a screen. Set `CLIMATE_SHOTS_DIR` to a directory to also get a PNG of the Climate widget for every fixture and cell size:
+
+```bash
+mkdir -p shots && CLIMATE_SHOTS_DIR=$PWD/shots build_linux/tests/widget_tests
 ```
 
 A defect that cannot be fixed in the same change is pinned in a suite named `*KnownBugs*`, with a comment saying what is wrong; fixing it flips its assertions. `grep -rn KnownBugs tests/` lists them (none today).
