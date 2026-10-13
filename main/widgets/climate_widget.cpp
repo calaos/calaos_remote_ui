@@ -14,12 +14,13 @@ const lv_color_t kChipBg = LV_COLOR_MAKE(0x26, 0x26, 0x26);
 const lv_color_t kCaption = LV_COLOR_MAKE(0x8A, 0x8A, 0x8A);
 
 // Only sizes other screens already link: each new font costs 40-150 KB of flash
-const std::vector<const lv_font_t*> kMidFonts = {&roboto_light_48, &roboto_regular_32, &roboto_regular_28};
-const std::vector<const lv_font_t*> kSmallFonts = {&roboto_regular_32, &roboto_regular_28, &roboto_light_26};
+const std::vector<const lv_font_t*> kMidFonts = {&roboto_light_48, &roboto_regular_32, &roboto_regular_28, &roboto_regular_24};
+const std::vector<const lv_font_t*> kSmallFonts = {&roboto_regular_32, &roboto_regular_28, &roboto_light_26, &roboto_regular_24};
 
 constexpr int kGap = 8;
-constexpr int kChipHeight = 44;
-constexpr int kButton = 44;
+// 48 px and up: about 5 mm on the 4" 720x720 panel, the smallest target for a finger
+constexpr int kChipHeight = 48;
+constexpr int kButton = 52;
 constexpr int kLargeButton = 56;
 
 lv_style_selector_t when(lv_state_t state)
@@ -166,8 +167,16 @@ void ClimateWidget::readState(const CalaosProtocol::IoState& state)
 {
     hasDevice_ = state.device.has_value();
     if (hasDevice_)
-        controller_.update(Capabilities::parse(state.device->capabilities, state.device->ios),
-                           Values::parse(state.device->state, state.state));
+    {
+        // Capabilities rarely change; the state does at every io_changed
+        if (state.device->capabilities != parsedCaps_ || state.device->ios != parsedIos_)
+        {
+            parsedCaps_ = state.device->capabilities;
+            parsedIos_ = state.device->ios;
+            caps_ = Capabilities::parse(parsedCaps_, parsedIos_);
+        }
+        controller_.update(caps_, Values::parse(state.device->state, state.state));
+    }
     else
         controller_.update(Capabilities{}, Values{});
 }
@@ -260,7 +269,9 @@ int ClimateWidget::columnHeight(lv_obj_t* column) const
         }
         if (inSlot || lv_obj_has_flag(child, LV_OBJ_FLAG_HIDDEN))
             continue;
-        used += lv_obj_get_height(child);
+        // A spacer only takes what is left, but its gaps are there
+        if (lv_obj_get_style_flex_grow(child, LV_PART_MAIN) == 0)
+            used += lv_obj_get_height(child);
         count++;
     }
     if (slotHeight >= 0)
@@ -457,6 +468,9 @@ void ClimateWidget::buildCompact(lv_obj_t* body)
     shiftButtons_.push_back(addButton(controls, false, Op::ShiftDown, kButton));
     modeCycle_ = addChip(controls, "--", Op::CycleMode, "", nullptr);
     lv_obj_set_flex_grow(modeCycle_, 1);
+    // Whatever the two 52 px buttons leave: 53 px in the 8" panel's 1x1 cell
+    lv_obj_set_style_min_width(modeCycle_, 0, 0);
+    lv_obj_set_style_pad_hor(modeCycle_, 2, 0);
     modeCycleLabel_ = lv_obj_get_child(modeCycle_, 0);
     shiftButtons_.push_back(addButton(controls, true, Op::ShiftUp, kButton));
     stepButtons_ = shiftButtons_;
@@ -525,10 +539,21 @@ void ClimateWidget::buildTall(lv_obj_t* body)
     const std::string widest = formatSetpoint(b.max, b.step);
     const int valueW = contentW_ - 2 * kButton - 2 * kGap;
 
+    // Name on top, controls at the bottom, readings centred in between: the
+    // free height of a sparse device goes around them, not between every row
+    lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    auto spacer = [body]()
+    {
+        lv_obj_t* s = box(body, LV_FLEX_FLOW_ROW);
+        lv_obj_set_size(s, 1, 0);
+        lv_obj_set_flex_grow(s, 1);
+    };
+
     nameLabel_ = label(body, &roboto_regular_24, theme_color_blue);
     lv_obj_set_width(nameLabel_, LV_PCT(100));
     lv_label_set_long_mode(nameLabel_, LV_LABEL_LONG_SCROLL_CIRCULAR);
 
+    spacer();
     addInfoRow(body);
 
     singleBox_ = addRangeRow(body, &targetLabel_, Op::TargetDown, Op::TargetUp,
@@ -542,6 +567,7 @@ void ClimateWidget::buildTall(lv_obj_t* body)
     addRangeRow(rangeBox_, &lowLabel_, Op::LowDown, Op::LowUp, rangeFont, kButton);
     addRangeRow(rangeBox_, &highLabel_, Op::HighDown, Op::HighUp, rangeFont, kButton);
 
+    spacer();
     addModeChips(body, contentW_);
 
     for (Op op : {Op::CycleFan, Op::CycleSwing})
