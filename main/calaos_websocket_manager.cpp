@@ -818,10 +818,9 @@ void CalaosWebSocketManager::handleIoStates(const json& data)
         ESP_LOGI(TAG, "Parsed %zu IO states", ioStates.size());
 
         // Dispatch event
-        AppDispatcher::getInstance().dispatch(
-            AppEvent(AppEventType::IoStatesReceived,
-                    IoStatesReceivedData{ioStates})
-        );
+        IoStatesReceivedData batch{ioStates};
+        batch.authoritative = true;
+        AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::IoStatesReceived, batch));
     }
     catch (const std::exception& e)
     {

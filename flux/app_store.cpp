@@ -46,7 +46,7 @@ void AppStore::unsubscribe(SubscriptionId id)
     subscribers_.erase(id);
 }
 
-bool AppStore::mergeIoState(const std::string& id, const CalaosProtocol::IoState& update)
+bool AppStore::mergeIoState(const std::string& id, const CalaosProtocol::IoState& update, bool authoritative)
 {
     if (id.empty())
         return false;
@@ -75,7 +75,7 @@ bool AppStore::mergeIoState(const std::string& id, const CalaosProtocol::IoState
         existing.gui_type = update.gui_type;
     if (update.brightness >= 0)
         existing.brightness = update.brightness;
-    if (update.device)
+    if (update.device || authoritative)
         existing.device = update.device;
     if (update.visible_set)
         existing.visible = update.visible;
@@ -394,7 +394,7 @@ void AppStore::handleEvent(const AppEvent& event)
                     }
 
                     for (const auto& [id, ioState] : data->ioStates)
-                        mergeIoState(id, ioState);
+                        mergeIoState(id, ioState, data->authoritative);
 
                     // A batch is always announced: it is the initial sync, and
                     // subscribers rely on it even when nothing differs.

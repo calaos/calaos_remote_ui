@@ -184,6 +184,8 @@ struct IoStatesReceivedData
     std::map<std::string, CalaosProtocol::IoState> ioStates;
     // The batch lists every IO of the panel: the stored ones it omits are dropped
     bool replace = false;
+    // Full states (remote_ui_io_states): an entry without a device is not one
+    bool authoritative = false;
 };
 
 struct IoCommandRefusedData

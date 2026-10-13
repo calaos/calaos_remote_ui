@@ -250,14 +250,15 @@ TEST(DeviceStore, FirstDeviceOnAnExistingIoNotifies)
     EXPECT_EQ(sub.calls, 1);
 }
 
-TEST(DeviceStore, BatchMergesTheDeviceToo)
+// remote_ui_io_states is the full state: an entry without a device is not one
+TEST(DeviceStore, BatchStatesTheDeviceWhole)
 {
     receive(CalaosProtocol::MSG_IO_STATES, json::array({item("dev_batch", climateDevice())}));
     expectClimate(stored("dev_batch").device);
 
     receive(CalaosProtocol::MSG_IO_STATES, json::array({{{"io_id", "dev_batch"}, {"state", "off"}}}));
     EXPECT_EQ(stored("dev_batch").state, "off");
-    expectClimate(stored("dev_batch").device);
+    EXPECT_FALSE(stored("dev_batch").device.has_value());
 }
 
 TEST(PartialUpdates, IoChangedDoesNotResetTheVisibilityFromTheConfig)
