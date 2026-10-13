@@ -178,3 +178,63 @@ TEST(ConfigUpdate, GridGivenAsStringsIsAccepted)
     EXPECT_EQ(pages.grid_width, 4);
     EXPECT_EQ(pages.grid_height, 2);
 }
+
+namespace
+{
+bool isStored(const std::string& id)
+{
+    return AppStore::getInstance().getStateCopy().ioStates.count(id) > 0;
+}
+
+json climateItem(const std::string& id)
+{
+    return {{"state", "heat"}, {"gui_type", "climate"},
+            {"device", {{"family", "climate"}, {"impl", "thermostat"},
+                        {"capabilities", {{"modes", {"off", "heat"}}}}, {"state", {{"mode", "heat"}}}}}};
+}
+}
+
+// The server re-sends its config at every connection, followed by the full
+// io_states batch: what the panel no longer references must not survive it.
+TEST(ConfigUpdateReset, AnIoTheConfigNoLongerListsIsDropped)
+{
+    receive(CalaosProtocol::MSG_IO_STATES, {{"reset_gone", climateItem("reset_gone")}, {"reset_kept", "true"}});
+    ASSERT_TRUE(isStored("reset_gone"));
+
+    receive(MSG_CONFIG_UPDATE, {{"io_items", json::array({{{"id", "reset_kept"}}})}});
+
+    EXPECT_FALSE(isStored("reset_gone"));
+    ASSERT_TRUE(isStored("reset_kept"));
+    EXPECT_EQ(AppStore::getInstance().getStateCopy().ioStates.at("reset_kept").state, "true");
+}
+
+TEST(ConfigUpdateReset, AnEmptyListLeavesNoIo)
+{
+    receive(CalaosProtocol::MSG_IO_STATES, {{"reset_lonely", climateItem("reset_lonely")}});
+    receive(MSG_CONFIG_UPDATE, {{"io_items", json::array()}});
+    EXPECT_TRUE(AppStore::getInstance().getStateCopy().ioStates.empty());
+}
+
+TEST(ConfigUpdateReset, AnUnreadableListDropsNothing)
+{
+    receive(CalaosProtocol::MSG_IO_STATES, {{"reset_safe", "true"}});
+    receive(MSG_CONFIG_UPDATE, {{"name", "No list"}});
+    receive(MSG_CONFIG_UPDATE, {{"io_items", "not a list"}});
+    EXPECT_TRUE(isStored("reset_safe"));
+}
+
+TEST(ConfigUpdateReset, SubscribersSeeTheDroppedIoGone)
+{
+    receive(CalaosProtocol::MSG_IO_STATES, {{"reset_seen", climateItem("reset_seen")}});
+
+    bool sawItGone = false;
+    SubscriptionId id = AppStore::getInstance().subscribe([&](const AppState& s)
+    {
+        if (!s.ioStates.count("reset_seen"))
+            sawItGone = true;
+    });
+    receive(MSG_CONFIG_UPDATE, {{"io_items", json::array({{{"id", "reset_other"}}})}});
+    AppStore::getInstance().unsubscribe(id);
+
+    EXPECT_TRUE(sawItGone);
+}
