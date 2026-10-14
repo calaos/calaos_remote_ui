@@ -148,7 +148,7 @@ std::string ClimateDetail::popupKey() const
 lv_obj_t* ClimateDetail::addControl(lv_obj_t* obj, Op op, const std::string& value, bool inPopup)
 {
     // The popup outlives a rebuilt body: its bindings must not go with the body's
-    auto& bindings = inPopup ? popupBindings_ : bindings_;
+    auto& bindings = inPopup ? *popupBindings_ : bindings_;
     bindings.push_back({this, op, value});
     lv_obj_add_event_cb(obj, eventCb, LV_EVENT_CLICKED, &bindings.back());
     (inPopup ? popupControls_ : controls_).push_back({op, value, obj});
@@ -589,8 +589,9 @@ void ClimateDetail::closePopup()
         lv_obj_delete_async(veil_);
         veil_ = nullptr;
     }
-    // The click being handled still reads its binding: eventCb works on a copy
-    popupBindings_.clear();
+    // The bindings belong to the veil and go with it, when it is really deleted:
+    // a button waiting for that can still be sent a click
+    popupBindings_ = nullptr;
     popupControls_.clear();
 }
 
@@ -601,6 +602,11 @@ void ClimateDetail::buildPopup(Popup which)
     popupBuiltKey_ = popupKey();
 
     veil_ = lv_obj_create(popupParent());
+    popupBindings_ = new std::deque<Binding>();
+    lv_obj_add_event_cb(veil_, [](lv_event_t* e)
+    {
+        delete static_cast<std::deque<Binding>*>(lv_event_get_user_data(e));
+    }, LV_EVENT_DELETE, popupBindings_);
     // Over the widget, still under what must always be on top
     if (embedded_)
         lv_obj_move_to_index(veil_, 0);

@@ -118,7 +118,7 @@ private:
 
     std::deque<Binding> bindings_;
     std::vector<Control> controls_;
-    std::deque<Binding> popupBindings_;
+    std::deque<Binding>* popupBindings_ = nullptr;   // owned by the veil, freed when it is deleted
     std::vector<Control> popupControls_;
     std::unique_ptr<LvglTimer> flushTimer_;
     std::unique_ptr<LvglTimer> echoTimer_;

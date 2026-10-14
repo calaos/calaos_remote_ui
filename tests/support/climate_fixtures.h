@@ -292,7 +292,7 @@ struct ClimateDetailTestAccess
 {
     using Op = ClimateDetail::Op;
 
-    static size_t bindingCount(ClimateDetail& d) { return d.bindings_.size() + d.popupBindings_.size(); }
+    static size_t bindingCount(ClimateDetail& d) { return d.bindings_.size() + (d.popupBindings_ ? d.popupBindings_->size() : 0); }
     static lv_obj_t* overlay(ClimateDetail& d) { return d.overlay_; }
     static lv_obj_t* dialContent(ClimateDetail& d) { return d.dial_->content(); }
     static lv_obj_t* body(ClimateDetail& d) { return d.body_; }

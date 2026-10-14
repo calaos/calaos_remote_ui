@@ -175,6 +175,23 @@ TEST_F(ClimateSmall, AWaitingRelayShowsTheCountdownAndItsGauge)
     EXPECT_FALSE(showsText(compact->get(), "Démarre dans 3\xC2\xA0min"));
 }
 
+TEST_F(ClimateSmall, ANameThatDoesNotFitScrollsLikeTheOthers)
+{
+    headless::resize(1280, 800);
+    publish("cs_name", garageOff());
+    auto narrow = place("cs_name", 2, 1, {180, 180});
+    auto found = labels(narrow->get(), "Chauffage garage");
+    ASSERT_EQ(found.size(), 1u);
+    EXPECT_EQ(lv_label_get_long_mode(found[0]), LV_LABEL_LONG_SCROLL_CIRCULAR);
+
+    // Nothing is cut with dots, and a name that fits wraps as before
+    publish("cs_name_ok", salon());
+    auto roomy = place("cs_name_ok", 2, 1, kSquare);
+    auto ok = labels(roomy->get(), "Clim salon");
+    ASSERT_EQ(ok.size(), 1u);
+    EXPECT_EQ(lv_label_get_long_mode(ok[0]), LV_LABEL_LONG_WRAP);
+}
+
 TEST_F(ClimateSmall, ATallCellShortensAWaitThatWouldTakeThreeLines)
 {
     publish("cs_tall_wait", waiting());
