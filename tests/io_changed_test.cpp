@@ -18,7 +18,8 @@ const IoStateReceivedData* single(const std::vector<AppEvent>& events)
 
 std::string changedState(const json& eventData)
 {
-    auto* d = single(ioChanged(eventData));
+    auto events = ioChanged(eventData);
+    auto* d = single(events);
     return d ? d->ioState.state : "<event lost>";
 }
 }
@@ -40,7 +41,8 @@ TEST(IoChanged, DispatchesIdAndStateOnly)
 
 TEST(IoChanged, MissingStateDispatchesAnEmptyState)
 {
-    auto* d = single(ioChanged({{"id", "ev_nostate"}}));
+    auto events = ioChanged({{"id", "ev_nostate"}});
+    auto* d = single(events);
     ASSERT_NE(d, nullptr);
     EXPECT_TRUE(d->ioState.state.empty());
 }
@@ -99,10 +101,12 @@ TEST(IoChanged, NumericStateReachesTheStore)
 
 TEST(IoChanged, StateOfAnUnsupportedTypeIsEmptyButTheEventIsKept)
 {
-    auto* d = single(ioChanged({{"id", "ev_state_obj"}, {"state", json::object()}}));
+    auto events = ioChanged({{"id", "ev_state_obj"}, {"state", json::object()}});
+    auto* d = single(events);
     ASSERT_NE(d, nullptr);
     EXPECT_TRUE(d->ioState.state.empty());
-    EXPECT_NE(single(ioChanged({{"id", "ev_state_null"}, {"state", nullptr}})), nullptr);
+    auto nullEvents = ioChanged({{"id", "ev_state_null"}, {"state", nullptr}});
+    EXPECT_NE(single(nullEvents), nullptr);
 }
 
 TEST(IoChanged, NonStringIdIsIgnored)

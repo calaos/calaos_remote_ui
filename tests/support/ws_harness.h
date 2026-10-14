@@ -38,6 +38,7 @@ inline std::vector<AppEvent> receive(const char* msg, const nlohmann::json& data
     return receive(nlohmann::json{{"msg", msg}, {"data", data}}.dump());
 }
 
+// The pointer is into `events`: keep them in a variable for as long as it is used.
 template<typename T>
 const T* firstData(const std::vector<AppEvent>& events, AppEventType type)
 {
