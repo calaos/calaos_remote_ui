@@ -35,6 +35,49 @@ jobs:
       - name: Run host tests
         run: ctest --test-dir build_linux --output-on-failure
 
+  # The tests hold raw pointers into event vectors and the dispatcher runs its own
+  # thread: a use-after-free or a race shows up here and nowhere else.
+  host-tests-sanitizers:
+    name: Host tests under ${{ matrix.sanitizer }} sanitizer
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, thread]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake build-essential pkg-config \
+            libmbedtls-dev libsdl2-dev libx11-dev libdrm-dev libgbm-dev \
+            python3-png python3-lz4
+
+      - name: Configure
+        run: |
+          cmake -S . -B build_san -DBUILD_LINUX=ON -DBOARD=linux-dev -DBUILD_HOST_TESTS=ON \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer -g" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer -g" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=${{ matrix.sanitizer }}"
+
+      - name: Build the tests
+        run: cmake --build build_san -j"$(nproc)" --target host_tests widget_tests
+
+      - name: Run host tests
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+          TSAN_OPTIONS: halt_on_error=1
+        run: build_san/tests/host_tests
+
+      - name: Run widget tests
+        if: matrix.sanitizer == 'address'
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: build_san/tests/widget_tests
+
   # One representative ESP32 board: catches ESP-IDF breakage (API drift, missing
   # sources in main/CMakeLists.txt) before it reaches main.
   esp32-build:

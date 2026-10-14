@@ -26,6 +26,7 @@ The CI builds firmware for each supported board, packages it into a `.deb`, and 
 | Job | Purpose |
 |---|---|
 | `host-tests` | Builds the `linux-dev` simulator and the host tests, then runs `ctest` |
+| `host-tests-sanitizers` | Builds the host tests with AddressSanitizer and with ThreadSanitizer and runs them (the widget tests under ASan only), to catch use-after-free and data races |
 | `esp32-build` | Builds `waveshare-86-panel` in its board image, to catch ESP-IDF breakage before merge |
 
 ### Host tests
@@ -39,6 +40,8 @@ ctest --test-dir build_linux --output-on-failure
 ```
 
 `widget_tests` builds widgets on an in-memory LVGL display (`tests/support/headless_lvgl.cpp`): they are laid out, clicked and rendered without a screen. Set `CLIMATE_SHOTS_DIR` to a directory to also get a PNG of the Climate widget for every fixture and cell size:
+
+The same tests run under a sanitizer in CI; locally add `-DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS=-fsanitize=address -DCMAKE_C_FLAGS=-fsanitize=address -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address` (or `thread`) to the configure command.
 
 ```bash
 mkdir -p shots && CLIMATE_SHOTS_DIR=$PWD/shots build_linux/tests/widget_tests
