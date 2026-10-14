@@ -155,6 +155,17 @@ TEST_F(ClimateDetailView, AStoppedOrUnreachableDeviceTakesNoSetpoint)
     }
 }
 
+TEST_F(ClimateDetailView, AStrayTapOnAnUnreachableDeviceChangesNothing)
+{
+    Outbox out;
+    auto& d = show(verandaOffline());
+    click(d, Op::Plus);
+    pause();
+    EXPECT_TRUE(out.sent.empty());
+    EXPECT_TRUE(text(d, "21"));
+    EXPECT_FALSE(text(d, "21.5"));
+}
+
 TEST_F(ClimateDetailView, AnOfflineDeviceCannotChangeMode)
 {
     auto& d = show(verandaOffline());
