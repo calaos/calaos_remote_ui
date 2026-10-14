@@ -29,6 +29,8 @@ public:
         std::function<bool(const climate::Command&)> send;
         // The user closed the view. It must not be destroyed from inside this call.
         std::function<void()> closed;
+        // Embedded in a widget: what the device does, to light the widget
+        std::function<void(const climate::Status&)> styled;
     };
 
     // A pause this long after the last tap sends the command
@@ -36,7 +38,12 @@ public:
     // A sent value not echoed by then gives way to the server's
     static constexpr uint32_t kEchoTimeoutMs = 4000;
 
+    // The full-screen view, on the top layer
     ClimateDetail(const std::string& title, Host host);
+    // The same content laid out inside a widget (2x2 and larger) of the given size:
+    // mode and settings on top, dial, line, title at the bottom. No close button,
+    // no overlay; the popups still open on the top layer.
+    ClimateDetail(lv_obj_t* parent, int width, int height, const std::string& title, Host host);
     ~ClimateDetail();
 
     void update(const climate::Capabilities& caps, const climate::Values& values, bool hasDevice);
@@ -66,6 +73,9 @@ private:
         lv_obj_t* obj;
     };
 
+    void init();
+    climate::DetailMetrics metrics() const;
+    lv_obj_t* popupParent() const;
     void buildBody();
     void buildHeader(lv_obj_t* parent);
     void buildDial(lv_obj_t* parent);
@@ -98,12 +108,17 @@ private:
     climate::LockoutClock clock_;
     bool hasDevice_ = false;
     bool canSet_ = false;
-    int width_;
-    int height_;
+    // The area the content lays out in; the screen's size for the popups
+    int width_ = 0;
+    int height_ = 0;
+    int screenW_ = 0;
+    int screenH_ = 0;
+    bool embedded_ = false;
+    lv_obj_t* parent_ = nullptr;
 
     std::deque<Binding> bindings_;
     std::vector<Control> controls_;
-    std::deque<Binding> popupBindings_;
+    std::deque<Binding>* popupBindings_ = nullptr;   // owned by the veil, freed when it is deleted
     std::vector<Control> popupControls_;
     std::unique_ptr<LvglTimer> flushTimer_;
     std::unique_ptr<LvglTimer> echoTimer_;

@@ -45,6 +45,14 @@ lv_obj_t* stepButton(lv_obj_t* parent, bool plus, int size);
 lv_obj_t* choiceButton(lv_obj_t* parent, int height);
 void setChoiceActive(lv_obj_t* button, bool active);
 
+// Fill and border of a widget lit (or not) by what the device does
+struct Surface
+{
+    lv_color_t bg;
+    lv_color_t border;
+};
+Surface surfaceFor(climate::Backdrop backdrop);
+
 lv_style_selector_t when(lv_state_t state);
 
 } // namespace climate_ui

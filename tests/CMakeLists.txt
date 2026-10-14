@@ -90,7 +90,7 @@ add_executable(widget_tests
     support/fake_hal.cpp
     support/event_probe.cpp
     support/headless_lvgl.cpp
-    climate_widget_test.cpp
+    climate_large_widget_test.cpp
     climate_small_widget_test.cpp
     climate_detail_test.cpp
 

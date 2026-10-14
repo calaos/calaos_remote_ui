@@ -39,6 +39,7 @@ private:
     void buildMiniDial(lv_obj_t* parent, int diameter, int stroke, int knob);
     void buildStatus(lv_obj_t* parent, const lv_font_t* font);
     void refresh();
+    void fitName();
     std::string structureKey() const;
 
     void open();
@@ -59,6 +60,9 @@ private:
     lv_obj_t* body_ = nullptr;
     std::unique_ptr<ClimateDial> dial_;
     lv_obj_t* nameLabel_ = nullptr;
+    const lv_font_t* nameFont_ = nullptr;
+    int nameLines_ = 2;
+    int nameWidth_ = 0;
     lv_obj_t* roomLabel_ = nullptr;      // 1x1: the big reading; elsewhere "Pièce 25.4°"
     lv_obj_t* setLabel_ = nullptr;       // 1x1: "22.5°"
     lv_obj_t* setRow_ = nullptr;

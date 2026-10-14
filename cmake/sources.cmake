@@ -46,7 +46,7 @@ set(MAIN_SOURCES
     main/widgets/climate_dial.cpp
     main/widgets/climate_detail.cpp
     main/widgets/climate_small_widget.cpp
-    main/widgets/climate_widget.cpp
+    main/widgets/climate_large_widget.cpp
 )
 
 # Flux architecture sources

@@ -196,19 +196,6 @@ TEST(ClimateSetpoint, AHandleStaysMinRangeAwayFromTheOther)
     EXPECT_DOUBLE_EQ(*c.view().high, 24);
 }
 
-TEST(ClimateSetpoint, ShiftingARangeMovesBothHandlesWithinBounds)
-{
-    auto c = rangeOnly();
-    EXPECT_TRUE(c.shiftRange(2));
-    EXPECT_DOUBLE_EQ(*c.view().low, 20);
-    EXPECT_DOUBLE_EQ(*c.view().high, 24);
-
-    auto top = controller(kRangeOnlyCaps, kRangeOnlyIos, {{"mode", "auto"},
-        {"target_temp_low", 26}, {"target_temp_high", 30}});
-    EXPECT_FALSE(top.shiftRange(1));
-    EXPECT_TRUE(top.shiftRange(-1));
-}
-
 TEST(ClimateCommand, TapsCoalesceIntoOneCommand)
 {
     auto c = proxy("heat");
@@ -254,7 +241,7 @@ TEST(ClimateCommand, TheActiveModeOrTheWayBackSendsNothing)
     EXPECT_FALSE(c.selectMode("eco"));
     EXPECT_FALSE(c.takeCommand().has_value());
 
-    EXPECT_TRUE(c.cycleMode());
+    EXPECT_TRUE(c.selectMode("cool"));
     EXPECT_EQ(c.view().mode, "cool");
     EXPECT_TRUE(c.selectMode("heat"));
     EXPECT_FALSE(c.takeCommand().has_value());
@@ -262,17 +249,6 @@ TEST(ClimateCommand, TheActiveModeOrTheWayBackSendsNothing)
     c.stepTarget(1);
     c.stepTarget(-1);
     EXPECT_FALSE(c.takeCommand().has_value());
-}
-
-TEST(ClimateCommand, CyclingWrapsAroundTheOfferedModes)
-{
-    auto c = proxy("fan_only");
-    EXPECT_TRUE(c.cycleMode());
-    EXPECT_EQ(c.view().mode, "off");
-
-    auto unknown = controller(kHeatOnlyCaps, "{}", {{"mode", "eco"}});
-    EXPECT_TRUE(unknown.cycleMode());
-    EXPECT_EQ(unknown.view().mode, "off");
 }
 
 TEST(ClimateCommand, ARangeIsAlwaysSentAsAPair)
@@ -322,7 +298,6 @@ TEST(ClimateCommand, ARangeOnlyDeviceNeverSendsTargetTemp)
         auto c = controller(kRangeOnlyCaps, kRangeOnlyIos, {{"mode", mode}, {"target_temp", 21.0},
             {"target_temp_low", 19.0}, {"target_temp_high", 23.0}});
         EXPECT_FALSE(c.stepTarget(1)) << mode;
-        c.shiftRange(1);
         c.stepLow(-1);
         c.stepHigh(1);
         auto cmd = c.takeCommand();
@@ -331,7 +306,8 @@ TEST(ClimateCommand, ARangeOnlyDeviceNeverSendsTargetTemp)
     }
 
     auto c = rangeOnly("heat");
-    EXPECT_TRUE(c.shiftRange(1));
+    EXPECT_TRUE(c.stepLow(1));
+    EXPECT_TRUE(c.stepHigh(1));
     auto cmd = c.takeCommand();
     ASSERT_TRUE(cmd.has_value());
     EXPECT_EQ(cmd->partial, (json{{"target_temp_low", 19.5}, {"target_temp_high", 23.5}}));
@@ -424,16 +400,8 @@ TEST(ClimateFormat, LabelsAndNumbers)
     EXPECT_EQ(formatSetpoint(21, 0.5), "21.0°");
     EXPECT_EQ(formatSetpoint(21, 1), "21°");
     EXPECT_EQ(formatSetpoint(21.25, 0.25), "21.25°");
-    EXPECT_EQ(formatTemperature(std::nullopt), "--");
-    EXPECT_EQ(formatTemperature(23.44), "23.4°");
-
-    EXPECT_EQ(modeLabel("fan_only"), "Fan");
-    EXPECT_EQ(modeLabel("heat"), "Heat");
-    EXPECT_EQ(modeLabel(""), "--");
-    EXPECT_EQ(modeLabel("heat_cool"), "Heat cool");
-    EXPECT_EQ(actionLabel("heating"), "Heating");
-    EXPECT_EQ(actionLabel("idle"), "Idle");
     EXPECT_EQ(optionLabel("auto"), "Auto");
+    EXPECT_EQ(optionLabel("heat_cool"), "Heat cool");
 }
 
 TEST(ClimateLayout, CellFootprintPicksTheLayout)
@@ -504,11 +472,3 @@ TEST(ClimateSetpoint, NearTheBoundsAHandleNeverBreaksMinRange)
     EXPECT_DOUBLE_EQ(moveHigh(b, {28.5, 29.5}, 29).high, 29.5);
 }
 
-TEST(ClimateSetpoint, ShiftingRestoresMinRange)
-{
-    // The server sent a pair closer than min_range (2)
-    auto c = controller(kProxyCaps, kProxyIos, {{"mode", "auto"}, {"target_temp_low", 20.0},
-        {"target_temp_high", 21.0}});
-    EXPECT_TRUE(c.shiftRange(1));
-    EXPECT_GE(*c.view().high - *c.view().low, 2.0);
-}

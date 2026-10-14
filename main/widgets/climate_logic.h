@@ -88,9 +88,6 @@ Range moveLow(const Bounds& b, const Range& current, double low);
 Range moveHigh(const Bounds& b, const Range& current, double high);
 
 std::string formatSetpoint(double value, double step);
-std::string formatTemperature(const std::optional<double>& value);
-std::string modeLabel(const std::string& mode);
-std::string actionLabel(const std::string& action);
 std::string optionLabel(const std::string& option);
 
 // A command is a plain mode when only the mode changes, else a JSON partial update
@@ -127,11 +124,7 @@ public:
     bool stepTarget(int steps);
     bool stepLow(int steps);
     bool stepHigh(int steps);
-    // Moves both handles together, for layouts too small for two of them
-    bool shiftRange(int steps);
-
     bool selectMode(const std::string& mode);
-    bool cycleMode();
     bool selectFan(const std::string& fan);
     bool selectSwing(const std::string& swing);
 

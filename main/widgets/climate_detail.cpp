@@ -29,22 +29,9 @@ ClimateDetail::ClimateDetail(const std::string& title, Host host):
     host_(std::move(host)),
     title_(title)
 {
-    lv_display_t* display = lv_display_get_default();
-    width_ = lv_display_get_horizontal_resolution(display);
-    height_ = lv_display_get_vertical_resolution(display);
-
-    // Created paused: resumed by a tap or a wait, paused again when fired
-    flushTimer_ = std::make_unique<LvglTimer>([this]() { flush(); }, kCoalesceMs);
-    flushTimer_->pause();
-    echoTimer_ = std::make_unique<LvglTimer>([this]()
-    {
-        echoTimer_->pause();
-        controller_.expireSent();
-        refresh();
-    }, kEchoTimeoutMs);
-    echoTimer_->pause();
-    secondTimer_ = std::make_unique<LvglTimer>([this]() { refresh(); }, 1000);
-    secondTimer_->pause();
+    width_ = screenW_ = lv_display_get_horizontal_resolution(lv_display_get_default());
+    height_ = screenH_ = lv_display_get_vertical_resolution(lv_display_get_default());
+    init();
 
     // Under the toast, the OTA screen and the screensaver, which must stay on top
     overlay_ = lv_obj_create(lv_layer_top());
@@ -57,6 +44,35 @@ ClimateDetail::ClimateDetail(const std::string& title, Host host):
     lv_obj_move_to_index(overlay_, 0);
 }
 
+ClimateDetail::ClimateDetail(lv_obj_t* parent, int width, int height, const std::string& title, Host host):
+    host_(std::move(host)),
+    title_(title),
+    embedded_(true),
+    parent_(parent)
+{
+    width_ = width;
+    height_ = height;
+    screenW_ = lv_display_get_horizontal_resolution(lv_display_get_default());
+    screenH_ = lv_display_get_vertical_resolution(lv_display_get_default());
+    init();
+}
+
+void ClimateDetail::init()
+{
+    // Created paused: resumed by a tap or a wait, paused again when fired
+    flushTimer_ = std::make_unique<LvglTimer>([this]() { flush(); }, kCoalesceMs);
+    flushTimer_->pause();
+    echoTimer_ = std::make_unique<LvglTimer>([this]()
+    {
+        echoTimer_->pause();
+        controller_.expireSent();
+        refresh();
+    }, kEchoTimeoutMs);
+    echoTimer_->pause();
+    secondTimer_ = std::make_unique<LvglTimer>([this]() { refresh(); }, 1000);
+    secondTimer_->pause();
+}
+
 ClimateDetail::~ClimateDetail()
 {
     // A page rebuilt mid-edit must not lose the user's last taps
@@ -64,6 +80,25 @@ ClimateDetail::~ClimateDetail()
         flush(false);
     if (overlay_)
         lv_obj_delete(overlay_);
+    else
+    {
+        // Embedded: the widget goes on without us, the popup lives on the top layer
+        if (veil_)
+            lv_obj_delete(veil_);
+        if (body_)
+            lv_obj_delete(body_);
+    }
+}
+
+DetailMetrics ClimateDetail::metrics() const
+{
+    return embedded_ ? widgetMetrics(width_, height_, controller_.kind())
+                     : detailMetrics(width_, height_, controller_.kind());
+}
+
+lv_obj_t* ClimateDetail::popupParent() const
+{
+    return overlay_ ? overlay_ : lv_layer_top();
 }
 
 uint32_t ClimateDetail::now() const
@@ -113,7 +148,7 @@ std::string ClimateDetail::popupKey() const
 lv_obj_t* ClimateDetail::addControl(lv_obj_t* obj, Op op, const std::string& value, bool inPopup)
 {
     // The popup outlives a rebuilt body: its bindings must not go with the body's
-    auto& bindings = inPopup ? popupBindings_ : bindings_;
+    auto& bindings = inPopup ? *popupBindings_ : bindings_;
     bindings.push_back({this, op, value});
     lv_obj_add_event_cb(obj, eventCb, LV_EVENT_CLICKED, &bindings.back());
     (inPopup ? popupControls_ : controls_).push_back({op, value, obj});
@@ -133,21 +168,40 @@ void ClimateDetail::buildBody()
     numberLabel_ = degreeLabel_ = lowLabel_ = highLabel_ = nullptr;
     pill_ = pillIcon_ = pillLabel_ = more_ = nullptr;
 
-    const SetpointKind kind = controller_.kind();
-    const DetailMetrics m = detailMetrics(width_, height_, kind);
+    const DetailMetrics m = metrics();
 
-    body_ = lv_obj_create(overlay_);
+    body_ = lv_obj_create(embedded_ ? parent_ : overlay_);
     lv_obj_remove_style_all(body_);
     lv_obj_remove_flag(body_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_remove_flag(body_, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_size(body_, width_, height_);
     lv_obj_set_style_pad_all(body_, m.margin, 0);
-    lv_obj_move_to_index(body_, 0);
+    if (!embedded_)
+        lv_obj_move_to_index(body_, 0);
 
     const Capabilities& c = controller_.caps();
     const bool hasMore = !c.fanModes.empty() || !c.swingModes.empty() || controller_.view().humidity.has_value();
 
-    if (m.landscape)
+    if (embedded_)
+    {
+        // Mode and settings on top, the title at the bottom like the other widgets
+        lv_obj_set_flex_flow(body_, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_flex_align(body_, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+        lv_obj_t* top = box(body_, LV_FLEX_FLOW_ROW);
+        lv_obj_set_style_pad_column(top, 12, 0);
+        buildPill(top);
+        if (hasMore)
+            buildMore(top);
+        buildDial(body_);
+        buildLine(body_);
+
+        title_label_ = label(body_, &roboto_regular_24, theme_color_blue, title_.c_str());
+        lv_obj_set_width(title_label_, LV_PCT(100));
+        lv_obj_set_style_text_align(title_label_, LV_TEXT_ALIGN_CENTER, 0);
+        lv_label_set_long_mode(title_label_, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    }
+    else if (m.landscape)
     {
         lv_obj_set_flex_flow(body_, LV_FLEX_FLOW_ROW);
         lv_obj_set_style_pad_column(body_, 24, 0);
@@ -211,8 +265,9 @@ void ClimateDetail::buildHeader(lv_obj_t* parent)
 
 void ClimateDetail::buildDial(lv_obj_t* parent)
 {
-    const DetailMetrics m = detailMetrics(width_, height_, controller_.kind());
-    dial_ = std::make_unique<ClimateDial>(parent, m.dial, m.stroke, m.knob, false, kScreenBg);
+    const DetailMetrics m = metrics();
+    dial_ = std::make_unique<ClimateDial>(parent, m.dial, m.stroke, m.knob, false,
+                                          embedded_ ? theme_color_widget_bg_off : kScreenBg);
 
     lv_obj_t* in = dial_->content();
     roomLabel_ = label(in, &roboto_light_26, theme_color_white);
@@ -221,24 +276,29 @@ void ClimateDetail::buildDial(lv_obj_t* parent)
     lv_obj_set_style_max_width(wordLabel_, dial_->innerWidth(), 0);
     lv_label_set_long_mode(wordLabel_, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_align(wordLabel_, LV_TEXT_ALIGN_CENTER, 0);
-    gauge_ = gauge(in, 160, theme_color_amber);
+    gauge_ = gauge(in, std::min(160, dial_->innerWidth()), theme_color_amber);
     lv_obj_set_style_margin_top(gauge_, 8, 0);
+
+    // A widget has no room under the line for the note: it goes inside the dial
+    if (embedded_ && controller_.kind() == SetpointKind::Range)
+        stopLabel_ = label(in, &roboto_regular_22, theme_color_muted);
 }
 
 lv_obj_t* ClimateDetail::numberGroup(lv_obj_t* parent, Op minus, Op plus, lv_obj_t** value,
                                      lv_color_t color, bool big)
 {
-    const DetailMetrics m = detailMetrics(width_, height_, controller_.kind());
+    const DetailMetrics m = metrics();
     lv_obj_t* group = box(parent, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_column(group, 8, 0);
 
     addControl(stepButton(group, false, m.button), minus);
 
     lv_obj_t* number = box(group, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_min_width(number, big ? 190 : 110, 0);
+    const bool lettered = big && m.numberPx == 80;
+    lv_obj_set_style_min_width(number, lettered ? 190 : (big ? 150 : 110), 0);
     lv_obj_set_flex_align(number, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-    *value = label(number, big ? &roboto_regular_80 : &roboto_regular_48, color, "--");
-    if (big)
+    *value = label(number, lettered ? &roboto_regular_80 : (big ? &roboto_regular_60 : &roboto_regular_48), color, "--");
+    if (lettered)
     {
         // The 80 px font has no degree sign: it is lettered apart, small and raised
         degreeLabel_ = label(number, &roboto_regular_48, color, "°");
@@ -252,7 +312,7 @@ lv_obj_t* ClimateDetail::numberGroup(lv_obj_t* parent, Op minus, Op plus, lv_obj
 void ClimateDetail::buildLine(lv_obj_t* parent)
 {
     const SetpointKind kind = controller_.kind();
-    const DetailMetrics m = detailMetrics(width_, height_, kind);
+    const DetailMetrics m = metrics();
 
     if (kind == SetpointKind::Single)
         numberGroup(parent, Op::Minus, Op::Plus, &numberLabel_, theme_color_yellow, true);
@@ -263,8 +323,11 @@ void ClimateDetail::buildLine(lv_obj_t* parent)
         lv_obj_set_style_pad_column(line, 24, 0);
         numberGroup(line, Op::LowMinus, Op::LowPlus, &lowLabel_, theme_color_yellow, false);
         numberGroup(line, Op::HighMinus, Op::HighPlus, &highLabel_, theme_color_blue, false);
-        stopLabel_ = label(parent, &roboto_regular_22, theme_color_muted);
-        lv_obj_set_style_margin_top(stopLabel_, 8, 0);
+        if (!embedded_)
+        {
+            stopLabel_ = label(parent, &roboto_regular_22, theme_color_muted);
+            lv_obj_set_style_margin_top(stopLabel_, 8, 0);
+        }
     }
 }
 
@@ -272,8 +335,8 @@ void ClimateDetail::buildPill(lv_obj_t* parent)
 {
     pill_ = box(parent, LV_FLEX_FLOW_ROW);
     lv_obj_add_flag(pill_, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_height(pill_, 64);
-    lv_obj_set_style_pad_hor(pill_, 22, 0);
+    lv_obj_set_height(pill_, metrics().pill);
+    lv_obj_set_style_pad_hor(pill_, embedded_ ? 18 : 22, 0);
     lv_obj_set_style_pad_column(pill_, 12, 0);
     lv_obj_set_style_radius(pill_, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(pill_, theme_color_widget_bg_off, 0);
@@ -282,7 +345,8 @@ void ClimateDetail::buildPill(lv_obj_t* parent)
     lv_obj_set_style_border_width(pill_, 2, 0);
     lv_obj_set_style_border_color(pill_, theme_color_blue, when(LV_STATE_PRESSED));
     lv_obj_set_style_opa(pill_, LV_OPA_50, when(LV_STATE_DISABLED));
-    lv_obj_set_style_margin_top(pill_, 10, 0);
+    if (!embedded_)
+        lv_obj_set_style_margin_top(pill_, 10, 0);
 
     pillIcon_ = icon(pill_, Icon::Help, theme_color_white);
     pillLabel_ = label(pill_, &roboto_regular_24, theme_color_white);
@@ -294,12 +358,28 @@ void ClimateDetail::buildMore(lv_obj_t* parent)
 {
     more_ = box(parent, LV_FLEX_FLOW_ROW);
     lv_obj_add_flag(more_, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_height(more_, 56);
-    lv_obj_set_style_pad_column(more_, 10, 0);
-    lv_obj_set_style_pad_hor(more_, 16, 0);
-    lv_obj_set_style_margin_top(more_, 14, 0);
-    label(more_, &roboto_regular_24, theme_color_muted, "Plus de réglages");
-    chevronRight(more_, theme_color_muted);
+    if (embedded_)
+    {
+        // A square button with three dots, like the - and + buttons
+        const int size = metrics().pill;
+        lv_obj_set_size(more_, size, size);
+        lv_obj_set_style_radius(more_, 16, 0);
+        lv_obj_set_style_bg_color(more_, theme_color_widget_bg_off, 0);
+        lv_obj_set_style_bg_opa(more_, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_color(more_, theme_color_widget_border_off, 0);
+        lv_obj_set_style_border_width(more_, 2, 0);
+        lv_obj_set_style_border_color(more_, theme_color_blue, when(LV_STATE_PRESSED));
+        dots(more_, theme_color_muted);
+    }
+    else
+    {
+        lv_obj_set_height(more_, 56);
+        lv_obj_set_style_pad_column(more_, 10, 0);
+        lv_obj_set_style_pad_hor(more_, 16, 0);
+        lv_obj_set_style_margin_top(more_, 14, 0);
+        label(more_, &roboto_regular_24, theme_color_muted, "Plus de réglages");
+        chevronRight(more_, theme_color_muted);
+    }
     addControl(more_, Op::OpenMore);
 }
 
@@ -317,6 +397,13 @@ void ClimateDetail::refresh()
     const bool editable = controller_.canEditSetpoint() && st.canSet;
 
     dial_->set(dialFor(caps, kind, v, st));
+    if (embedded_)
+    {
+        // The widget is lit by what the device does; the dial's knobs ring follows
+        dial_->setSeparator(surfaceFor(st.backdrop).bg);
+        if (host_.styled)
+            host_.styled(st);
+    }
 
     setText(roomLabel_, "Pièce " + formatReading(v.current));
     setText(wordLabel_, st.text);
@@ -331,12 +418,16 @@ void ClimateDetail::refresh()
     {
         std::string text = setpointText(SetpointKind::Single, v, caps.bounds);
         const bool known = v.target.has_value();
-        if (known)
+        // Only the 80 px number has its degree lettered apart
+        if (known && degreeLabel_)
             text.resize(text.size() - std::string("°").size());
         setText(numberLabel_, text);
-        setVisible(degreeLabel_, known);
         lv_obj_set_style_text_color(numberLabel_, single, 0);
-        lv_obj_set_style_text_color(degreeLabel_, single, 0);
+        if (degreeLabel_)
+        {
+            setVisible(degreeLabel_, known);
+            lv_obj_set_style_text_color(degreeLabel_, single, 0);
+        }
     }
     if (lowLabel_ && highLabel_)
     {
@@ -352,7 +443,7 @@ void ClimateDetail::refresh()
     if (stopLabel_)
     {
         const bool stop = atMinRange(caps, kind, v);
-        setText(stopLabel_, stop ? minRangeText(caps.bounds) : std::string());
+        setText(stopLabel_, stop ? minRangeText(caps.bounds, embedded_) : std::string());
         setVisible(stopLabel_, stop);
     }
 
@@ -373,7 +464,7 @@ void ClimateDetail::refresh()
     }
 
     setIcon(pillIcon_, modeIcon(v.mode), theme_color_white);
-    setText(pillLabel_, modeLabelFr(v.mode));
+    setText(pillLabel_, embedded_ ? modeShortFr(v.mode) : modeLabelFr(v.mode));
     setEnabled(pill_, st.phase != Phase::Offline && !caps.modes.empty());
 
     if (waiting)
@@ -498,8 +589,9 @@ void ClimateDetail::closePopup()
         lv_obj_delete_async(veil_);
         veil_ = nullptr;
     }
-    // The click being handled still reads its binding: eventCb works on a copy
-    popupBindings_.clear();
+    // The bindings belong to the veil and go with it, when it is really deleted:
+    // a button waiting for that can still be sent a click
+    popupBindings_ = nullptr;
     popupControls_.clear();
 }
 
@@ -509,11 +601,19 @@ void ClimateDetail::buildPopup(Popup which)
     const Values v = controller_.view();
     popupBuiltKey_ = popupKey();
 
-    veil_ = lv_obj_create(overlay_);
+    veil_ = lv_obj_create(popupParent());
+    popupBindings_ = new std::deque<Binding>();
+    lv_obj_add_event_cb(veil_, [](lv_event_t* e)
+    {
+        delete static_cast<std::deque<Binding>*>(lv_event_get_user_data(e));
+    }, LV_EVENT_DELETE, popupBindings_);
+    // Over the widget, still under what must always be on top
+    if (embedded_)
+        lv_obj_move_to_index(veil_, 0);
     lv_obj_remove_style_all(veil_);
     lv_obj_remove_flag(veil_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(veil_, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_size(veil_, width_, height_);
+    lv_obj_set_size(veil_, screenW_, screenH_);
     lv_obj_set_style_bg_color(veil_, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(veil_, LV_OPA_60, 0);
     lv_obj_set_flex_flow(veil_, LV_FLEX_FLOW_COLUMN);
@@ -521,8 +621,8 @@ void ClimateDetail::buildPopup(Popup which)
     addControl(veil_, Op::ClosePopup, "", true);
 
     // A short screen takes four choices to a row, and the humidity beside the title
-    const bool compact = height_ < 600;
-    const int boxWidth = std::min(compact && which == Popup::More ? 720 : 560, width_ - 48);
+    const bool compact = screenH_ < 600;
+    const int boxWidth = std::min(compact && which == Popup::More ? 720 : 560, screenW_ - 48);
     lv_obj_t* panel = lv_obj_create(veil_);
     lv_obj_remove_style_all(panel);
     lv_obj_remove_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
@@ -618,7 +718,7 @@ void ClimateDetail::buildPopup(Popup which)
     label(close, &roboto_regular_24, theme_color_white, "Fermer");
     addControl(close, Op::ClosePopup, "close", true);
 
-    fitPopup(panel, body, choices, height_ - 48);
+    fitPopup(panel, body, choices, screenH_ - 48);
     refreshPopup();
 }
 

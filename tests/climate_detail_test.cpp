@@ -408,6 +408,27 @@ TEST_F(ClimateDetailView, APopupSurvivesTheBodyBeingRebuiltUnderIt)
     EXPECT_FALSE(text(d, "Fermer"));
 }
 
+TEST_F(ClimateDetailView, AButtonOfARebuiltPopupStillHasItsBindingUntilItIsDeleted)
+{
+    // A value too long for the small-string buffer: a freed binding is then a freed heap block
+    const std::string longFan = "extremely_long_fan_mode_name";
+    json device = salon();
+    device["device"]["capabilities"]["fan_modes"] = {"auto", longFan};
+    auto& d = show(device);
+    click(d, Op::OpenMore);
+    // The old popup's button, kept: the rebuild hides it and leaves its deletion for later
+    lv_obj_t* old = ClimateDetailTestAccess::controls(d, Op::Fan, longFan).at(0);
+
+    // The humidity goes: the choices change, the popup is built again
+    json gone = withState(device, {{"humidity", nullptr}});
+    publish(id_, gone);
+    ASSERT_TRUE(text(d, "Fermer"));
+
+    lv_obj_send_event(old, LV_EVENT_CLICKED, nullptr);
+    headless::advance(50);
+    EXPECT_TRUE(text(d, "Fermer"));
+}
+
 TEST_F(ClimateDetailView, APopupSurvivesTheDeviceGoing)
 {
     auto& d = show(salon());

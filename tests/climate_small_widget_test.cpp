@@ -1,6 +1,6 @@
 #include "support/climate_fixtures.h"
 #include "theme.h"
-#include "widgets/climate_widget.h"
+#include "widgets/climate_large_widget.h"
 
 using namespace climatefx;
 
@@ -66,7 +66,7 @@ TEST_F(ClimateSmall, IsBuiltForTheSmallCellsAndLeavesTheLargeOnesAlone)
     for (auto [w, h] : {std::pair{2, 2}, {3, 3}, {3, 2}})
     {
         auto widget = place("cs_reg", w, h);
-        EXPECT_NE(dynamic_cast<ClimateWidget*>(widget.get()), nullptr) << w << "x" << h;
+        EXPECT_NE(dynamic_cast<ClimateLargeWidget*>(widget.get()), nullptr) << w << "x" << h;
     }
 }
 
@@ -78,7 +78,7 @@ TEST_F(ClimateSmall, EveryFixtureFitsEveryCell)
                              withState(salon(), {{"fault", "sensor_stale"}})};
     const struct { int w; int h; } sizes[] = {{1, 1}, {2, 1}, {1, 2}, {3, 1}, {1, 3}};
     const struct { const char* name; Cell cell; } cells[] = {{"240x240", kSquare}, {"213x266", kTall},
-                                                             {"200x240", kLandscape}};
+                                                             {"200x240", kLandscape}, {"180x180", {180, 180}}};
     headless::resize(1280, 800);
     int n = 0;
     for (const auto& f : fixtures)
@@ -95,7 +95,7 @@ TEST_F(ClimateSmall, EveryFixtureFitsEveryCell)
                 n++;
             }
     }
-    EXPECT_EQ(n, 12 * 15);
+    EXPECT_EQ(n, 12 * 20);
 }
 
 TEST_F(ClimateSmall, CompactShowsRoomSetpointStatusAndName)
@@ -173,6 +173,23 @@ TEST_F(ClimateSmall, AWaitingRelayShowsTheCountdownAndItsGauge)
     auto compact = place("cs_wait", 1, 1, kSquare, 1, 1);
     EXPECT_TRUE(showsText(compact->get(), "Attente"));
     EXPECT_FALSE(showsText(compact->get(), "Démarre dans 3\xC2\xA0min"));
+}
+
+TEST_F(ClimateSmall, ANameThatDoesNotFitScrollsLikeTheOthers)
+{
+    headless::resize(1280, 800);
+    publish("cs_name", garageOff());
+    auto narrow = place("cs_name", 2, 1, {180, 180});
+    auto found = labels(narrow->get(), "Chauffage garage");
+    ASSERT_EQ(found.size(), 1u);
+    EXPECT_EQ(lv_label_get_long_mode(found[0]), LV_LABEL_LONG_SCROLL_CIRCULAR);
+
+    // Nothing is cut with dots, and a name that fits wraps as before
+    publish("cs_name_ok", salon());
+    auto roomy = place("cs_name_ok", 2, 1, kSquare);
+    auto ok = labels(roomy->get(), "Clim salon");
+    ASSERT_EQ(ok.size(), 1u);
+    EXPECT_EQ(lv_label_get_long_mode(ok[0]), LV_LABEL_LONG_WRAP);
 }
 
 TEST_F(ClimateSmall, ATallCellShortensAWaitThatWouldTakeThreeLines)
