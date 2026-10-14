@@ -44,6 +44,13 @@ struct Capabilities
     bool hasMode(const std::string& mode) const;
 };
 
+// CLIM-6: a wanted output waiting for its lock-out, seconds left at publication
+struct Lockout
+{
+    std::string output;
+    double remaining = 0;
+};
+
 struct Values
 {
     std::string mode;           // "" while unknown
@@ -54,6 +61,12 @@ struct Values
     std::string action;
     std::string fanMode;
     std::string swingMode;
+
+    // CLIM-6, absent until the server publishes them
+    std::optional<double> humidity;
+    std::optional<bool> connected;      // nullopt: nothing said, taken as connected
+    std::string fault;                  // sensor_stale, humidity_high...
+    std::optional<Lockout> lockout;
 
     // scalarMode is the IO state, which is the mode: used when the device state has none
     static Values parse(const std::string& stateJson, const std::string& scalarMode);

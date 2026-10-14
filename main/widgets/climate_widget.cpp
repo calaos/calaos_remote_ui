@@ -15,7 +15,6 @@ const lv_color_t kCaption = LV_COLOR_MAKE(0x8A, 0x8A, 0x8A);
 
 // Only sizes other screens already link: each new font costs 40-150 KB of flash
 const std::vector<const lv_font_t*> kMidFonts = {&roboto_light_48, &roboto_regular_32, &roboto_regular_28, &roboto_regular_24};
-const std::vector<const lv_font_t*> kSmallFonts = {&roboto_regular_32, &roboto_regular_28, &roboto_light_26, &roboto_regular_24};
 
 constexpr int kGap = 8;
 // 48 px and up: about 5 mm on the 4" 720x720 panel, the smallest target for a finger
@@ -121,8 +120,7 @@ std::string join(const std::vector<std::string>& v)
 ClimateWidget::ClimateWidget(lv_obj_t* parent,
                              const CalaosProtocol::WidgetConfig& config,
                              const GridLayoutInfo& gridInfo):
-    CalaosWidget(parent, config, gridInfo),
-    layout_(chooseLayout(config.w, config.h))
+    CalaosWidget(parent, config, gridInfo)
 {
     ESP_LOGI(TAG, "Creating climate widget: %s (size %dx%d)", config.io_id.c_str(), config.w, config.h);
 
@@ -131,8 +129,7 @@ ClimateWidget::ClimateWidget(lv_obj_t* parent,
     setRadius(20);
     setBorderWidth(2);
 
-    // The 8" panel's 1x1 cell is 197 px wide once the grid padding is off
-    const int pad = layout_ == Layout::Compact ? 12 : 16;
+    constexpr int pad = 16;
     setPadding(pad, pad, pad, pad);
     lv_obj_remove_flag(get(), LV_OBJ_FLAG_CLICKABLE);
     lv_obj_remove_flag(get(), LV_OBJ_FLAG_SCROLLABLE);
@@ -215,7 +212,6 @@ void ClimateWidget::build()
         lv_obj_delete(body_);
     bindings_.clear();
     stepButtons_.clear();
-    shiftButtons_.clear();
     optional_.clear();
     buttons_.clear();
     degreeLabel_ = nullptr;
@@ -224,20 +220,14 @@ void ClimateWidget::build()
     swingChips_.clear();
     nameLabel_ = currentLabel_ = actionLabel_ = nullptr;
     singleBox_ = targetLabel_ = rangeBox_ = lowLabel_ = highLabel_ = noneLabel_ = nullptr;
-    modeCycle_ = modeCycleLabel_ = fanCycleLabel_ = swingCycleLabel_ = nullptr;
+    fanCycleLabel_ = swingCycleLabel_ = nullptr;
 
     body_ = box(get(), LV_FLEX_FLOW_COLUMN);
     lv_obj_set_size(body_, LV_PCT(100), LV_PCT(100));
     lv_obj_set_style_pad_row(body_, kGap, 0);
     lv_obj_set_flex_align(body_, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    switch (layout_)
-    {
-        case Layout::Compact: buildCompact(body_); break;
-        case Layout::Wide: buildWide(body_); break;
-        case Layout::Tall: buildTall(body_); break;
-        case Layout::Large: buildLarge(body_); break;
-    }
+    buildLarge(body_);
 
     fitToHeight();
 }
@@ -444,144 +434,6 @@ lv_obj_t* ClimateWidget::addInfoRow(lv_obj_t* parent)
     return row;
 }
 
-void ClimateWidget::buildCompact(lv_obj_t* body)
-{
-    const Bounds& b = controller_.caps().bounds;
-    const std::string widest = formatSetpoint(b.max, b.step);
-
-    addInfoRow(body);
-
-    lv_obj_t* value = box(body, LV_FLEX_FLOW_ROW);
-    singleBox_ = targetLabel_ = label(value, fit(kMidFonts, widest, contentW_),
-                                      theme_color_white, "--");
-    noneLabel_ = label(value, &roboto_light_48, theme_color_white, "--");
-
-    rangeBox_ = box(value, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(rangeBox_, kGap * 2, 0);
-    const lv_font_t* rangeFont = fit(kSmallFonts, widest, contentW_, 2);
-    lowLabel_ = label(rangeBox_, rangeFont, theme_color_orange, "--");
-    highLabel_ = label(rangeBox_, rangeFont, theme_color_blue, "--");
-
-    lv_obj_t* controls = box(body, LV_FLEX_FLOW_ROW);
-    lv_obj_set_width(controls, LV_PCT(100));
-    lv_obj_set_style_pad_column(controls, 6, 0);
-    shiftButtons_.push_back(addButton(controls, false, Op::ShiftDown, kButton));
-    modeCycle_ = addChip(controls, "--", Op::CycleMode, "", nullptr);
-    lv_obj_set_flex_grow(modeCycle_, 1);
-    // Whatever the two 52 px buttons leave: 53 px in the 8" panel's 1x1 cell
-    lv_obj_set_style_min_width(modeCycle_, 0, 0);
-    lv_obj_set_style_pad_hor(modeCycle_, 2, 0);
-    modeCycleLabel_ = lv_obj_get_child(modeCycle_, 0);
-    shiftButtons_.push_back(addButton(controls, true, Op::ShiftUp, kButton));
-    stepButtons_ = shiftButtons_;
-
-    nameLabel_ = label(body, &roboto_regular_24, theme_color_blue);
-    lv_obj_set_width(nameLabel_, LV_PCT(100));
-    lv_obj_set_style_text_align(nameLabel_, LV_TEXT_ALIGN_CENTER, 0);
-    lv_label_set_long_mode(nameLabel_, LV_LABEL_LONG_SCROLL_CIRCULAR);
-}
-
-void ClimateWidget::buildWide(lv_obj_t* body)
-{
-    lv_obj_set_flex_flow(body, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(body, kGap * 2, 0);
-
-    const int leftW = std::clamp(contentW_ * 9 / 20, 170, 250);
-    const int rightW = contentW_ - leftW - 2 * kGap;
-    const Bounds& b = controller_.caps().bounds;
-    const std::string widest = formatSetpoint(b.max, b.step);
-
-    lv_obj_t* left = box(body, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_size(left, leftW, LV_PCT(100));
-    lv_obj_set_flex_align(left, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-
-    nameLabel_ = label(left, &roboto_regular_24, theme_color_blue);
-    lv_obj_set_width(nameLabel_, LV_PCT(100));
-    lv_label_set_long_mode(nameLabel_, LV_LABEL_LONG_SCROLL_CIRCULAR);
-
-    const int valueW = leftW - 2 * kButton - 2 * kGap;
-    singleBox_ = addRangeRow(left, &targetLabel_, Op::TargetDown, Op::TargetUp,
-                             fit(kMidFonts, widest, valueW), kButton);
-    noneLabel_ = label(left, &roboto_light_48, theme_color_white, "--");
-
-    rangeBox_ = box(left, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_width(rangeBox_, LV_PCT(100));
-    lv_obj_set_style_pad_row(rangeBox_, 6, 0);
-    const lv_font_t* rangeFont = fit(kSmallFonts, widest, valueW);
-    addRangeRow(rangeBox_, &lowLabel_, Op::LowDown, Op::LowUp, rangeFont, kButton);
-    addRangeRow(rangeBox_, &highLabel_, Op::HighDown, Op::HighUp, rangeFont, kButton);
-
-    addInfoRow(left);
-
-    lv_obj_t* right = box(body, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_height(right, LV_PCT(100));
-    lv_obj_set_flex_grow(right, 1);
-    lv_obj_set_style_pad_row(right, 6, 0);
-    lv_obj_set_flex_align(right, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    addModeChips(right, rightW);
-
-    // Fan and swing step through their values: there is no room for every choice
-    for (Op op : {Op::CycleFan, Op::CycleSwing})
-    {
-        const bool fan = op == Op::CycleFan;
-        if ((fan ? controller_.caps().fanModes : controller_.caps().swingModes).empty())
-            continue;
-        lv_obj_t* chip = addChip(right, "--", op, "", nullptr);
-        lv_obj_set_width(chip, LV_PCT(100));
-        (fan ? fanCycleLabel_ : swingCycleLabel_) = lv_obj_get_child(chip, 0);
-        optional_.push_back(chip);
-    }
-}
-
-void ClimateWidget::buildTall(lv_obj_t* body)
-{
-    const Bounds& b = controller_.caps().bounds;
-    const std::string widest = formatSetpoint(b.max, b.step);
-    const int valueW = contentW_ - 2 * kButton - 2 * kGap;
-
-    // Name on top, controls at the bottom, readings centred in between: the
-    // free height of a sparse device goes around them, not between every row
-    lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    auto spacer = [body]()
-    {
-        lv_obj_t* s = box(body, LV_FLEX_FLOW_ROW);
-        lv_obj_set_size(s, 1, 0);
-        lv_obj_set_flex_grow(s, 1);
-    };
-
-    nameLabel_ = label(body, &roboto_regular_24, theme_color_blue);
-    lv_obj_set_width(nameLabel_, LV_PCT(100));
-    lv_label_set_long_mode(nameLabel_, LV_LABEL_LONG_SCROLL_CIRCULAR);
-
-    spacer();
-    addInfoRow(body);
-
-    singleBox_ = addRangeRow(body, &targetLabel_, Op::TargetDown, Op::TargetUp,
-                             fit(kMidFonts, widest, valueW), kButton);
-    noneLabel_ = label(body, &roboto_light_48, theme_color_white, "--");
-
-    rangeBox_ = box(body, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_width(rangeBox_, LV_PCT(100));
-    lv_obj_set_style_pad_row(rangeBox_, 6, 0);
-    const lv_font_t* rangeFont = fit(kSmallFonts, widest, valueW);
-    addRangeRow(rangeBox_, &lowLabel_, Op::LowDown, Op::LowUp, rangeFont, kButton);
-    addRangeRow(rangeBox_, &highLabel_, Op::HighDown, Op::HighUp, rangeFont, kButton);
-
-    spacer();
-    addModeChips(body, contentW_);
-
-    for (Op op : {Op::CycleFan, Op::CycleSwing})
-    {
-        const bool fan = op == Op::CycleFan;
-        if ((fan ? controller_.caps().fanModes : controller_.caps().swingModes).empty())
-            continue;
-        lv_obj_t* chip = addChip(body, "--", op, "", nullptr);
-        lv_obj_set_width(chip, LV_PCT(100));
-        (fan ? fanCycleLabel_ : swingCycleLabel_) = lv_obj_get_child(chip, 0);
-        optional_.push_back(chip);
-    }
-}
-
 void ClimateWidget::buildLarge(lv_obj_t* body)
 {
     const Bounds& b = controller_.caps().bounds;
@@ -657,9 +509,7 @@ void ClimateWidget::refresh()
 
     if (currentLabel_)
     {
-        std::string current = formatTemperature(v.current);
-        if (layout_ == Layout::Large)
-            current = "Room " + current;
+        std::string current = "Room " + formatTemperature(v.current);
         // With no setpoint the big slot shows the room temperature, named here
         if (kind == SetpointKind::None)
             current = "Room";
@@ -702,15 +552,6 @@ void ClimateWidget::refresh()
 
     for (lv_obj_t* b : stepButtons_)
         setEnabled(b, editable);
-    for (lv_obj_t* b : shiftButtons_)
-        setVisible(b, kind != SetpointKind::None);
-
-    if (modeCycle_)
-    {
-        setText(modeCycleLabel_, modeLabel(v.mode));
-        lv_obj_set_style_text_color(modeCycleLabel_, active ? accent : theme_color_white, 0);
-        setEnabled(modeCycle_, controller_.caps().modes.size() > 1);
-    }
 
     // The mode is lit; fan and swing choices are only outlined, to stay secondary
     for (auto& c : modeChips_)
@@ -732,15 +573,13 @@ void ClimateWidget::refresh()
     outline(fanChips_, v.fanMode);
     outline(swingChips_, v.swingMode);
 
-    // In the large layout the row caption already names the choice
-    const bool captioned = layout_ == Layout::Large;
-    auto cycleText = [captioned](const char* name, const std::string& option)
+    // The row caption already names the choice
+    auto cycleText = [](const std::string& option)
     {
-        const std::string value = option.empty() ? std::string("--") : optionLabel(option);
-        return captioned ? value : std::string(name) + " " + value;
+        return option.empty() ? std::string("--") : optionLabel(option);
     };
-    setText(fanCycleLabel_, cycleText("Fan", v.fanMode));
-    setText(swingCycleLabel_, cycleText("Swing", v.swingMode));
+    setText(fanCycleLabel_, cycleText(v.fanMode));
+    setText(swingCycleLabel_, cycleText(v.swingMode));
 }
 
 void ClimateWidget::eventCb(lv_event_t* e)
@@ -769,15 +608,6 @@ void ClimateWidget::handle(Op op, const std::string& value)
         case Op::LowUp: changed = controller_.stepLow(1); break;
         case Op::HighDown: changed = controller_.stepHigh(-1); break;
         case Op::HighUp: changed = controller_.stepHigh(1); break;
-        case Op::ShiftDown:
-        case Op::ShiftUp:
-        {
-            const int steps = op == Op::ShiftUp ? 1 : -1;
-            changed = controller_.kind() == SetpointKind::Range ? controller_.shiftRange(steps)
-                                                                : controller_.stepTarget(steps);
-            break;
-        }
-        case Op::CycleMode: changed = controller_.cycleMode(); break;
         case Op::CycleFan:
             if (!controller_.caps().fanModes.empty())
                 changed = controller_.selectFan(cycle(controller_.caps().fanModes, controller_.view().fanMode));

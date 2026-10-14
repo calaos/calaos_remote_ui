@@ -9,6 +9,7 @@
 #include "widgets/shutter_wide_widget.h"
 #include "widgets/shutter_large_widget.h"
 #include "widgets/climate_widget.h"
+#include "widgets/climate_small_widget.h"
 #include "logging.h"
 #include <sstream>
 
@@ -164,10 +165,13 @@ void WidgetFactory::registerBuiltinWidgets()
         }
     );
 
-    // Climate adapts its layout to the cell footprint (spec 9.3)
+    // Climate adapts to the cell footprint (spec 9.3): 2x2 and up carries its own
+    // controls, the smaller cells are read-only and open a full-screen view
     registerWidgetAnySize("Climate",
-        [](lv_obj_t* parent, const auto& config, const auto& gridInfo) {
-            return std::make_unique<ClimateWidget>(parent, config, gridInfo);
+        [](lv_obj_t* parent, const auto& config, const auto& gridInfo) -> std::unique_ptr<CalaosWidget> {
+            if (climate::chooseLayout(config.w, config.h) == climate::Layout::Large)
+                return std::make_unique<ClimateWidget>(parent, config, gridInfo);
+            return std::make_unique<ClimateSmallWidget>(parent, config, gridInfo);
         }
     );
 

@@ -154,7 +154,7 @@ struct ClimateWidgetTestAccess
         std::vector<lv_obj_t*> out;
         for (const auto& [op, obj] : static_cast<ClimateWidget&>(w).buttons_)
         {
-            const bool plus = op == Op::TargetUp || op == Op::LowUp || op == Op::HighUp || op == Op::ShiftUp;
+            const bool plus = op == Op::TargetUp || op == Op::LowUp || op == Op::HighUp;
             if ((sign == "+") == plus && shown(obj))
                 out.push_back(obj);
         }
@@ -272,7 +272,7 @@ TEST(ClimateWidget, EveryFixtureFitsEveryCell)
         {"heat_only", heatOnly()},
         {"range_only", rangeOnly()},
     };
-    const struct { int w; int h; } sizes[] = {{1, 1}, {2, 1}, {1, 2}, {2, 2}, {3, 1}};
+    const struct { int w; int h; } sizes[] = {{2, 2}, {3, 2}, {3, 3}};
     const struct { const char* name; Cell cell; } cells[] = {{"240x240", kSquare}, {"213x266", kTall}};
 
     for (const auto& f : fixtures)
@@ -291,27 +291,16 @@ TEST(ClimateWidget, EveryFixtureFitsEveryCell)
     }
 }
 
-TEST(ClimateWidget, CompactShowsSetpointRoomAndMode)
-{
-    publish("cw_compact", fullHvac());
-    auto w = place("cw_compact", 1, 1);
-    EXPECT_TRUE(showsText(*w, "21.0°"));
-    EXPECT_TRUE(showsText(*w, "23.4°"));
-    EXPECT_TRUE(showsText(*w, "Heat"));
-    EXPECT_TRUE(showsText(*w, "Heating"));
-    EXPECT_TRUE(showsText(*w, "Living room AC"));
-}
-
 TEST(ClimateWidget, TapsLeaveAsOneCommandAfterAPause)
 {
     Outbox out;
     publish("cw_taps", fullHvac());
-    auto w = place("cw_taps", 1, 1);
+    auto w = place("cw_taps", 2, 2);
 
     click(*w, "+");
     click(*w, "+");
     click(*w, "+");
-    EXPECT_TRUE(showsText(*w, "22.5°"));
+    EXPECT_TRUE(showsText(*w, "22.5"));
     headless::advance(ClimateWidget::kCoalesceMs - 100);
     EXPECT_TRUE(out.sent.empty());
 
@@ -325,35 +314,35 @@ TEST(ClimateWidget, ARefusalShowsTheServerValueAtOnce)
 {
     Outbox out;
     publish("cw_refused", fullHvac());
-    auto w = place("cw_refused", 1, 1);
+    auto w = place("cw_refused", 2, 2);
 
     click(*w, "+");
     headless::advance(ClimateWidget::kCoalesceMs + 50);
     ASSERT_EQ(out.sent.size(), 1u);
-    EXPECT_TRUE(showsText(*w, "21.5°"));
+    EXPECT_TRUE(showsText(*w, "21.5"));
 
     receive(json{{"msg", "set_state"}, {"msg_id", "ui_cmd:cw_refused"}, {"data", {{"success", "false"}}}}.dump());
-    EXPECT_TRUE(showsText(*w, "21.0°"));
+    EXPECT_TRUE(showsText(*w, "21.0"));
 }
 
 TEST(ClimateWidget, AnUnansweredCommandGivesWayToTheServer)
 {
     Outbox out;
     publish("cw_echo", fullHvac());
-    auto w = place("cw_echo", 1, 1);
+    auto w = place("cw_echo", 2, 2);
 
     click(*w, "-");
     headless::advance(ClimateWidget::kCoalesceMs + 50);
-    EXPECT_TRUE(showsText(*w, "20.5°"));
+    EXPECT_TRUE(showsText(*w, "20.5"));
     headless::advance(ClimateWidget::kEchoTimeoutMs + 50);
-    EXPECT_TRUE(showsText(*w, "21.0°"));
+    EXPECT_TRUE(showsText(*w, "21.0"));
 }
 
 TEST(ClimateWidget, TheEchoSettlesTheDisplayedValue)
 {
     Outbox out;
     publish("cw_echoed", fullHvac());
-    auto w = place("cw_echoed", 1, 1);
+    auto w = place("cw_echoed", 2, 2);
 
     click(*w, "+");
     headless::advance(ClimateWidget::kCoalesceMs + 50);
@@ -362,7 +351,7 @@ TEST(ClimateWidget, TheEchoSettlesTheDisplayedValue)
     publish("cw_echoed", echoed);
 
     headless::advance(ClimateWidget::kEchoTimeoutMs + 50);
-    EXPECT_TRUE(showsText(*w, "21.5°"));
+    EXPECT_TRUE(showsText(*w, "21.5"));
 }
 
 TEST(ClimateWidget, ModeButtonsSendAtOnce)
@@ -393,25 +382,6 @@ TEST(ClimateWidget, ThePendingSetpointLeavesWithTheMode)
     EXPECT_EQ(command(out.sent[0]), (json{{"mode", "cool"}, {"target_temp", 21.5}}));
     headless::advance(ClimateWidget::kCoalesceMs + 50);
     EXPECT_EQ(out.sent.size(), 1u);
-}
-
-TEST(ClimateWidget, CompactModeButtonCyclesThenSendsOnce)
-{
-    Outbox out;
-    publish("cw_cycle", heatOnly());
-    auto w = place("cw_cycle", 1, 1);
-
-    click(*w, "Heat");
-    EXPECT_TRUE(showsText(*w, "Off"));
-    click(*w, "Off");
-    EXPECT_TRUE(showsText(*w, "Heat"));
-    headless::advance(ClimateWidget::kCoalesceMs + 50);
-    EXPECT_TRUE(out.sent.empty());
-
-    click(*w, "Heat");
-    headless::advance(ClimateWidget::kCoalesceMs + 50);
-    ASSERT_EQ(out.sent.size(), 1u);
-    EXPECT_EQ(command(out.sent[0]), json("off"));
 }
 
 TEST(ClimateWidget, OffGreysAndFanOnlyHidesTheSetpoint)
@@ -449,26 +419,14 @@ TEST(ClimateWidget, ARangeOnlyDeviceSendsItsRangeAsAPair)
     EXPECT_EQ(command(out.sent[0]), (json{{"target_temp_low", 19.0}, {"target_temp_high", 25.0}}));
 }
 
-TEST(ClimateWidget, CompactRangeMovesBothHandles)
-{
-    Outbox out;
-    publish("cw_shift", rangeOnly());
-    auto w = place("cw_shift", 1, 1);
-
-    click(*w, "-");
-    headless::advance(ClimateWidget::kCoalesceMs + 50);
-    ASSERT_EQ(out.sent.size(), 1u);
-    EXPECT_EQ(command(out.sent[0]), (json{{"target_temp_low", 18.5}, {"target_temp_high", 23.5}}));
-}
-
 TEST(ClimateWidget, ADroppedDeviceStopsShowingItsState)
 {
     publish("cw_dropped", fullHvac());
-    auto w = place("cw_dropped", 1, 1);
-    ASSERT_TRUE(showsText(*w, "21.0°"));
+    auto w = place("cw_dropped", 2, 2);
+    ASSERT_TRUE(showsText(*w, "21.0"));
 
     receive(CalaosProtocol::MSG_CONFIG_UPDATE, {{"io_items", json::array({{{"id", "cw_other"}}})}});
-    EXPECT_FALSE(showsText(*w, "21.0°"));
+    EXPECT_FALSE(showsText(*w, "21.0"));
     EXPECT_FALSE(showsText(*w, "Heating"));
 }
 
@@ -491,7 +449,7 @@ TEST(ClimateWidget, AnEditInProgressIsSentWhenThePageGoes)
 {
     Outbox out;
     publish("cw_gone", heatOnly());
-    auto w = place("cw_gone", 1, 1);
+    auto w = place("cw_gone", 2, 2);
     click(*w, "+");
     w.reset();
     ASSERT_EQ(out.sent.size(), 1u);
