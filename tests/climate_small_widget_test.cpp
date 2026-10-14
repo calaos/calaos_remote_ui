@@ -175,6 +175,19 @@ TEST_F(ClimateSmall, AWaitingRelayShowsTheCountdownAndItsGauge)
     EXPECT_FALSE(showsText(compact->get(), "Démarre dans 3\xC2\xA0min"));
 }
 
+TEST_F(ClimateSmall, ATallCellShortensAWaitThatWouldTakeThreeLines)
+{
+    publish("cs_tall_wait", waiting());
+    auto roomy = place("cs_tall_wait", 1, 2, kSquare);
+    EXPECT_TRUE(showsText(roomy->get(), "Démarre dans 3\xC2\xA0min"));
+    roomy.reset();
+
+    headless::resize(800, 480);
+    auto narrow = place("cs_tall_wait", 1, 2, kLandscape);
+    EXPECT_FALSE(showsText(narrow->get(), "Démarre dans 3\xC2\xA0min"));
+    EXPECT_TRUE(showsText(narrow->get(), "Attente"));
+}
+
 TEST_F(ClimateSmall, TheCountdownRunsByItselfBetweenPublications)
 {
     publish("cs_count", waiting(140));
