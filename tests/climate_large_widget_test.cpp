@@ -385,6 +385,21 @@ TEST_F(ClimateLarge, FaultAndUnknownModeAreTold)
     EXPECT_TRUE(text("Inconnu"));
 }
 
+TEST_F(ClimateLarge, ANarrowWidgetShowsTheNumberInTheSmallerFontWithItsDegree)
+{
+    headless::resize(1280, 800);
+    put(salon(), 2, 2, Cell{160, 240});
+    EXPECT_TRUE(text("22°"));
+    EXPECT_FALSE(text("°"));
+}
+
+TEST_F(ClimateLarge, AWideWidgetLettersTheDegreeApart)
+{
+    put(salon());
+    EXPECT_TRUE(text("22"));
+    EXPECT_TRUE(text("°"));
+}
+
 TEST_F(ClimateLarge, ADroppedDeviceStopsShowingItsState)
 {
     put(salon());
