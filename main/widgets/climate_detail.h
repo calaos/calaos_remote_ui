@@ -74,7 +74,7 @@ private:
     void buildMore(lv_obj_t* parent);
     lv_obj_t* numberGroup(lv_obj_t* parent, Op minus, Op plus, lv_obj_t** value, lv_color_t color,
                           bool big);
-    lv_obj_t* addControl(lv_obj_t* obj, Op op, const std::string& value = "");
+    lv_obj_t* addControl(lv_obj_t* obj, Op op, const std::string& value = "", bool inPopup = false);
 
     void refresh();
     void refreshPopup();
@@ -103,6 +103,8 @@ private:
 
     std::deque<Binding> bindings_;
     std::vector<Control> controls_;
+    std::deque<Binding> popupBindings_;
+    std::vector<Control> popupControls_;
     std::unique_ptr<LvglTimer> flushTimer_;
     std::unique_ptr<LvglTimer> echoTimer_;
     std::unique_ptr<LvglTimer> secondTimer_;

@@ -46,7 +46,8 @@ ClimateDial::ClimateDial(lv_obj_t* parent, int diameter, int stroke, int knobRad
     lv_obj_remove_flag(tick_, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_pos(tick_, 0, 0);
     lv_line_set_points_mutable(tick_, tickPoints_, 2);
-    lv_obj_set_style_line_width(tick_, 3, 0);
+    lv_obj_set_style_line_width(tick_, 2, 0);
+    lv_obj_set_style_line_opa(tick_, LV_OPA_80, 0);
     lv_obj_set_style_line_color(tick_, lv_color_white(), 0);
     lv_obj_set_style_line_rounded(tick_, true, 0);
 
@@ -150,7 +151,7 @@ void ClimateDial::set(const Dial& d)
         else
         {
             const double a = (kDialStart + kDialSpan * *d.room) * M_PI / 180.0;
-            const double inner = radius_ - stroke_ * 1.3, outer = radius_ + stroke_ * 1.3;
+            const double inner = radius_ - stroke_ * 1.0, outer = radius_ + stroke_ * 1.0;
             tickPoints_[0] = {static_cast<lv_value_precise_t>(centre_ + inner * std::cos(a)),
                               static_cast<lv_value_precise_t>(centre_ + inner * std::sin(a))};
             tickPoints_[1] = {static_cast<lv_value_precise_t>(centre_ + outer * std::cos(a)),

@@ -110,11 +110,13 @@ std::string ClimateDetail::popupKey() const
            (controller_.view().humidity ? "h" : "");
 }
 
-lv_obj_t* ClimateDetail::addControl(lv_obj_t* obj, Op op, const std::string& value)
+lv_obj_t* ClimateDetail::addControl(lv_obj_t* obj, Op op, const std::string& value, bool inPopup)
 {
-    bindings_.push_back({this, op, value});
-    lv_obj_add_event_cb(obj, eventCb, LV_EVENT_CLICKED, &bindings_.back());
-    controls_.push_back({op, value, obj});
+    // The popup outlives a rebuilt body: its bindings must not go with the body's
+    auto& bindings = inPopup ? popupBindings_ : bindings_;
+    bindings.push_back({this, op, value});
+    lv_obj_add_event_cb(obj, eventCb, LV_EVENT_CLICKED, &bindings.back());
+    (inPopup ? popupControls_ : controls_).push_back({op, value, obj});
     return obj;
 }
 
@@ -385,8 +387,11 @@ void ClimateDetail::refresh()
 void ClimateDetail::eventCb(lv_event_t* e)
 {
     auto* binding = static_cast<Binding*>(lv_event_get_user_data(e));
-    if (binding && binding->view)
-        binding->view->handle(binding->op, binding->value);
+    if (!binding || !binding->view)
+        return;
+    // handle() may close the popup, which frees the binding it was reached through
+    const Binding copy = *binding;
+    copy.view->handle(copy.op, copy.value);
 }
 
 void ClimateDetail::handle(Op op, const std::string& value)
@@ -493,10 +498,9 @@ void ClimateDetail::closePopup()
         lv_obj_delete_async(veil_);
         veil_ = nullptr;
     }
-    controls_.erase(std::remove_if(controls_.begin(), controls_.end(), [](const Control& c)
-    {
-        return c.op == Op::Mode || c.op == Op::Fan || c.op == Op::Swing || c.op == Op::ClosePopup;
-    }), controls_.end());
+    // The click being handled still reads its binding: eventCb works on a copy
+    popupBindings_.clear();
+    popupControls_.clear();
 }
 
 void ClimateDetail::buildPopup(Popup which)
@@ -514,7 +518,7 @@ void ClimateDetail::buildPopup(Popup which)
     lv_obj_set_style_bg_opa(veil_, LV_OPA_60, 0);
     lv_obj_set_flex_flow(veil_, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(veil_, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    addControl(veil_, Op::ClosePopup);
+    addControl(veil_, Op::ClosePopup, "", true);
 
     // A short screen takes four choices to a row, and the humidity beside the title
     const bool compact = height_ < 600;
@@ -567,7 +571,7 @@ void ClimateDetail::buildPopup(Popup which)
         if (ic)
             icon(b, *ic, theme_color_white);
         label(b, &roboto_regular_24, theme_color_white, text.c_str());
-        addControl(b, op, value);
+        addControl(b, op, value, true);
         choices.push_back(b);
         return b;
     };
@@ -612,7 +616,7 @@ void ClimateDetail::buildPopup(Popup which)
     lv_obj_set_width(close, LV_PCT(100));
     lv_obj_set_style_margin_top(close, compact ? 12 : 20, 0);
     label(close, &roboto_regular_24, theme_color_white, "Fermer");
-    addControl(close, Op::ClosePopup, "close");
+    addControl(close, Op::ClosePopup, "close", true);
 
     fitPopup(panel, body, choices, height_ - 48);
     refreshPopup();

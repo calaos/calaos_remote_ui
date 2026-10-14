@@ -390,6 +390,51 @@ TEST_F(ClimateDetailView, TheHumidityFollowsTheServerWhileThePopupIsOpen)
     EXPECT_TRUE(text(d, "Humidité 52 %"));
 }
 
+TEST_F(ClimateDetailView, APopupSurvivesTheBodyBeingRebuiltUnderIt)
+{
+    Outbox out;
+    auto& d = show(salon());
+    click(d, Op::OpenMore);
+
+    // The mode goes to auto from another panel: the body is rebuilt, the popup is not
+    publish(id_, withState(salon(), {{"mode", "auto"}}));
+    ASSERT_TRUE(text(d, "Fermer"));
+
+    click(d, Op::Fan, "low");
+    ASSERT_EQ(out.sent.size(), 1u);
+    EXPECT_EQ(out.command(0), (json{{"fan_mode", "low"}}));
+    click(d, Op::ClosePopup, "close");
+    headless::advance(50);
+    EXPECT_FALSE(text(d, "Fermer"));
+}
+
+TEST_F(ClimateDetailView, APopupSurvivesTheDeviceGoing)
+{
+    auto& d = show(salon());
+    click(d, Op::OpenMore);
+    receive(CalaosProtocol::MSG_CONFIG_UPDATE, {{"io_items", json::array({{{"id", "other"}}})}});
+    click(d, Op::ClosePopup, "close");
+    headless::advance(50);
+    EXPECT_FALSE(text(d, "Fermer"));
+}
+
+TEST_F(ClimateDetailView, OpeningPopupsOverAndOverDoesNotGrowTheBindings)
+{
+    auto& d = show(salon());
+    click(d, Op::OpenMore);
+    click(d, Op::ClosePopup, "close");
+    headless::advance(50);
+    const size_t once = ClimateDetailTestAccess::bindingCount(d);
+
+    for (int i = 0; i < 50; i++)
+    {
+        click(d, i % 2 ? Op::OpenMode : Op::OpenMore);
+        click(d, Op::ClosePopup, "close");
+        headless::advance(50);
+    }
+    EXPECT_EQ(ClimateDetailTestAccess::bindingCount(d), once);
+}
+
 TEST_F(ClimateDetailView, ThePopupFollowsTheServerChoice)
 {
     auto& d = show(salon());

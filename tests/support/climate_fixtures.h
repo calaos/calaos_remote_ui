@@ -286,15 +286,17 @@ struct ClimateDetailTestAccess
 {
     using Op = ClimateDetail::Op;
 
+    static size_t bindingCount(ClimateDetail& d) { return d.bindings_.size() + d.popupBindings_.size(); }
     static lv_obj_t* overlay(ClimateDetail& d) { return d.overlay_; }
     static lv_obj_t* dialContent(ClimateDetail& d) { return d.dial_->content(); }
 
     static std::vector<lv_obj_t*> controls(ClimateDetail& d, Op op, const std::string& value = "")
     {
         std::vector<lv_obj_t*> out;
-        for (const auto& c : d.controls_)
-            if (c.op == op && c.value == value && climatefx::shown(c.obj))
-                out.push_back(c.obj);
+        for (const auto* list : {&d.controls_, &d.popupControls_})
+            for (const auto& c : *list)
+                if (c.op == op && c.value == value && climatefx::shown(c.obj))
+                    out.push_back(c.obj);
         return out;
     }
 
