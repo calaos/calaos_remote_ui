@@ -13,6 +13,10 @@ constexpr int kWidth = 1280;
 constexpr int kHeight = 800;
 
 void init();
+// The display shows the top-left w x h of the buffer, so a test can stand in for the 800x480 or 720x720 panels
+void resize(int w, int h);
+int width();
+int height();
 lv_obj_t* screen();
 void advance(uint32_t ms);
 void render();

@@ -11,12 +11,11 @@
 #include <vector>
 
 /**
- * @brief Climate device widget, any grid size (spec §9.3)
+ * @brief Climate device widget for 2x2 cells and larger (spec §9.3)
  *
- * Driven only by the device's capabilities and state, never by its impl:
- * - 1x1: setpoint, current temperature, action, -/+ and a mode button that cycles
- * - 2x1, 1x2, 2x2 and larger: mode buttons, setpoint or range with -/+ per
- *   handle, fan and swing choices when the device has them
+ * Driven only by the device's capabilities and state, never by its impl: mode
+ * buttons, setpoint or range with -/+ per handle, fan and swing choices when
+ * the device has them. The smaller cells are ClimateSmallWidget.
  *
  * Taps are coalesced into one command, sent once the user pauses.
  */
@@ -44,8 +43,7 @@ private:
         TargetDown, TargetUp,
         LowDown, LowUp,
         HighDown, HighUp,
-        ShiftDown, ShiftUp,
-        CycleMode, CycleFan, CycleSwing,
+        CycleFan, CycleSwing,
         Mode, Fan, Swing
     };
 
@@ -66,9 +64,6 @@ private:
     void readState(const CalaosProtocol::IoState& state);
     std::string structureKey() const;
     void build();
-    void buildCompact(lv_obj_t* body);
-    void buildWide(lv_obj_t* body);
-    void buildTall(lv_obj_t* body);
     void buildLarge(lv_obj_t* body);
     int columnHeight(lv_obj_t* column) const;
     void fitToHeight();
@@ -93,7 +88,6 @@ private:
     climate::Capabilities caps_;
     std::string parsedCaps_;
     std::string parsedIos_;
-    climate::Layout layout_;
     bool hasDevice_ = false;
     std::string builtKey_;
     int contentW_ = 0;
@@ -114,13 +108,10 @@ private:
     lv_obj_t* lowLabel_ = nullptr;
     lv_obj_t* highLabel_ = nullptr;
     lv_obj_t* noneLabel_ = nullptr;
-    lv_obj_t* modeCycle_ = nullptr;
-    lv_obj_t* modeCycleLabel_ = nullptr;
     lv_obj_t* fanCycleLabel_ = nullptr;
     lv_obj_t* swingCycleLabel_ = nullptr;
 
     std::vector<lv_obj_t*> stepButtons_;      // greyed with the setpoint
-    std::vector<lv_obj_t*> shiftButtons_;     // compact -/+: hidden without a setpoint
     std::vector<lv_obj_t*> optional_;         // dropped, last first, when the cell is too short
     std::vector<Chip> modeChips_;
     std::vector<Chip> fanChips_;

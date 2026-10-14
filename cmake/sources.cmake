@@ -41,6 +41,11 @@ set(MAIN_SOURCES
     main/widgets/shutter_wide_widget.cpp
     main/widgets/shutter_large_widget.cpp
     main/widgets/climate_logic.cpp
+    main/widgets/climate_present.cpp
+    main/widgets/climate_ui.cpp
+    main/widgets/climate_dial.cpp
+    main/widgets/climate_detail.cpp
+    main/widgets/climate_small_widget.cpp
     main/widgets/climate_widget.cpp
 )
 

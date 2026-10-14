@@ -27,9 +27,11 @@ add_executable(host_tests
     device_test.cpp
     command_reply_test.cpp
     climate_logic_test.cpp
+    climate_present_test.cpp
 
     ${APP_ROOT}/main/calaos_protocol.cpp
     ${APP_ROOT}/main/widgets/climate_logic.cpp
+    ${APP_ROOT}/main/widgets/climate_present.cpp
     ${APP_ROOT}/main/calaos_websocket_manager.cpp
     ${APP_ROOT}/main/hmac_authenticator.cpp
     ${APP_ROOT}/main/provisioning_manager.cpp
@@ -89,6 +91,8 @@ add_executable(widget_tests
     support/event_probe.cpp
     support/headless_lvgl.cpp
     climate_widget_test.cpp
+    climate_small_widget_test.cpp
+    climate_detail_test.cpp
 
     ${WIDGET_APP_SOURCES}
     ${WIDGET_FONT_SOURCES}
