@@ -144,7 +144,20 @@ void ClimateSmallWidget::buildCompact(lv_obj_t* body)
 {
     lv_obj_set_flex_align(body, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    roomLabel_ = label(body, fit(kReadingFonts, "00.0°", contentW_), theme_color_yellow, "--");
+    // A 4x4 grid makes 180 px cells: the name drops to one line, then the reading shrinks
+    const auto needed = [](const lv_font_t* reading, int nameLines)
+    {
+        return lv_font_get_line_height(reading) + 2 * lv_font_get_line_height(&roboto_regular_24) +
+               nameLines * lv_font_get_line_height(&roboto_regular_22) + 6;
+    };
+    const lv_font_t* reading = fit(kReadingFonts, "00.0°", contentW_);
+    int nameLines = 2;
+    if (needed(reading, nameLines) > contentH_)
+        nameLines = 1;
+    if (needed(reading, nameLines) > contentH_)
+        reading = &roboto_light_26;
+
+    roomLabel_ = label(body, reading, theme_color_yellow, "--");
 
     setRow_ = box(body, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_column(setRow_, 6, 0);
@@ -153,7 +166,7 @@ void ClimateSmallWidget::buildCompact(lv_obj_t* body)
 
     buildStatus(body, &roboto_regular_24);
 
-    nameLabel_ = wrapped(body, &roboto_regular_22, theme_color_blue, 2);
+    nameLabel_ = wrapped(body, &roboto_regular_22, theme_color_blue, nameLines);
     lv_obj_set_width(nameLabel_, LV_PCT(100));
     lv_obj_set_style_text_align(nameLabel_, LV_TEXT_ALIGN_CENTER, 0);
 }
@@ -173,7 +186,16 @@ void ClimateSmallWidget::buildWide(lv_obj_t* body)
     lv_obj_set_style_pad_row(col, 4, 0);
     lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 
-    nameLabel_ = wrapped(col, &roboto_regular_28, theme_color_blue, 2);
+    // The status (two lines when it waits), the gauge and the room reading come first
+    // in a 180 px cell: the name takes what is left
+    const int others = 2 * lv_font_get_line_height(&roboto_regular_24) + 7 + lv_font_get_line_height(&roboto_regular_24) + 12;
+    const lv_font_t* nameFont = &roboto_regular_28;
+    int nameLines = 2;
+    if (others + nameLines * lv_font_get_line_height(nameFont) > contentH_)
+        nameFont = &roboto_regular_24;
+    if (others + nameLines * lv_font_get_line_height(nameFont) > contentH_)
+        nameLines = 1;
+    nameLabel_ = wrapped(col, nameFont, theme_color_blue, nameLines);
     lv_obj_set_width(nameLabel_, LV_PCT(100));
     buildStatus(col, &roboto_regular_24);
     lv_obj_set_width(statusLabel_, textW - 32);
@@ -215,18 +237,9 @@ void ClimateSmallWidget::refresh()
     const uint32_t now = lv_tick_get();
     const Status st = statusOf(caps, v, present, clock_.remaining(now));
 
-    lv_color_t bg = theme_color_widget_bg_off;
-    lv_color_t border = theme_color_widget_border_off;
-    if (st.backdrop == Backdrop::Heat)
-    {
-        bg = theme_color_widget_bg_heat;
-        border = theme_color_yellow;
-    }
-    else if (st.backdrop == Backdrop::Cool)
-    {
-        bg = theme_color_widget_bg_on;
-        border = theme_color_blue;
-    }
+    const Surface surface = surfaceFor(st.backdrop);
+    const lv_color_t bg = surface.bg;
+    const lv_color_t border = surface.border;
     setBgColor(bg);
     setBorderColor(border);
     lv_obj_set_style_border_color(get(), border, 0);
@@ -249,6 +262,7 @@ void ClimateSmallWidget::refresh()
         lv_obj_set_style_text_font(statusLabel_, f, 0);
         lv_label_set_long_mode(statusLabel_, LV_LABEL_LONG_DOT);
         lv_obj_set_width(statusLabel_, std::min(room, static_cast<int>(textWidth(statusText.c_str(), f)) + 2));
+        lv_obj_set_height(statusLabel_, lv_font_get_line_height(f));
     }
     setText(statusLabel_, statusText);
     lv_obj_set_style_text_color(statusLabel_, toneColor(st.tone), 0);

@@ -239,35 +239,6 @@ std::string formatSetpoint(double value, double step)
     return buf;
 }
 
-std::string formatTemperature(const std::optional<double>& value)
-{
-    if (!value)
-        return "--";
-    char buf[32];
-    std::snprintf(buf, sizeof(buf), "%.1f°", *value);
-    return buf;
-}
-
-std::string modeLabel(const std::string& mode)
-{
-    if (mode.empty())
-        return "--";
-    if (mode == "fan_only")
-        return "Fan";
-    return optionLabel(mode);
-}
-
-std::string actionLabel(const std::string& action)
-{
-    if (action == "heating") return "Heating";
-    if (action == "cooling") return "Cooling";
-    if (action == "drying") return "Drying";
-    if (action == "idle") return "Idle";
-    if (action == "fan") return "Fan";
-    if (action == "off") return "Off";
-    return optionLabel(action);
-}
-
 std::string optionLabel(const std::string& option)
 {
     std::string out = option;
@@ -375,24 +346,6 @@ bool Controller::stepHigh(int steps)
     return true;
 }
 
-bool Controller::shiftRange(int steps)
-{
-    if (kind() != SetpointKind::Range || !canEditSetpoint() || steps == 0)
-        return false;
-
-    const Values v = view();
-    const Bounds& b = caps_.bounds;
-    const double low = *v.low + steps * b.step;
-    // A pair the server sent too narrow leaves widened, not as it came
-    const double high = std::max(*v.high, *v.low + b.minRange) + steps * b.step;
-    if (low < b.min - kEpsilon || high > b.max + kEpsilon)
-        return false;
-
-    low_.set(snap(b, low));
-    high_.set(snap(b, high));
-    return true;
-}
-
 bool Controller::setMode(const std::string& mode)
 {
     if (!caps_.hasMode(mode) || mode == view().mode)
@@ -409,18 +362,6 @@ bool Controller::setMode(const std::string& mode)
 bool Controller::selectMode(const std::string& mode)
 {
     return setMode(mode);
-}
-
-bool Controller::cycleMode()
-{
-    const auto& modes = caps_.modes;
-    if (modes.empty())
-        return false;
-
-    auto it = std::find(modes.begin(), modes.end(), view().mode);
-    if (it == modes.end() || ++it == modes.end())
-        it = modes.begin();
-    return setMode(*it);
 }
 
 bool Controller::selectFan(const std::string& fan)

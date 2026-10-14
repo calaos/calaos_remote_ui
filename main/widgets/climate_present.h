@@ -38,6 +38,8 @@ Status statusOf(const Capabilities& caps, const Values& view, bool hasDevice, do
 
 Icon modeIcon(const std::string& mode);
 std::string modeLabelFr(const std::string& mode);
+// The word on the pill of a widget: "Chaud", "Sec"
+std::string modeShortFr(const std::string& mode);
 std::string fanLabelFr(const std::string& option);
 std::string swingLabelFr(const std::string& option);
 std::string faultLabelFr(const std::string& fault, bool shortForm);
@@ -55,7 +57,8 @@ std::string formatShort(double value, double step);
 
 // "22.5°", "21-23°" in a range, "--" while unknown, "" when the mode has no setpoint
 std::string setpointText(SetpointKind kind, const Values& view, const Bounds& bounds);
-std::string minRangeText(const Bounds& bounds);
+// shortForm: "Écart min. 2°" for the narrow inside of a dial
+std::string minRangeText(const Bounds& bounds, bool shortForm = false);
 
 // Both handles held min_range apart: the inner buttons are refused
 bool atMinRange(const Capabilities& caps, SetpointKind kind, const Values& view);
@@ -123,8 +126,14 @@ struct DetailMetrics
     int button = 80;
     int columnWidth = 0;        // landscape: the dial's column
     bool stacked = false;       // range: one -/+ pair above the other
+    int pill = 64;              // mode pill and settings button height
+    int numberPx = 80;          // single setpoint: 80 (degree lettered apart) or 60
 };
 DetailMetrics detailMetrics(int w, int h, SetpointKind kind);
+
+// The climate inside a 2x2 or larger widget, content area w x h: mode pill and
+// settings button on top, dial, "- 22 +" line, title at the bottom
+DetailMetrics widgetMetrics(int w, int h, SetpointKind kind);
 
 // Height the dial takes for a diameter: the arc is open at the bottom
 int dialHeight(int diameter, int stroke, int knob);

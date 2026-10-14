@@ -4,6 +4,7 @@
 #include "ws_harness.h"
 #include "widget_factory.h"
 #include "widgets/climate_detail.h"
+#include "widgets/climate_large_widget.h"
 #include "widgets/climate_small_widget.h"
 #include "misc/lv_area_private.h"
 #include <cstdlib>
@@ -282,6 +283,11 @@ struct ClimateSmallWidgetTestAccess
     static ClimateDetail* detail(CalaosWidget& w) { return static_cast<ClimateSmallWidget&>(w).detail_.get(); }
 };
 
+struct ClimateLargeWidgetTestAccess
+{
+    static ClimateDetail& panel(CalaosWidget& w) { return *static_cast<ClimateLargeWidget&>(w).panel_; }
+};
+
 struct ClimateDetailTestAccess
 {
     using Op = ClimateDetail::Op;
@@ -289,6 +295,10 @@ struct ClimateDetailTestAccess
     static size_t bindingCount(ClimateDetail& d) { return d.bindings_.size() + d.popupBindings_.size(); }
     static lv_obj_t* overlay(ClimateDetail& d) { return d.overlay_; }
     static lv_obj_t* dialContent(ClimateDetail& d) { return d.dial_->content(); }
+    static lv_obj_t* body(ClimateDetail& d) { return d.body_; }
+    static lv_obj_t* titleLabel(ClimateDetail& d) { return d.title_label_; }
+    static lv_obj_t* dial(ClimateDetail& d) { return d.dial_->get(); }
+    static lv_obj_t* pill(ClimateDetail& d) { return d.pill_; }
 
     static std::vector<lv_obj_t*> controls(ClimateDetail& d, Op op, const std::string& value = "")
     {

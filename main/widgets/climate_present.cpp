@@ -51,6 +51,18 @@ std::string modeLabelFr(const std::string& mode)
     return optionLabel(mode);
 }
 
+std::string modeShortFr(const std::string& mode)
+{
+    if (mode == "off") return "Arrêt";
+    if (mode == "heat") return "Chaud";
+    if (mode == "cool") return "Froid";
+    if (mode == "auto") return "Auto";
+    if (mode == "dry") return "Sec";
+    if (mode == "fan_only") return "Ventil.";
+    if (mode.empty()) return "Inconnu";
+    return optionLabel(mode);
+}
+
 std::string fanLabelFr(const std::string& option)
 {
     if (option == "auto") return "Auto";
@@ -260,9 +272,9 @@ std::string setpointText(SetpointKind kind, const Values& view, const Bounds& bo
     return "";
 }
 
-std::string minRangeText(const Bounds& bounds)
+std::string minRangeText(const Bounds& bounds, bool shortForm)
 {
-    return "Écart minimum " + formatShort(bounds.minRange, bounds.step);
+    return (shortForm ? "Écart min. " : "Écart minimum ") + formatShort(bounds.minRange, bounds.step);
 }
 
 bool atMinRange(const Capabilities& caps, SetpointKind kind, const Values& view)
@@ -434,6 +446,53 @@ DetailMetrics detailMetrics(int w, int h, SetpointKind kind)
         if (dialHeight(d, big ? 14 : 12, big ? 16 : 14) + rest <= availH)
         {
             m.dial = d;
+            break;
+        }
+    }
+    m.stroke = m.dial >= 280 ? 14 : 12;
+    m.knob = m.dial >= 280 ? 16 : 14;
+    return m;
+}
+
+DetailMetrics widgetMetrics(int w, int h, SetpointKind kind)
+{
+    DetailMetrics m;
+    m.margin = 0;
+    m.pill = 56;
+
+    const bool range = kind == SetpointKind::Range;
+    constexpr int gap = 6;
+    constexpr int title = 30;
+    const int widest = std::min(340, w);
+    // Smallest dial worth drawing before the buttons give up some size
+    const int worthwhile = range ? 210 : 240;
+
+    for (int button : {80, 72, 64, 56})
+    {
+        const bool stacked = range && 2 * (button + 8 + 110 + 8 + button) + 24 > w;
+        const int line = kind == SetpointKind::None ? 0 : (stacked ? 2 * button + 4 : button);
+        // The 80 px number needs 190 px between the buttons
+        const bool roomy = w - 2 * button - 16 >= 190;
+        const int avail = h - (m.pill + title + line + 3 * gap);
+
+        int dial = 0;
+        for (int d = widest; d >= 100; d--)
+        {
+            const bool big = d >= 280;
+            if (dialHeight(d, big ? 14 : 12, big ? 16 : 14) <= avail)
+            {
+                dial = d;
+                break;
+            }
+        }
+
+        const bool last = button == 56;
+        if (last || (dial >= worthwhile && (range || kind == SetpointKind::None || roomy)))
+        {
+            m.button = button;
+            m.stacked = stacked;
+            m.dial = std::max(dial, 100);
+            m.numberPx = roomy ? 80 : 60;
             break;
         }
     }

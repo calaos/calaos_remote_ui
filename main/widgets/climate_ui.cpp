@@ -14,6 +14,17 @@ lv_style_selector_t when(lv_state_t state)
     return static_cast<lv_style_selector_t>(LV_PART_MAIN) | static_cast<lv_style_selector_t>(state);
 }
 
+Surface surfaceFor(climate::Backdrop backdrop)
+{
+    switch (backdrop)
+    {
+        case climate::Backdrop::Heat: return {theme_color_widget_bg_heat, theme_color_yellow};
+        case climate::Backdrop::Cool: return {theme_color_widget_bg_on, theme_color_blue};
+        case climate::Backdrop::Off: break;
+    }
+    return {theme_color_widget_bg_off, theme_color_widget_border_off};
+}
+
 lv_color_t toneColor(Tone tone)
 {
     switch (tone)

@@ -439,3 +439,62 @@ TEST(ClimatePresentValues, AMalformedLockoutIsIgnored)
     EXPECT_FALSE(values({{"lockout", {{"remaining", 0}}}}).lockout.has_value());
     EXPECT_FALSE(values({{"lockout", {{"remaining", -5}}}}).lockout.has_value());
 }
+
+TEST(ClimatePresentWidgetMetrics, TheDialKeepsItsSizeInEveryWidgetOfTheTwoPanels)
+{
+    // Content areas: 2x2 and 3x3 of the 720x720 panel (3x3 and 4x4 grids), 2x2 of the 800x480 panel
+    const struct { const char* name; int w, h; } areas[] = {
+        {"2x2 on 720x720", 436, 436}, {"3x3 on 4x4 grid", 496, 496}, {"2x2 on 800x480", 360, 436},
+        {"2x2 on 1280x800", 398, 500},
+    };
+    for (const auto& a : areas)
+    {
+        EXPECT_GE(widgetMetrics(a.w, a.h, SetpointKind::Single).dial, 240) << a.name;
+        EXPECT_GE(widgetMetrics(a.w, a.h, SetpointKind::Range).dial, 210) << a.name;
+        EXPECT_GE(widgetMetrics(a.w, a.h, SetpointKind::None).dial, 240) << a.name;
+    }
+}
+
+TEST(ClimatePresentWidgetMetrics, EverythingFitsTheHeightAndTheButtonsStayFingerSized)
+{
+    for (int w : {300, 360, 436, 496, 700})
+        for (int h : {380, 436, 496, 700})
+            for (auto kind : {SetpointKind::Single, SetpointKind::Range, SetpointKind::None})
+            {
+                const DetailMetrics m = widgetMetrics(w, h, kind);
+                const int line = kind == SetpointKind::None ? 0 : (m.stacked ? 2 * m.button + 4 : m.button);
+                EXPECT_LE(m.pill + dialHeight(m.dial, m.stroke, m.knob) + line + 30 + 18, h) << w << "x" << h;
+                EXPECT_GE(m.button, 56);
+                EXPECT_GE(m.pill, 56);
+                EXPECT_LE(m.dial, std::min(340, w));
+            }
+}
+
+TEST(ClimatePresentWidgetMetrics, TwoPairsStackInAWidgetAndTheButtonsShrinkForTheDial)
+{
+    const DetailMetrics m = widgetMetrics(436, 436, SetpointKind::Range);
+    EXPECT_TRUE(m.stacked);
+    EXPECT_EQ(m.button, 64);
+    // A single setpoint has the room for the big buttons
+    EXPECT_EQ(widgetMetrics(436, 436, SetpointKind::Single).button, 80);
+    EXPECT_FALSE(widgetMetrics(436, 436, SetpointKind::Single).stacked);
+}
+
+TEST(ClimatePresentWidgetMetrics, ANarrowWidgetKeepsTheBigNumberByTakingSmallerButtons)
+{
+    const DetailMetrics narrow = widgetMetrics(360, 436, SetpointKind::Single);
+    EXPECT_EQ(narrow.numberPx, 80);
+    EXPECT_EQ(narrow.button, 72);
+    // Too narrow for the 80 px number at all: the 60 px font
+    EXPECT_EQ(widgetMetrics(300, 436, SetpointKind::Single).numberPx, 60);
+}
+
+TEST(ClimatePresentLabels, ThePillOfAWidgetUsesTheShortWord)
+{
+    EXPECT_EQ(modeShortFr("heat"), "Chaud");
+    EXPECT_EQ(modeShortFr("dry"), "Sec");
+    EXPECT_EQ(modeShortFr("fan_only"), "Ventil.");
+    EXPECT_EQ(modeShortFr("off"), "Arrêt");
+    EXPECT_EQ(modeShortFr(""), "Inconnu");
+    EXPECT_EQ(minRangeText(Bounds{16, 30, 0.5, 2, "°C"}, true), "Écart min. 2°");
+}
