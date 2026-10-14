@@ -426,7 +426,7 @@ DetailMetrics detailMetrics(int w, int h, SetpointKind kind)
 
     // The largest dial that leaves room for the rest of its column
     // Portrait: header, dial, line, note, pill, spacer, "more" with a gap between each
-    const int rest = m.landscape ? line + gap : header + line + (range ? note - gap : 0) + pill + more + 6 * gap;
+    const int rest = m.landscape ? line + gap : header + line + pill + more + 6 * gap;
     m.dial = 160;
     for (int d = widest; d >= 160; d--)
     {
