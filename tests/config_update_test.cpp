@@ -46,11 +46,13 @@ TEST(ConfigUpdate, ServerTypoBrigtnessIsAccepted)
 
 TEST(ConfigUpdate, ScreensaverNumbersAcceptStringsAndEmptyMeansZero)
 {
-    auto* a = configOf(receive(MSG_CONFIG_UPDATE, {{"screensaver_timeout", "120"}, {"screensaver_dimming", 20}}));
+    auto first = receive(MSG_CONFIG_UPDATE, {{"screensaver_timeout", "120"}, {"screensaver_dimming", 20}});
+    auto* a = configOf(first);
     EXPECT_EQ(a->config.screensaver_timeout, 120);
     EXPECT_EQ(a->config.screensaver_dimming, 20);
 
-    auto* b = configOf(receive(MSG_CONFIG_UPDATE, {{"screensaver_timeout", ""}}));
+    auto second = receive(MSG_CONFIG_UPDATE, {{"screensaver_timeout", ""}});
+    auto* b = configOf(second);
     EXPECT_EQ(b->config.screensaver_timeout, 0);
 }
 

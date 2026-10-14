@@ -28,6 +28,7 @@ add_executable(host_tests
     command_reply_test.cpp
     climate_logic_test.cpp
     climate_present_test.cpp
+    app_dispatcher_test.cpp
 
     ${APP_ROOT}/main/calaos_protocol.cpp
     ${APP_ROOT}/main/widgets/climate_logic.cpp

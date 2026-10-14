@@ -78,8 +78,11 @@ private:
     // Event queue and worker thread management
 #ifdef ESP_PLATFORM
     // FreeRTOS implementation - use pointers to avoid copy issues with complex objects
-    QueueHandle_t eventQueue_;
-    TaskHandle_t workerTaskHandle_;
+    QueueHandle_t eventQueue_ = nullptr;
+    TaskHandle_t workerTaskHandle_ = nullptr;
+    // dispatch() sends under it and stopWorkerTask() deletes the queue under it:
+    // a send must never reach a queue that is being deleted
+    flux::Mutex queueMutex_;
     std::atomic<bool> shouldStop_;
     static const int QUEUE_SIZE = 64;
     static const int TASK_STACK_SIZE = 8192;

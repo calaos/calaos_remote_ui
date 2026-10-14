@@ -50,9 +50,13 @@ void AppDispatcher::subscribe(AppEventType eventType, AppEventCallback callback)
 void AppDispatcher::dispatch(const AppEvent& event)
 {
 #ifdef ESP_PLATFORM
+    flux::LockGuard lock(queueMutex_);
+    if (!eventQueue_ || shouldStop_.load())
+        return;
+
     // Create a copy of the event on the heap to avoid copy issues
     AppEvent* eventPtr = new AppEvent(event);
-    if (eventQueue_ && xQueueSend(eventQueue_, &eventPtr, 0) != pdTRUE)
+    if (xQueueSend(eventQueue_, &eventPtr, 0) != pdTRUE)
     {
         ESP_LOGW(TAG, "Event queue full, dropping event type %d", static_cast<int>(event.getType()));
         delete eventPtr;  // Clean up if queue is full
@@ -200,6 +204,7 @@ void AppDispatcher::stopWorkerTask()
         workerTaskHandle_ = nullptr;
     }
 
+    flux::LockGuard lock(queueMutex_);
     if (eventQueue_)
     {
         // Clean up any remaining events in queue to prevent memory leaks
