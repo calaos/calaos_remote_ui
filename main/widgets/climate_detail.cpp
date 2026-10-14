@@ -213,8 +213,12 @@ void ClimateDetail::buildDial(lv_obj_t* parent)
     dial_ = std::make_unique<ClimateDial>(parent, m.dial, m.stroke, m.knob, false, kScreenBg);
 
     lv_obj_t* in = dial_->content();
-    roomLabel_ = label(in, &roboto_light_28, theme_color_white);
+    roomLabel_ = label(in, &roboto_light_26, theme_color_white);
     wordLabel_ = label(in, &roboto_regular_24, theme_color_muted);
+    // "Démarre dans 2 min 20" is wider than a small dial: it breaks in two
+    lv_obj_set_style_max_width(wordLabel_, dial_->innerWidth(), 0);
+    lv_label_set_long_mode(wordLabel_, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(wordLabel_, LV_TEXT_ALIGN_CENTER, 0);
     gauge_ = gauge(in, 160, theme_color_amber);
     lv_obj_set_style_margin_top(gauge_, 8, 0);
 }
@@ -308,7 +312,7 @@ void ClimateDetail::refresh()
     const uint32_t t = now();
     const double remaining = clock_.remaining(t);
     const Status st = statusOf(caps, v, hasDevice_, remaining);
-    const bool editable = controller_.canEditSetpoint();
+    const bool editable = controller_.canEditSetpoint() && st.canSet;
 
     dial_->set(dialFor(caps, kind, v, st));
 

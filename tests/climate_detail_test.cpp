@@ -469,6 +469,28 @@ TEST_F(ClimateDetailView, FitsTheScreenInEveryState)
     }
 }
 
+TEST_F(ClimateDetailView, TheTextsInsideTheDialDoNotCrossItsTrack)
+{
+    for (const auto& s : {std::pair{800, 480}, std::pair{720, 720}})
+    {
+        open(s.first, s.second);
+        for (const json& f : {waiting(), salon(), bureauAtStop()})
+        {
+            auto& d = show(f);
+            lv_obj_t* content = ClimateDetailTestAccess::dialContent(d);
+            const int room = lv_obj_get_width(content);
+            ASSERT_GT(room, 100);
+            for (uint32_t i = 0; i < lv_obj_get_child_count(content); i++)
+            {
+                lv_obj_t* c = lv_obj_get_child(content, i);
+                if (shown(c))
+                    EXPECT_LE(lv_obj_get_width(c), room) << f["name"] << " at " << s.first;
+            }
+            widget_.reset();
+        }
+    }
+}
+
 TEST_F(ClimateDetailView, ThePopupsFitTheScreen)
 {
     for (const auto& s : {std::pair{800, 480}, std::pair{720, 720}})

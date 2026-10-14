@@ -287,6 +287,7 @@ struct ClimateDetailTestAccess
     using Op = ClimateDetail::Op;
 
     static lv_obj_t* overlay(ClimateDetail& d) { return d.overlay_; }
+    static lv_obj_t* dialContent(ClimateDetail& d) { return d.dial_->content(); }
 
     static std::vector<lv_obj_t*> controls(ClimateDetail& d, Op op, const std::string& value = "")
     {

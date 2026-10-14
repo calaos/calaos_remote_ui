@@ -20,6 +20,8 @@ public:
     // Centred in the circle, for the texts inside it
     lv_obj_t* content() const { return content_; }
     int height() const { return height_; }
+    // Room for the texts inside the track
+    int innerWidth() const { return inner_; }
 
 private:
     lv_obj_t* knob(lv_obj_t* parent);
@@ -39,6 +41,7 @@ private:
     int knobRadius_;
     bool miniMark_;
     int height_;
+    int inner_;
     double centre_;
     double radius_;     // of the middle of the track
 };

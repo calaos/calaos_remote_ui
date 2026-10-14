@@ -14,9 +14,10 @@ namespace
 
 constexpr int kPad = 12;
 
-const std::vector<const lv_font_t*> kReadingFonts = {&roboto_light_48, &roboto_light_32, &roboto_light_28};
+const std::vector<const lv_font_t*> kReadingFonts = {&roboto_light_48, &roboto_light_26};
 const std::vector<const lv_font_t*> kDialFonts = {&roboto_bold_32, &roboto_bold_28, &roboto_bold_24};
 const std::vector<const lv_font_t*> kSetpointFonts = {&roboto_regular_24, &roboto_regular_22};
+const std::vector<const lv_font_t*> kStatusFonts = {&roboto_regular_24, &roboto_regular_22};
 
 lv_obj_t* wrapped(lv_obj_t* parent, const lv_font_t* font, lv_color_t color, int lines)
 {
@@ -196,7 +197,7 @@ void ClimateSmallWidget::buildTall(lv_obj_t* body)
     roomLabel_ = label(col, &roboto_regular_24, theme_color_muted);
     buildStatus(col, &roboto_regular_26);
     // Long words ("Démarre dans 3 min") break onto a second line in the narrow cell
-    lv_obj_set_width(statusLabel_, contentW_ - 32);
+    lv_obj_set_style_max_width(statusLabel_, contentW_ - 32, 0);
     lv_label_set_long_mode(statusLabel_, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_align(statusLabel_, LV_TEXT_ALIGN_CENTER, 0);
     gauge_ = gauge(col, std::min(diameter, contentW_) * 4 / 5, theme_color_amber);
@@ -237,8 +238,19 @@ void ClimateSmallWidget::refresh()
     setText(nameLabel_, getDisplayName());
 
     const bool wide = layout_ != Layout::Compact;
-    const std::string shortOrFull = wide ? st.widgetText : st.shortText;
-    setText(statusLabel_, shortOrFull);
+    std::string statusText = wide ? st.widgetText : st.shortText;
+    if (layout_ == Layout::Tall && lineCount(statusText, &roboto_regular_26, contentW_ - 32) > 2)
+        statusText = st.shortText;
+    if (layout_ == Layout::Compact)
+    {
+        // A long word takes the smaller font, then gives way to dots, but never leaves the cell
+        const int room = contentW_ - 32;
+        const lv_font_t* f = fit(kStatusFonts, statusText, room);
+        lv_obj_set_style_text_font(statusLabel_, f, 0);
+        lv_label_set_long_mode(statusLabel_, LV_LABEL_LONG_DOT);
+        lv_obj_set_width(statusLabel_, std::min(room, static_cast<int>(textWidth(statusText.c_str(), f)) + 2));
+    }
+    setText(statusLabel_, statusText);
     lv_obj_set_style_text_color(statusLabel_, toneColor(st.tone), 0);
     setIcon(statusIcon_, st.icon, toneColor(st.tone));
 

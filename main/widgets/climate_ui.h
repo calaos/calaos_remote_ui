@@ -15,6 +15,8 @@ const lv_image_dsc_t* iconImage(climate::Icon icon);
 lv_obj_t* box(lv_obj_t* parent, lv_flex_flow_t flow);
 lv_obj_t* label(lv_obj_t* parent, const lv_font_t* font, lv_color_t color, const char* text = "");
 int32_t textWidth(const char* text, const lv_font_t* font);
+// Lines the text takes wrapped in maxWidth
+int lineCount(const std::string& text, const lv_font_t* font, int maxWidth);
 // Largest font whose text fits in width
 const lv_font_t* fit(const std::vector<const lv_font_t*>& fonts, const std::string& text, int width);
 

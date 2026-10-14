@@ -74,6 +74,13 @@ int32_t textWidth(const char* text, const lv_font_t* font)
     return size.x;
 }
 
+int lineCount(const std::string& text, const lv_font_t* font, int maxWidth)
+{
+    lv_point_t size;
+    lv_text_get_size(&size, text.c_str(), font, 0, 0, maxWidth, LV_TEXT_FLAG_NONE);
+    return std::max(1, static_cast<int>(size.y / std::max(1, static_cast<int>(lv_font_get_line_height(font)))));
+}
+
 const lv_font_t* fit(const std::vector<const lv_font_t*>& fonts, const std::string& text, int width)
 {
     for (const lv_font_t* f : fonts)

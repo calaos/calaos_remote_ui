@@ -65,6 +65,7 @@ ClimateDial::ClimateDial(lv_obj_t* parent, int diameter, int stroke, int knobRad
 
     // The texts of the dial sit on its centre, inside the track
     const int inner = static_cast<int>(2 * radius_ - 2 * stroke);
+    inner_ = inner;
     content_ = climate_ui::box(root_, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_size(content_, inner, inner);
     lv_obj_set_pos(content_, static_cast<int>(centre_ - inner / 2.0), static_cast<int>(centre_ - inner / 2.0));
