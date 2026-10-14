@@ -170,6 +170,25 @@ Values Values::parse(const std::string& stateJson, const std::string& scalarMode
     v.action = text(state, "action");
     v.fanMode = text(state, "fan_mode");
     v.swingMode = text(state, "swing_mode");
+    v.humidity = number(state, "humidity");
+    v.fault = text(state, "fault");
+
+    auto conn = state.find("connected");
+    if (conn != state.end())
+    {
+        if (conn->is_boolean())
+            v.connected = conn->get<bool>();
+        else if (conn->is_string())
+            v.connected = conn->get_ref<const std::string&>() != "false";
+    }
+
+    auto lock = state.find("lockout");
+    if (lock != state.end() && lock->is_object())
+    {
+        const auto remaining = number(*lock, "remaining");
+        if (remaining && *remaining > 0)
+            v.lockout = Lockout{text(*lock, "output"), *remaining};
+    }
     return v;
 }
 
