@@ -380,6 +380,14 @@ TEST_F(ClimateLarge, FaultAndUnknownModeAreTold)
     put(withState(salon(), {{"fault", "sensor_stale"}}));
     EXPECT_TRUE(text("Sonde muette"));
     widget_.reset();
+    put(withState(salon(), {{"fault", "sensor_waiting"}}));
+    EXPECT_TRUE(text("En attente de la sonde"));
+    widget_.reset();
+    put(withState(salon(), {{"fault", "sensor_disconnected"}}));
+    EXPECT_TRUE(text("Sonde déconnectée"));
+    // The thermostat stays settable: the buttons are live
+    EXPECT_TRUE(enabled(Op::Plus));
+    widget_.reset();
     put(unknownMode());
     EXPECT_TRUE(text("Mode inconnu"));
     EXPECT_TRUE(text("Inconnu"));
@@ -423,7 +431,9 @@ TEST_F(ClimateLarge, EveryFixtureFitsEveryCell)
     const json fixtures[] = {salon(), chambre(), bureauAtStop(), sejour(), waiting(), garageOff(),
                              verandaOffline(), unknownMode(), cellier(),
                              withState(salon(), {{"mode", "fan_only"}}),
-                             withState(salon(), {{"fault", "humidity_high"}})};
+                             withState(salon(), {{"fault", "humidity_high"}}),
+                             withState(salon(), {{"fault", "sensor_waiting"}}),
+                             withState(salon(), {{"fault", "sensor_disconnected"}})};
     const struct { int w; int h; } sizes[] = {{2, 2}, {3, 2}, {2, 3}, {3, 3}};
     const struct { const char* name; Cell cell; } cells[] = {{"240x240", kSquare}, {"213x266", kTall},
                                                              {"200x240", kLandscape}};
@@ -443,7 +453,7 @@ TEST_F(ClimateLarge, EveryFixtureFitsEveryCell)
                 n++;
             }
     }
-    EXPECT_EQ(n, 11 * 12);
+    EXPECT_EQ(n, 13 * 12);
 }
 
 TEST_F(ClimateLarge, TheDialStaysLargeInA2x2OnTheSmallPanel)

@@ -123,6 +123,8 @@ TEST(ClimatePresentStatus, AFaultHasItsOwnWords)
         {"sensor_stale", "Sonde muette", "Sonde muette"},
         {"sensor_missing", "Sonde absente", "Sonde absente"},
         {"humidity_high", "Humidité trop haute", "Hum. haute"},
+        {"sensor_waiting", "En attente de la sonde", "Attente"},
+        {"sensor_disconnected", "Sonde déconnectée", "Déconnectée"},
     };
     for (const auto& r : rows)
     {
@@ -134,6 +136,21 @@ TEST(ClimatePresentStatus, AFaultHasItsOwnWords)
     }
     // A fault the panel does not know is still shown
     EXPECT_EQ(status({{"mode", "cool"}, {"fault", "pump_stuck"}}).text, "Pump stuck");
+}
+
+TEST(ClimatePresentStatus, ASensorThatIsWaitingOrDisconnectedIsToldInFrenchAndTheThermostatStaysSettable)
+{
+    for (const char* fault : {"sensor_waiting", "sensor_disconnected"})
+    {
+        const Status s = status({{"mode", "heat"}, {"action", "idle"}, {"fault", fault}});
+        EXPECT_EQ(s.phase, Phase::Fault) << fault;
+        EXPECT_EQ(s.tone, Tone::Wait) << fault;
+        // The server keeps accepting the mode and the setpoint (decision 20)
+        EXPECT_TRUE(s.canSet) << fault;
+        for (const char* english : {"Sensor", "waiting", "disconnected"})
+            EXPECT_EQ(s.text.find(english), std::string::npos) << fault;
+    }
+    EXPECT_EQ(status({{"mode", "off"}, {"fault", "sensor_waiting"}}).phase, Phase::Off);
 }
 
 TEST(ClimatePresentStatus, AFaultOutranksTheWaitButNotOff)

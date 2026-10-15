@@ -75,7 +75,10 @@ TEST_F(ClimateSmall, EveryFixtureFitsEveryCell)
     const json fixtures[] = {salon(), chambre(), bureauAtStop(), sejour(), waiting(), waiting(0), garageOff(),
                              verandaOffline(), unknownMode(), cellier(),
                              withState(salon(), {{"fault", "humidity_high"}}),
-                             withState(salon(), {{"fault", "sensor_stale"}})};
+                             withState(salon(), {{"fault", "sensor_stale"}}),
+                             withState(salon(), {{"fault", "sensor_waiting"}}),
+                             withState(salon(), {{"fault", "sensor_disconnected"}}),
+                             withState(waiting(), {{"fault", "sensor_disconnected"}})};
     const struct { int w; int h; } sizes[] = {{1, 1}, {2, 1}, {1, 2}, {3, 1}, {1, 3}};
     const struct { const char* name; Cell cell; } cells[] = {{"240x240", kSquare}, {"213x266", kTall},
                                                              {"200x240", kLandscape}, {"180x180", {180, 180}}};
@@ -95,7 +98,7 @@ TEST_F(ClimateSmall, EveryFixtureFitsEveryCell)
                 n++;
             }
     }
-    EXPECT_EQ(n, 12 * 20);
+    EXPECT_EQ(n, 15 * 20);
 }
 
 TEST_F(ClimateSmall, CompactShowsRoomSetpointStatusAndName)
@@ -261,6 +264,8 @@ TEST_F(ClimateSmall, StatesAreToldInWordsAndColour)
         {chambre(), "Chauffe", theme_color_yellow},
         {salon(), "Refroidit", theme_color_blue},
         {withState(salon(), {{"fault", "sensor_stale"}}), "Sonde muette", theme_color_amber},
+        {withState(salon(), {{"fault", "sensor_waiting"}}), "Attente", theme_color_amber},
+        {withState(salon(), {{"fault", "sensor_disconnected"}}), "Déconnectée", theme_color_amber},
     };
     for (const auto& r : rows)
     {
