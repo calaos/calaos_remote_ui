@@ -385,6 +385,10 @@ TEST_F(ClimateLarge, FaultAndUnknownModeAreTold)
     widget_.reset();
     put(withState(salon(), {{"fault", "sensor_disconnected"}}));
     EXPECT_TRUE(text("Sonde déconnectée"));
+    EXPECT_TRUE(enabled(Op::Plus));
+    widget_.reset();
+    put(withState(salon(), {{"fault", "sensor_out_of_range"}}));
+    EXPECT_TRUE(text("Sonde hors limites"));
     // The thermostat stays settable: the buttons are live
     EXPECT_TRUE(enabled(Op::Plus));
     widget_.reset();
@@ -433,7 +437,8 @@ TEST_F(ClimateLarge, EveryFixtureFitsEveryCell)
                              withState(salon(), {{"mode", "fan_only"}}),
                              withState(salon(), {{"fault", "humidity_high"}}),
                              withState(salon(), {{"fault", "sensor_waiting"}}),
-                             withState(salon(), {{"fault", "sensor_disconnected"}})};
+                             withState(salon(), {{"fault", "sensor_disconnected"}}),
+                             withState(salon(), {{"fault", "sensor_out_of_range"}})};
     const struct { int w; int h; } sizes[] = {{2, 2}, {3, 2}, {2, 3}, {3, 3}};
     const struct { const char* name; Cell cell; } cells[] = {{"240x240", kSquare}, {"213x266", kTall},
                                                              {"200x240", kLandscape}};
@@ -453,7 +458,7 @@ TEST_F(ClimateLarge, EveryFixtureFitsEveryCell)
                 n++;
             }
     }
-    EXPECT_EQ(n, 13 * 12);
+    EXPECT_EQ(n, 14 * 12);
 }
 
 TEST_F(ClimateLarge, TheDialStaysLargeInA2x2OnTheSmallPanel)

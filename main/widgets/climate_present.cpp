@@ -93,6 +93,7 @@ std::string faultLabelFr(const std::string& fault, bool shortForm)
     if (fault == "sensor_missing") return "Sonde absente";
     if (fault == "sensor_waiting") return shortForm ? "Attente" : "En attente de la sonde";
     if (fault == "sensor_disconnected") return shortForm ? "Déconnectée" : "Sonde déconnectée";
+    if (fault == "sensor_out_of_range") return shortForm ? "Hors limites" : "Sonde hors limites";
     if (fault == "humidity_high") return shortForm ? "Hum. haute" : "Humidité trop haute";
     if (fault == "humidity_stale") return shortForm ? "Hum. muette" : "Sonde d'humidité muette";
     return optionLabel(fault);

@@ -125,6 +125,7 @@ TEST(ClimatePresentStatus, AFaultHasItsOwnWords)
         {"humidity_high", "Humidité trop haute", "Hum. haute"},
         {"sensor_waiting", "En attente de la sonde", "Attente"},
         {"sensor_disconnected", "Sonde déconnectée", "Déconnectée"},
+        {"sensor_out_of_range", "Sonde hors limites", "Hors limites"},
     };
     for (const auto& r : rows)
     {
@@ -140,14 +141,14 @@ TEST(ClimatePresentStatus, AFaultHasItsOwnWords)
 
 TEST(ClimatePresentStatus, ASensorThatIsWaitingOrDisconnectedIsToldInFrenchAndTheThermostatStaysSettable)
 {
-    for (const char* fault : {"sensor_waiting", "sensor_disconnected"})
+    for (const char* fault : {"sensor_waiting", "sensor_disconnected", "sensor_out_of_range"})
     {
         const Status s = status({{"mode", "heat"}, {"action", "idle"}, {"fault", fault}});
         EXPECT_EQ(s.phase, Phase::Fault) << fault;
         EXPECT_EQ(s.tone, Tone::Wait) << fault;
         // The server keeps accepting the mode and the setpoint (decision 20)
         EXPECT_TRUE(s.canSet) << fault;
-        for (const char* english : {"Sensor", "waiting", "disconnected"})
+        for (const char* english : {"Sensor", "waiting", "disconnected", "range"})
             EXPECT_EQ(s.text.find(english), std::string::npos) << fault;
     }
     EXPECT_EQ(status({{"mode", "off"}, {"fault", "sensor_waiting"}}).phase, Phase::Off);
