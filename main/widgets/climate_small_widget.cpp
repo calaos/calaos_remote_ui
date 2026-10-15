@@ -262,7 +262,10 @@ void ClimateSmallWidget::refresh()
 
     const bool wide = layout_ != Layout::Compact;
     std::string statusText = wide ? st.widgetText : st.shortText;
+    // A word that would take three lines gives way to its short form
     if (layout_ == Layout::Tall && lineCount(statusText, &roboto_regular_26, contentW_ - 32) > 2)
+        statusText = st.shortText;
+    if (layout_ == Layout::Wide && lineCount(statusText, &roboto_regular_24, nameWidth_ - 32) > 2)
         statusText = st.shortText;
     if (layout_ == Layout::Compact)
     {
