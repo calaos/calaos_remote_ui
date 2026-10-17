@@ -211,6 +211,8 @@ Example: `calaos-remote-ui-waveshare-86-panel`
 └── manifest.json           # Metadata (version, checksum, hardware_id, etc.)
 ```
 
+The package asks calaos-server for a firmware rescan (`POST /api/v3/ota/rescan` on `127.0.0.1:5454`) through a deferred dpkg trigger, `calaos-remote-ui-rescan`: when an upgrade also ships calaos-server, the rescan reaches the new server, after its own postinst has restarted it. The ctest case `DebPackage.RescanRunsOnceTheWholeDpkgRunIsConfigured` (`tests/deb_trigger_test.sh`) installs the built package with a stand-in calaos-server on a private dpkg database and checks that order.
+
 ### Manifest Format
 
 ```json
