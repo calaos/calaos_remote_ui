@@ -70,6 +70,15 @@ Section: misc
 Priority: optional
 EOF
 
+# The rescan runs as a dpkg trigger: an upgrade that also ships calaos-server
+# restarts it after this package is configured, and a rescan sent before that
+# makes the old server offer an image it will not be there to serve. Deferred
+# triggers run once the whole dpkg run is configured.
+cat > "${PKG_DIR}/DEBIAN/triggers" <<'TRIGGERS'
+interest-noawait calaos-remote-ui-rescan
+activate-noawait calaos-remote-ui-rescan
+TRIGGERS
+
 # Generate DEBIAN/postinst – notify calaos service to rescan firmwares
 cat > "${PKG_DIR}/DEBIAN/postinst" <<'POSTINST'
 #!/bin/sh
@@ -77,10 +86,24 @@ set -e
 
 RESCAN_URL="http://127.0.0.1:5454/api/v3/ota/rescan"
 
-if ! curl --silent --show-error --max-time 5 -X POST "${RESCAN_URL}" > /dev/null 2>&1; then
-    echo "Warning: could not notify calaos service for firmware rescan (is it running?)." >&2
-    echo "A rescan will happen on next service restart." >&2
-fi
+rescan() {
+    if ! curl --silent --show-error --max-time 5 -X POST "${RESCAN_URL}" > /dev/null 2>&1; then
+        echo "Warning: could not notify calaos service for firmware rescan (is it running?)." >&2
+        echo "A rescan will happen on next service restart." >&2
+    fi
+}
+
+case "$1" in
+    triggered)
+        rescan
+        ;;
+    configure)
+        # Without trigger support (dpkg older than 1.16.1) rescan right away
+        if ! dpkg-trigger --no-await calaos-remote-ui-rescan 2>/dev/null; then
+            rescan
+        fi
+        ;;
+esac
 
 exit 0
 POSTINST
