@@ -13,7 +13,7 @@
 #include "esp_system.h"
 #include "esp_app_format.h"
 #include "esp_crt_bundle.h"
-#include "mbedtls/sha256.h"
+#include "ota_download.h"
 #include "esp_heap_caps.h"
 
 #include <cstring>
@@ -119,7 +119,7 @@ HalResult Esp32Ota::markFirmwareValid()
     return HalResult::OK;
 }
 
-void Esp32Ota::updateProgress(HalOtaState state, int percent, size_t downloaded, size_t total, const std::string& error)
+void Esp32Ota::updateProgress(HalOtaState state, int percent, size_t downloaded, size_t total, const std::string& error, bool permanent)
 {
     {
         std::lock_guard<std::mutex> lock(progressMutex);
@@ -128,6 +128,7 @@ void Esp32Ota::updateProgress(HalOtaState state, int percent, size_t downloaded,
         currentProgress.bytesDownloaded = downloaded;
         currentProgress.totalBytes = total;
         currentProgress.errorMessage = error;
+        currentProgress.permanent = permanent;
     }
 
     if (callback)
@@ -136,255 +137,185 @@ void Esp32Ota::updateProgress(HalOtaState state, int percent, size_t downloaded,
     }
 }
 
+namespace
+{
+
+class EspHttpSource : public OtaSource
+{
+public:
+    EspHttpSource(const std::string& url, const std::map<std::string, std::string>& headers):
+        url_(url), headers_(headers)
+    {
+    }
+
+    ~EspHttpSource() override
+    {
+        if (client_)
+        {
+            esp_http_client_close(client_);
+            esp_http_client_cleanup(client_);
+        }
+    }
+
+    bool open(std::string& error) override
+    {
+        esp_http_client_config_t config = {};
+        config.url = url_.c_str();
+        // Per read; OtaStallWatchdog bounds the whole silence
+        config.timeout_ms = 5000;
+        config.buffer_size = 4096;
+        config.buffer_size_tx = 1024;
+        if (url_.find("https://") == 0)
+            config.crt_bundle_attach = esp_crt_bundle_attach;
+
+        client_ = esp_http_client_init(&config);
+        if (!client_)
+        {
+            error = "HTTP client init failed";
+            return false;
+        }
+        for (const auto& [key, value] : headers_)
+            esp_http_client_set_header(client_, key.c_str(), value.c_str());
+
+        esp_err_t err = esp_http_client_open(client_, 0);
+        if (err != ESP_OK)
+        {
+            error = esp_err_to_name(err);
+            return false;
+        }
+        contentLength_ = esp_http_client_fetch_headers(client_);
+        return true;
+    }
+
+    int statusCode() override { return esp_http_client_get_status_code(client_); }
+
+    int64_t contentLength() override { return contentLength_ > 0 ? contentLength_ : -1; }
+
+    int read(char* buffer, int size) override
+    {
+        int n = esp_http_client_read(client_, buffer, size);
+        if (n == -ESP_ERR_HTTP_EAGAIN)
+            return kTimeout;
+        return n;
+    }
+
+private:
+    std::string url_;
+    std::map<std::string, std::string> headers_;
+    esp_http_client_handle_t client_ = nullptr;
+    int64_t contentLength_ = -1;
+};
+
+class EspPartitionSink : public OtaSink
+{
+public:
+    bool begin(int64_t imageSize, std::string& error) override
+    {
+        partition_ = esp_ota_get_next_update_partition(nullptr);
+        if (!partition_)
+        {
+            error = "no OTA partition";
+            return false;
+        }
+        ESP_LOGI(TAG, "Writing to partition: %s (offset 0x%lx, size %lu)",
+                 partition_->label, partition_->address, partition_->size);
+        esp_err_t err = esp_ota_begin(partition_, imageSize > 0 ? imageSize : OTA_SIZE_UNKNOWN, &handle_);
+        if (err != ESP_OK)
+        {
+            error = esp_err_to_name(err);
+            return false;
+        }
+        open_ = true;
+        return true;
+    }
+
+    bool write(const char* data, size_t size, std::string& error) override
+    {
+        esp_err_t err = esp_ota_write(handle_, data, size);
+        if (err != ESP_OK)
+        {
+            error = esp_err_to_name(err);
+            return false;
+        }
+        return true;
+    }
+
+    bool commit(std::string& error) override
+    {
+        // esp_ota_end releases the handle whatever its result
+        open_ = false;
+        esp_err_t err = esp_ota_end(handle_);
+        if (err == ESP_OK)
+            err = esp_ota_set_boot_partition(partition_);
+        if (err != ESP_OK)
+        {
+            error = esp_err_to_name(err);
+            return false;
+        }
+        return true;
+    }
+
+    void abort() override
+    {
+        if (open_)
+            esp_ota_abort(handle_);
+        open_ = false;
+    }
+
+private:
+    const esp_partition_t* partition_ = nullptr;
+    esp_ota_handle_t handle_ = 0;
+    bool open_ = false;
+};
+
+}
+
 void Esp32Ota::otaTask()
 {
     ESP_LOGI(TAG, "OTA task started");
 
-    // Use direct esp_ota API with esp_http_client for better control over HTTP/HTTPS
-    esp_http_client_config_t httpConfig = {};
-    httpConfig.url = updateUrl.c_str();
-    httpConfig.timeout_ms = 30000;
-    httpConfig.keep_alive_enable = true;
-    httpConfig.buffer_size = 4096;
-    httpConfig.buffer_size_tx = 1024;
-
-    // For HTTPS URLs, use the certificate bundle
-    bool isHttps = (updateUrl.find("https://") == 0);
-    if (isHttps)
-    {
-        httpConfig.crt_bundle_attach = esp_crt_bundle_attach;
-    }
-
-    esp_http_client_handle_t httpClient = esp_http_client_init(&httpConfig);
-    if (!httpClient)
-    {
-        ESP_LOGE(TAG, "Failed to initialize HTTP client");
-        updateProgress(HalOtaState::Error, 0, 0, 0, "Failed to initialize HTTP client");
-        updateInProgress = false;
-        return;
-    }
-
-    // Set authentication headers
-    for (const auto& [key, value] : authHeaders_)
-    {
-        esp_http_client_set_header(httpClient, key.c_str(), value.c_str());
-        ESP_LOGD(TAG, "Set header: %s = %s", key.c_str(), value.c_str());
-    }
-
-    esp_err_t err = esp_http_client_open(httpClient, 0);
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Failed to open HTTP connection: %s", esp_err_to_name(err));
-        updateProgress(HalOtaState::Error, 0, 0, 0, std::string("HTTP connection failed: ") + esp_err_to_name(err));
-        esp_http_client_cleanup(httpClient);
-        updateInProgress = false;
-        return;
-    }
-
-    int contentLength = esp_http_client_fetch_headers(httpClient);
-    int statusCode = esp_http_client_get_status_code(httpClient);
-
-    ESP_LOGI(TAG, "HTTP status: %d, content length: %d", statusCode, contentLength);
-
-    if (statusCode != 200)
-    {
-        ESP_LOGE(TAG, "HTTP error: %d", statusCode);
-        updateProgress(HalOtaState::Error, 0, 0, 0, "HTTP error: " + std::to_string(statusCode));
-        esp_http_client_close(httpClient);
-        esp_http_client_cleanup(httpClient);
-        updateInProgress = false;
-        return;
-    }
-
-    // Get the next OTA partition
-    const esp_partition_t* updatePartition = esp_ota_get_next_update_partition(nullptr);
-    if (!updatePartition)
-    {
-        ESP_LOGE(TAG, "No OTA partition available");
-        updateProgress(HalOtaState::Error, 0, 0, 0, "No OTA partition available");
-        esp_http_client_close(httpClient);
-        esp_http_client_cleanup(httpClient);
-        updateInProgress = false;
-        return;
-    }
-
-    ESP_LOGI(TAG, "Writing to partition: %s (offset 0x%lx, size %lu)",
-             updatePartition->label, updatePartition->address, updatePartition->size);
-
-    esp_ota_handle_t otaHandle;
-    err = esp_ota_begin(updatePartition, contentLength > 0 ? contentLength : OTA_SIZE_UNKNOWN, &otaHandle);
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(TAG, "esp_ota_begin failed: %s", esp_err_to_name(err));
-        updateProgress(HalOtaState::Error, 0, 0, 0, std::string("OTA begin failed: ") + esp_err_to_name(err));
-        esp_http_client_close(httpClient);
-        esp_http_client_cleanup(httpClient);
-        updateInProgress = false;
-        return;
-    }
-
-    // Download buffer
-    const int bufferSize = 4096;
-    char* buffer = (char*)heap_caps_malloc(bufferSize, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    const size_t bufferSize = 4096;
+    char* buffer = static_cast<char*>(heap_caps_malloc(bufferSize, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
     if (!buffer)
     {
-        ESP_LOGE(TAG, "Failed to allocate download buffer");
-        esp_ota_abort(otaHandle);
-        esp_http_client_close(httpClient);
-        esp_http_client_cleanup(httpClient);
+        updateInProgress = false;
         updateProgress(HalOtaState::Error, 0, 0, 0, "Memory allocation failed");
-        updateInProgress = false;
         return;
     }
 
-    // Initialize SHA256 context for download verification
-    mbedtls_sha256_context sha256_ctx;
-    mbedtls_sha256_init(&sha256_ctx);
-    mbedtls_sha256_starts(&sha256_ctx, 0); // 0 = SHA256, 1 = SHA224
+    EspHttpSource source(updateUrl, authHeaders_);
+    EspPartitionSink sink;
 
-    int totalRead = 0;
+    OtaDownloadOptions options;
+    options.expectedSha256 = expectedChecksum;
+    options.nowMs = []() { return HAL::getInstance().getSystem().getTimeMs(); };
+    options.abortRequested = &abortRequested;
+    options.buffer = buffer;
+    options.bufferSize = bufferSize;
     int lastPercent = -1;
-    int imageSize = contentLength > 0 ? contentLength : 0;
-
-    while (!abortRequested)
+    options.onProgress = [this, &lastPercent](size_t received, size_t total)
     {
-        int readLen = esp_http_client_read(httpClient, buffer, bufferSize);
-        if (readLen < 0)
-        {
-            ESP_LOGE(TAG, "HTTP read error");
-            free(buffer);
-            mbedtls_sha256_free(&sha256_ctx);
-            esp_ota_abort(otaHandle);
-            esp_http_client_close(httpClient);
-            esp_http_client_cleanup(httpClient);
-            updateProgress(HalOtaState::Error, 0, 0, 0, "HTTP read error");
-            updateInProgress = false;
+        int percent = total > 0 ? static_cast<int>((received * 100) / total) : 0;
+        if (percent == lastPercent)
             return;
-        }
-        else if (readLen == 0)
-        {
-            // End of data
-            break;
-        }
+        lastPercent = percent;
+        updateProgress(HalOtaState::Downloading, percent, received, total);
+    };
 
-        // Update SHA256 hash with downloaded data
-        mbedtls_sha256_update(&sha256_ctx, (const unsigned char*)buffer, readLen);
+    options.onVerified = [this]() { updateProgress(HalOtaState::Installing, 100, 0, 0); };
 
-        err = esp_ota_write(otaHandle, buffer, readLen);
-        if (err != ESP_OK)
-        {
-            ESP_LOGE(TAG, "esp_ota_write failed: %s", esp_err_to_name(err));
-            free(buffer);
-            mbedtls_sha256_free(&sha256_ctx);
-            esp_ota_abort(otaHandle);
-            esp_http_client_close(httpClient);
-            esp_http_client_cleanup(httpClient);
-            updateProgress(HalOtaState::Error, 0, 0, 0, std::string("OTA write failed: ") + esp_err_to_name(err));
-            updateInProgress = false;
-            return;
-        }
-
-        totalRead += readLen;
-
-        // Update progress
-        int percent = 0;
-        if (imageSize > 0)
-        {
-            percent = (totalRead * 100) / imageSize;
-        }
-
-        if (percent != lastPercent)
-        {
-            lastPercent = percent;
-            ESP_LOGI(TAG, "OTA progress: %d%% (%d/%d bytes)", percent, totalRead, imageSize);
-            updateProgress(HalOtaState::Downloading, percent, totalRead, imageSize);
-        }
-    }
-
-    free(buffer);
-    esp_http_client_close(httpClient);
-    esp_http_client_cleanup(httpClient);
-
-    if (abortRequested)
+    OtaDownloadResult result = runOtaDownload(source, sink, options);
+    heap_caps_free(buffer);
+    if (!result.ok)
     {
-        ESP_LOGW(TAG, "OTA aborted by user");
-        mbedtls_sha256_free(&sha256_ctx);
-        esp_ota_abort(otaHandle);
-        updateProgress(HalOtaState::Error, 0, 0, 0, "Update aborted");
+        ESP_LOGE(TAG, "OTA failed after %u bytes: %s", (unsigned)result.received, result.error.c_str());
         updateInProgress = false;
+        updateProgress(HalOtaState::Error, 0, 0, 0, result.error, result.permanent);
         return;
     }
 
-    ESP_LOGI(TAG, "Download complete, total bytes: %d", totalRead);
-
-    // Finalize SHA256 and verify checksum
-    unsigned char sha256_hash[32];
-    mbedtls_sha256_finish(&sha256_ctx, sha256_hash);
-    mbedtls_sha256_free(&sha256_ctx);
-
-    // Convert hash to hex string
-    char calculatedChecksum[65];
-    for (int i = 0; i < 32; i++)
-    {
-        sprintf(&calculatedChecksum[i * 2], "%02x", sha256_hash[i]);
-    }
-    calculatedChecksum[64] = '\0';
-
-    ESP_LOGI(TAG, "Downloaded SHA256: %s", calculatedChecksum);
-    ESP_LOGI(TAG, "Expected SHA256:   %s", expectedChecksum.c_str());
-
-    // Verify checksum if provided
-    if (!expectedChecksum.empty())
-    {
-        if (expectedChecksum != calculatedChecksum)
-        {
-            ESP_LOGE(TAG, "SHA256 MISMATCH! Download corrupted.");
-            ESP_LOGE(TAG, "  Expected: %s", expectedChecksum.c_str());
-            ESP_LOGE(TAG, "  Got:      %s", calculatedChecksum);
-            esp_ota_abort(otaHandle);
-            updateProgress(HalOtaState::Error, 0, 0, 0, "Download checksum mismatch - data corrupted during transfer");
-            updateInProgress = false;
-            return;
-        }
-        ESP_LOGI(TAG, "SHA256 checksum verified OK!");
-    }
-    else
-    {
-        ESP_LOGW(TAG, "No expected checksum provided, skipping verification");
-    }
-
-    updateProgress(HalOtaState::Installing, 100, totalRead, imageSize);
-
-    // Finish OTA
-    err = esp_ota_end(otaHandle);
-    if (err != ESP_OK)
-    {
-        if (err == ESP_ERR_OTA_VALIDATE_FAILED)
-        {
-            ESP_LOGE(TAG, "OTA image validation failed");
-            updateProgress(HalOtaState::Error, 0, 0, 0, "Image validation failed");
-        }
-        else
-        {
-            ESP_LOGE(TAG, "esp_ota_end failed: %s", esp_err_to_name(err));
-            updateProgress(HalOtaState::Error, 0, 0, 0, std::string("OTA finish failed: ") + esp_err_to_name(err));
-        }
-        updateInProgress = false;
-        return;
-    }
-
-    // Set the boot partition
-    err = esp_ota_set_boot_partition(updatePartition);
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(TAG, "esp_ota_set_boot_partition failed: %s", esp_err_to_name(err));
-        updateProgress(HalOtaState::Error, 0, 0, 0, std::string("Failed to set boot partition: ") + esp_err_to_name(err));
-        updateInProgress = false;
-        return;
-    }
-
-    ESP_LOGI(TAG, "OTA update successful, preparing to reboot");
-    updateProgress(HalOtaState::Rebooting, 100, totalRead, imageSize);
+    ESP_LOGI(TAG, "OTA update successful (%u bytes), preparing to reboot", (unsigned)result.received);
+    updateProgress(HalOtaState::Rebooting, 100, result.received, result.received);
 
     // Small delay to allow UI to update
     HAL::getInstance().getSystem().delay(2000);
@@ -396,7 +327,6 @@ void Esp32Ota::otaTask()
     HAL::getInstance().getDisplay().displayOff();
     HAL::getInstance().getSystem().delay(100);
 
-    // Reboot to apply update
     ESP_LOGI(TAG, "Rebooting...");
     esp_restart();
 }

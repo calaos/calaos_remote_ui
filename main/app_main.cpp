@@ -300,6 +300,8 @@ void AppMain::renderLoop()
         otaScreen->update();
     }
 
+    OtaManager::getInstance().tick(HAL::getInstance().getSystem().getTimeMs());
+
     if (stackView)
         stackView->render();
 }

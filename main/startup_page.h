@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "page_base.h"
 #include "smooth_ui_toolkit.h"
 #include "lvgl/smooth_lvgl.h"
@@ -63,6 +65,7 @@ private:
     void showVerifyingUI();
     void hideVerifyingUI();
     void onStateChanged(const AppState& state);
+    void maybeShowMainPage();
 
     NetworkState lastNetworkState;
     NtpState lastNtpState;
@@ -70,5 +73,8 @@ private:
     ProvisioningState lastProvisioningState;
     CalaosWebSocketState lastWebSocketState;
     OtaState lastOtaState;
+    bool mainPagePending = false;
+    // Set from every state change, before the display lock that may be skipped
+    std::atomic<bool> mainPageWanted{false};
     SubscriptionId subscriptionId_;
 };

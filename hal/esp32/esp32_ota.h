@@ -29,7 +29,7 @@ public:
 
 private:
     void otaTask();
-    void updateProgress(HalOtaState state, int percent, size_t downloaded, size_t total, const std::string& error = "");
+    void updateProgress(HalOtaState state, int percent, size_t downloaded, size_t total, const std::string& error = "", bool permanent = false);
 
     std::string updateUrl;
     std::string expectedChecksum;

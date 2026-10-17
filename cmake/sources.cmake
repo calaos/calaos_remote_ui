@@ -26,6 +26,8 @@ set(MAIN_SOURCES
     main/widget_factory.cpp
     main/image_sequence_animator.cpp
     main/ota_manager.cpp
+    main/ota_policy.cpp
+    main/ota_download.cpp
     main/ota_update_screen.cpp
     main/notification_toast.cpp
     main/about_page.cpp

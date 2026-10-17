@@ -2,6 +2,7 @@
 #include "app_dispatcher.h"
 #include "hal.h"
 #include "logging.h"
+#include "ota_policy.h"
 
 static const char* TAG = "AppStore";
 
@@ -430,6 +431,13 @@ void AppStore::handleEvent(const AppEvent& event)
             {
                 if (auto* data = event.getData<OtaUpdateAvailableData>())
                 {
+                    // The server offers again on every reconnection, also to a
+                    // panel that is still downloading the same image.
+                    if (OtaPolicy::ownsScreen(state_.ota))
+                    {
+                        ESP_LOGI(TAG, "OTA offer v%s ignored, an update is in progress", data->version.c_str());
+                        break;
+                    }
                     state_.ota.status = OtaStatus::Available;
                     state_.ota.updateAvailable = true;
                     state_.ota.version = data->version;
@@ -499,6 +507,10 @@ void AppStore::handleEvent(const AppEvent& event)
 
             case AppEventType::OtaReset:
             {
+                // Sent by the error screen a few seconds after the error: a
+                // retry may have started in between.
+                if (OtaPolicy::ownsScreen(state_.ota))
+                    break;
                 // Reset OTA state to Idle after error, allowing normal operation
                 state_.ota.status = OtaStatus::Idle;
                 state_.ota.updateAvailable = false;

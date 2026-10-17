@@ -29,6 +29,9 @@ add_executable(host_tests
     climate_logic_test.cpp
     climate_present_test.cpp
     app_dispatcher_test.cpp
+    ota_flow_test.cpp
+    ota_download_test.cpp
+    support/fake_ota.cpp
 
     ${APP_ROOT}/main/calaos_protocol.cpp
     ${APP_ROOT}/main/widgets/climate_logic.cpp
@@ -38,6 +41,9 @@ add_executable(host_tests
     ${APP_ROOT}/main/provisioning_manager.cpp
     ${APP_ROOT}/main/provisioning_requester.cpp
     ${APP_ROOT}/main/provisioning_crypto.cpp
+    ${APP_ROOT}/main/ota_manager.cpp
+    ${APP_ROOT}/main/ota_policy.cpp
+    ${APP_ROOT}/main/ota_download.cpp
     ${APP_ROOT}/flux/app_dispatcher.cpp
     ${APP_ROOT}/flux/app_store.cpp
     ${APP_ROOT}/network/calaos_net.cpp
@@ -138,3 +144,9 @@ target_link_libraries(widget_tests PRIVATE
 )
 
 gtest_discover_tests(widget_tests DISCOVERY_TIMEOUT 60)
+
+# The firmware .deb rescans through a dpkg trigger; dpkg runs on a private
+# database, without privileges.
+add_test(NAME DebPackage.RescanRunsOnceTheWholeDpkgRunIsConfigured
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/deb_trigger_test.sh)
+set_tests_properties(DebPackage.RescanRunsOnceTheWholeDpkgRunIsConfigured PROPERTIES SKIP_RETURN_CODE 77)
