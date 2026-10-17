@@ -263,3 +263,75 @@ TEST(OtaManagerFlow, ANewVersionStartsTheBackoffAgain)
     EXPECT_EQ(OtaManager::getInstance().nextRetryMs(), FakeHal::nowMs + OtaRetryPolicy::kBaseDelayMs);
     backToIdle();
 }
+
+namespace
+{
+OtaUpdateAvailableData offerWith(const std::string& version, const std::string& checksum)
+{
+    OtaUpdateAvailableData d = offer(version);
+    d.checksumSha256 = checksum;
+    return d;
+}
+}
+
+// The URL serves whatever image the server has now: retrying the old
+// checksum against it fails on every attempt.
+TEST(OtaManagerFlow, ANewVersionOfferedDuringADownloadIsTheOneRetried)
+{
+    FakeOta& ota = backend();
+    FakeHal::nowMs = 5000000;
+    serverConnected(true);
+    dispatch(AppEvent(AppEventType::OtaUpdateAvailable, offerWith("5.0.0-a", "aa")));
+    settle();
+    ASSERT_EQ(otaStatus(), OtaStatus::Downloading);
+    const int starts = ota.starts();
+
+    dispatch(AppEvent(AppEventType::OtaUpdateAvailable, offerWith("5.0.1-b", "bb")));
+    settle();
+    EXPECT_EQ(ota.starts(), starts);
+
+    ota.report(HalOtaState::Error, "Connection lost");
+    settle();
+    OtaManager::getInstance().tick(FakeHal::nowMs + OtaRetryPolicy::kBaseDelayMs);
+    settle();
+    EXPECT_EQ(ota.starts(), starts + 1);
+    EXPECT_EQ(ota.lastChecksum(), "bb");
+    EXPECT_EQ(store().getStateCopy().ota.version, "5.0.1-b");
+
+    ota.report(HalOtaState::Error, "cleanup");
+    backToIdle();
+}
+
+// The dispatcher drops events when its queue is full: a lost OtaError must
+// not leave the update screen up for good.
+TEST(OtaManagerFlow, ADownloadStateLeftWithoutABackendIsEnded)
+{
+    backend();
+    FakeHal::nowMs = 6000000;
+    store().handleEvent(AppEvent(AppEventType::OtaUpdateAvailable, offer(APP_VERSION)));
+    store().handleEvent(AppEvent(AppEventType::OtaDownloadStarted));
+    ASSERT_EQ(otaStatus(), OtaStatus::Downloading);
+
+    OtaManager::getInstance().tick(FakeHal::nowMs);
+    OtaManager::getInstance().tick(FakeHal::nowMs + 9000);
+    settle();
+    EXPECT_EQ(otaStatus(), OtaStatus::Downloading);
+
+    OtaManager::getInstance().tick(FakeHal::nowMs + 10000);
+    settle();
+    EXPECT_EQ(otaStatus(), OtaStatus::Error);
+    backToIdle();
+}
+
+TEST(OtaManagerFlow, AnOfferWithoutChecksumIsRefused)
+{
+    FakeOta& ota = backend();
+    serverConnected(true);
+    settle();
+    const int starts = ota.starts();
+    dispatch(AppEvent(AppEventType::OtaUpdateAvailable, offerWith("7.0.0-nosum", "")));
+    settle();
+    EXPECT_EQ(ota.starts(), starts);
+    EXPECT_NE(otaStatus(), OtaStatus::Available);
+    backToIdle();
+}

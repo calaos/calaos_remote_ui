@@ -12,7 +12,7 @@ FakeOta* FakeOta::instance()
 }
 
 HalResult FakeOta::startUpdate(const std::string& url,
-                               const std::string&,
+                               const std::string& checksum,
                                const std::map<std::string, std::string>&,
                                HalOtaProgressCallback progressCallback)
 {
@@ -22,6 +22,7 @@ HalResult FakeOta::startUpdate(const std::string& url,
         std::lock_guard<std::mutex> lock(mutex_);
         callback_ = progressCallback;
         lastUrl_ = url;
+        lastChecksum_ = checksum;
     }
     starts_++;
     return HalResult::OK;
@@ -52,4 +53,10 @@ std::unique_ptr<HalOta> createOta()
     auto ota = std::make_unique<FakeOta>();
     g_instance = ota.get();
     return ota;
+}
+
+std::string FakeOta::lastChecksum() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return lastChecksum_;
 }

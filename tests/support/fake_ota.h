@@ -28,6 +28,7 @@ public:
 
     int starts() const { return starts_.load(); }
     std::string lastUrl() const;
+    std::string lastChecksum() const;
 
     std::atomic<bool> supported{true};
     std::atomic<bool> refuseStart{false};
@@ -36,5 +37,6 @@ private:
     mutable std::mutex mutex_;
     HalOtaProgressCallback callback_;
     std::string lastUrl_;
+    std::string lastChecksum_;
     std::atomic<int> starts_{0};
 };
