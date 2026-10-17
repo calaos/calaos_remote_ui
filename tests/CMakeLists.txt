@@ -144,3 +144,9 @@ target_link_libraries(widget_tests PRIVATE
 )
 
 gtest_discover_tests(widget_tests DISCOVERY_TIMEOUT 60)
+
+# The firmware .deb rescans through a dpkg trigger; dpkg runs on a private
+# database, without privileges.
+add_test(NAME DebPackage.RescanRunsOnceTheWholeDpkgRunIsConfigured
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/deb_trigger_test.sh)
+set_tests_properties(DebPackage.RescanRunsOnceTheWholeDpkgRunIsConfigured PROPERTIES SKIP_RETURN_CODE 77)
