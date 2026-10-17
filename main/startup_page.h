@@ -63,6 +63,7 @@ private:
     void showVerifyingUI();
     void hideVerifyingUI();
     void onStateChanged(const AppState& state);
+    void maybeShowMainPage(const AppState& state);
 
     NetworkState lastNetworkState;
     NtpState lastNtpState;
@@ -70,5 +71,6 @@ private:
     ProvisioningState lastProvisioningState;
     CalaosWebSocketState lastWebSocketState;
     OtaState lastOtaState;
+    bool mainPagePending = false;
     SubscriptionId subscriptionId_;
 };

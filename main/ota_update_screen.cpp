@@ -283,9 +283,13 @@ void OtaUpdateScreen::errorTimerCallback(lv_timer_t* timer)
     OtaUpdateScreen* self = static_cast<OtaUpdateScreen*>(lv_timer_get_user_data(timer));
     if (self)
     {
-        self->hide();
-        self->resetAfterError();
         self->errorTimer = nullptr;
+        // A retry may have started while the error was displayed
+        if (self->lastStatus_.load() == OtaStatus::Error)
+        {
+            self->hide();
+            self->resetAfterError();
+        }
     }
     lv_timer_del(timer);
 }
@@ -316,6 +320,13 @@ void OtaUpdateScreen::update()
     {
         // Extract version and show
         std::string version = statusText.substr(5);
+        if (errorTimer)
+        {
+            lv_timer_del(errorTimer);
+            errorTimer = nullptr;
+        }
+        lv_obj_set_style_text_color(statusLabel->get(), theme_color_white, LV_PART_MAIN);
+        lv_obj_set_style_bg_color(progressBar, theme_color_blue, LV_PART_INDICATOR);
         show(version, "");
         needsShow_.store(false);
         updateProgress(progress, "Downloading firmware...");
