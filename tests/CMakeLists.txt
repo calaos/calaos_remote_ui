@@ -29,6 +29,8 @@ add_executable(host_tests
     climate_logic_test.cpp
     climate_present_test.cpp
     app_dispatcher_test.cpp
+    ota_flow_test.cpp
+    support/fake_ota.cpp
 
     ${APP_ROOT}/main/calaos_protocol.cpp
     ${APP_ROOT}/main/widgets/climate_logic.cpp
@@ -38,6 +40,7 @@ add_executable(host_tests
     ${APP_ROOT}/main/provisioning_manager.cpp
     ${APP_ROOT}/main/provisioning_requester.cpp
     ${APP_ROOT}/main/provisioning_crypto.cpp
+    ${APP_ROOT}/main/ota_manager.cpp
     ${APP_ROOT}/flux/app_dispatcher.cpp
     ${APP_ROOT}/flux/app_store.cpp
     ${APP_ROOT}/network/calaos_net.cpp
