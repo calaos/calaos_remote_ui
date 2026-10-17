@@ -24,7 +24,7 @@ public:
     HalResult markFirmwareValid() override { return HalResult::OK; }
 
     // Delivers a progress report the way the real backend does, from its own thread.
-    void report(HalOtaState state, const std::string& error = "");
+    void report(HalOtaState state, const std::string& error = "", bool permanent = false);
 
     int starts() const { return starts_.load(); }
     std::string lastUrl() const;

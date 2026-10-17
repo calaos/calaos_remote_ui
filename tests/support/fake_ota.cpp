@@ -28,7 +28,7 @@ HalResult FakeOta::startUpdate(const std::string& url,
     return HalResult::OK;
 }
 
-void FakeOta::report(HalOtaState state, const std::string& error)
+void FakeOta::report(HalOtaState state, const std::string& error, bool permanent)
 {
     HalOtaProgressCallback cb;
     {
@@ -38,6 +38,7 @@ void FakeOta::report(HalOtaState state, const std::string& error)
     HalOtaProgress p;
     p.state = state;
     p.errorMessage = error;
+    p.permanent = permanent;
     if (cb)
         cb(p);
 }

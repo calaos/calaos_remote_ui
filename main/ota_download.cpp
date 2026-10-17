@@ -21,13 +21,14 @@ std::string toHex(const unsigned char* data, size_t len)
     return out;
 }
 
-OtaDownloadResult failed(OtaSink* sink, const std::string& error, size_t received)
+OtaDownloadResult failed(OtaSink* sink, const std::string& error, size_t received, bool permanent = false)
 {
     if (sink)
         sink->abort();
     OtaDownloadResult r;
     r.error = error;
     r.received = received;
+    r.permanent = permanent;
     return r;
 }
 }
@@ -40,7 +41,8 @@ OtaDownloadResult runOtaDownload(OtaSource& source, OtaSink& sink, const OtaDown
 
     const int status = source.statusCode();
     if (status != 200)
-        return failed(nullptr, "HTTP error: " + std::to_string(status), 0);
+        // 5xx is the server not ready (OTA disabled, file missing): it may recover
+        return failed(nullptr, "HTTP error: " + std::to_string(status), 0, status >= 400 && status < 500);
 
     const int64_t contentLength = source.contentLength();
     if (!sink.begin(contentLength, error))
@@ -64,6 +66,7 @@ OtaDownloadResult runOtaDownload(OtaSource& source, OtaSink& sink, const OtaDown
     const int bufferSize = static_cast<int>(options.bufferSize);
     size_t received = 0;
     std::string failure;
+    bool permanent = false;
 
     while (failure.empty())
     {
@@ -92,6 +95,7 @@ OtaDownloadResult runOtaDownload(OtaSource& source, OtaSink& sink, const OtaDown
         if (contentLength >= 0 && received > static_cast<size_t>(contentLength))
         {
             failure = "Server sent more than announced";
+            permanent = true;
             break;
         }
         watchdog.feed(options.nowMs());
@@ -110,7 +114,7 @@ OtaDownloadResult runOtaDownload(OtaSource& source, OtaSink& sink, const OtaDown
     mbedtls_md_free(&sha);
 
     if (!failure.empty())
-        return failed(&sink, failure, received);
+        return failed(&sink, failure, received, permanent);
 
     // An early end of body is how a server that stops mid-transfer looks.
     if (contentLength >= 0 && received != static_cast<size_t>(contentLength))
@@ -119,7 +123,7 @@ OtaDownloadResult runOtaDownload(OtaSource& source, OtaSink& sink, const OtaDown
         return failed(&sink, "Empty firmware", received);
 
     if (!options.expectedSha256.empty() && toHex(digest, sizeof(digest)) != options.expectedSha256)
-        return failed(&sink, "Checksum mismatch", received);
+        return failed(&sink, "Checksum mismatch", received, true);
 
     if (options.onVerified)
         options.onVerified();
@@ -128,6 +132,7 @@ OtaDownloadResult runOtaDownload(OtaSource& source, OtaSink& sink, const OtaDown
     {
         OtaDownloadResult r;
         r.error = "Image rejected: " + error;
+        r.permanent = true;
         r.received = received;
         return r;
     }

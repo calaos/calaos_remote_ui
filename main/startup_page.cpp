@@ -426,6 +426,8 @@ void StartupPage::hideVerifyingUI()
 
 void StartupPage::render()
 {
+    maybeShowMainPage();
+
     // Update logo animation
     logoDropAnimation.update();
 
@@ -443,11 +445,11 @@ void StartupPage::render()
     }
 }
 
-void StartupPage::maybeShowMainPage(const AppState& state)
+void StartupPage::maybeShowMainPage()
 {
-    // Re-evaluated on every change: the old one-shot checks missed the OTA
-    // sequences that do not end with Downloading -> Error while connected.
-    if (mainPagePending || !OtaPolicy::mayShowMainPage(state))
+    // Polled from render(): onStateChanged() skips its UI work when the
+    // display lock is busy, and a skipped change must not leave the logo up.
+    if (mainPagePending || !mainPageWanted.load())
         return;
     if (!g_appMain || !g_appMain->getStackView() || g_appMain->getStackView()->size() > 1)
         return;
@@ -478,6 +480,8 @@ void StartupPage::onStateChanged(const AppState& state)
         ESP_LOGD(TAG, "Ignoring state change - application is shutting down");
         return;
     }
+
+    mainPageWanted = OtaPolicy::mayShowMainPage(state);
 
     ESP_LOGD(TAG, "State changed - network isReady=%d, hasTimeout=%d, calaos isDiscovering=%d, hasServers=%d, provisioning status=%d",
              state.network.isReady, state.network.hasTimeout,
@@ -1118,8 +1122,6 @@ void StartupPage::onStateChanged(const AppState& state)
             }, 100);
         }
     }
-
-    maybeShowMainPage(state);
 
     // Update cached states
     lastNetworkState = state.network;

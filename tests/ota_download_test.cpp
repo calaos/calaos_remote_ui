@@ -127,6 +127,7 @@ TEST(OtaDownload, ABodyCutShortIsNeverCommitted)
     auto res = r.go();
     EXPECT_FALSE(res.ok);
     EXPECT_EQ(res.error, "Download incomplete");
+    EXPECT_FALSE(res.permanent);
     EXPECT_TRUE(r.sink.aborted);
     EXPECT_FALSE(r.sink.committed);
 }
@@ -138,6 +139,7 @@ TEST(OtaDownload, AConnectionResetIsNeverCommitted)
     auto res = r.go();
     EXPECT_FALSE(res.ok);
     EXPECT_EQ(res.error, "Connection lost");
+    EXPECT_FALSE(res.permanent);
     EXPECT_TRUE(r.sink.aborted);
     EXPECT_FALSE(r.sink.committed);
 }
@@ -152,6 +154,7 @@ TEST(OtaDownload, AStalledServerIsGivenUpOnAfterTheStallTimeout)
     auto res = r.go();
     EXPECT_FALSE(res.ok);
     EXPECT_EQ(res.error, "Download stalled");
+    EXPECT_FALSE(res.permanent);
     EXPECT_TRUE(r.sink.aborted);
     EXPECT_FALSE(r.sink.committed);
     // 5 s per silent read: gives up on the 4th, not before and not much later
@@ -178,6 +181,7 @@ TEST(OtaDownload, AChecksumMismatchIsNeverCommitted)
     auto res = r.go();
     EXPECT_FALSE(res.ok);
     EXPECT_EQ(res.error, "Checksum mismatch");
+    EXPECT_TRUE(res.permanent);
     EXPECT_TRUE(r.sink.aborted);
     EXPECT_FALSE(r.sink.committed);
 }
@@ -190,6 +194,7 @@ TEST(OtaDownload, MoreBytesThanAnnouncedAreRefused)
     r.source.steps = {{1, kImage.substr(0, 101)}, {0, ""}};
     auto res = r.go();
     EXPECT_FALSE(res.ok);
+    EXPECT_TRUE(res.permanent);
     EXPECT_TRUE(r.sink.aborted);
 }
 
@@ -216,13 +221,20 @@ TEST(OtaDownload, AnAbsentServerFailsBeforeThePartitionIsTouched)
     auto res = r.go();
     EXPECT_FALSE(res.ok);
     EXPECT_EQ(res.error, "Connection failed: ECONNREFUSED");
+    EXPECT_FALSE(res.permanent);
     EXPECT_FALSE(r.sink.begun);
 
     Download s;
     s.source.status = 503;
     res = s.go();
     EXPECT_EQ(res.error, "HTTP error: 503");
+    EXPECT_FALSE(res.permanent);
     EXPECT_FALSE(s.sink.begun);
+
+    Download nf;
+    nf.source.status = 404;
+    res = nf.go();
+    EXPECT_TRUE(res.permanent);
 }
 
 TEST(OtaDownload, AnImageTheBootloaderRejectsIsAnError)
@@ -236,6 +248,7 @@ TEST(OtaDownload, AnImageTheBootloaderRejectsIsAnError)
     EXPECT_FALSE(res.ok);
     EXPECT_TRUE(verified);
     EXPECT_EQ(res.error, "Image rejected: ESP_ERR_OTA_VALIDATE_FAILED");
+    EXPECT_TRUE(res.permanent);
 }
 
 TEST(OtaDownload, AnAbortStopsTheDownload)

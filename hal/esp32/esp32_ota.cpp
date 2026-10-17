@@ -119,7 +119,7 @@ HalResult Esp32Ota::markFirmwareValid()
     return HalResult::OK;
 }
 
-void Esp32Ota::updateProgress(HalOtaState state, int percent, size_t downloaded, size_t total, const std::string& error)
+void Esp32Ota::updateProgress(HalOtaState state, int percent, size_t downloaded, size_t total, const std::string& error, bool permanent)
 {
     {
         std::lock_guard<std::mutex> lock(progressMutex);
@@ -128,6 +128,7 @@ void Esp32Ota::updateProgress(HalOtaState state, int percent, size_t downloaded,
         currentProgress.bytesDownloaded = downloaded;
         currentProgress.totalBytes = total;
         currentProgress.errorMessage = error;
+        currentProgress.permanent = permanent;
     }
 
     if (callback)
@@ -309,7 +310,7 @@ void Esp32Ota::otaTask()
     {
         ESP_LOGE(TAG, "OTA failed after %u bytes: %s", (unsigned)result.received, result.error.c_str());
         updateInProgress = false;
-        updateProgress(HalOtaState::Error, 0, 0, 0, result.error);
+        updateProgress(HalOtaState::Error, 0, 0, 0, result.error, result.permanent);
         return;
     }
 

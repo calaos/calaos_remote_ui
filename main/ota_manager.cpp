@@ -66,6 +66,15 @@ bool OtaManager::init()
             onStateChanged(state);
         });
 
+    // The store ignores an offer received during a download; the retry must
+    // still use it, the download URL serves the newest image.
+    AppDispatcher::getInstance().subscribe(AppEventType::OtaUpdateAvailable,
+        [this](const AppEvent& event)
+        {
+            if (auto* data = event.getData<OtaUpdateAvailableData>())
+                onOfferEvent(*data);
+        });
+
     initialized_ = true;
     return true;
 }
@@ -158,6 +167,7 @@ bool OtaManager::isSupported() const
 void OtaManager::onStateChanged(const AppState& state)
 {
     serverConnected_ = state.websocket.isConnected;
+    observedStatus_ = static_cast<int>(state.ota.status);
 
     if (state.ota.status == OtaStatus::Available && state.ota.updateAvailable && !updateInProgress_)
     {
@@ -168,11 +178,19 @@ void OtaManager::onStateChanged(const AppState& state)
             return;
         }
 
+        if (state.ota.checksumSha256.empty())
+        {
+            ESP_LOGE(TAG, "OTA offer v%s has no checksum, refused", state.ota.version.c_str());
+            AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::OtaReset));
+            return;
+        }
+
         ESP_LOGI(TAG, "OTA update available detected, version: %s", state.ota.version.c_str());
 
         {
             std::lock_guard<std::mutex> lock(retryMutex_);
-            if (hasOffer_ && lastOffer_.version != state.ota.version)
+            if (hasOffer_ && (lastOffer_.version != state.ota.version ||
+                              lastOffer_.checksumSha256 != state.ota.checksumSha256))
                 retry_.reset();
             lastOffer_.version = state.ota.version;
             lastOffer_.downloadUrl = state.ota.downloadUrl;
@@ -218,15 +236,27 @@ void OtaManager::onOtaProgress(const HalOtaProgress& progress)
 
         case HalOtaState::Error:
         {
-            uint64_t retryAt;
+            uint64_t retryAt = 0;
             {
                 std::lock_guard<std::mutex> lock(retryMutex_);
-                retry_.onFailure(HAL::getInstance().getSystem().getTimeMs());
-                retryAt = retry_.nextAttemptMs();
+                // A permanent failure waits for the server to offer again
+                if (progress.permanent)
+                {
+                    retry_.consume();
+                }
+                else
+                {
+                    retry_.onFailure(HAL::getInstance().getSystem().getTimeMs());
+                    retryAt = retry_.nextAttemptMs();
+                }
             }
             updateInProgress_ = false;
-            ESP_LOGW(TAG, "OTA failed (%s), retry at t=%llu ms", progress.errorMessage.c_str(),
-                     (unsigned long long)retryAt);
+            if (progress.permanent)
+                ESP_LOGE(TAG, "OTA failed (%s), no retry until the server offers again",
+                         progress.errorMessage.c_str());
+            else
+                ESP_LOGW(TAG, "OTA failed (%s), retry at t=%llu ms", progress.errorMessage.c_str(),
+                         (unsigned long long)retryAt);
             OtaErrorData errorData;
             errorData.errorMessage = progress.errorMessage;
             AppDispatcher::getInstance().dispatch(AppEvent(AppEventType::OtaError, errorData));
@@ -239,8 +269,43 @@ void OtaManager::onOtaProgress(const HalOtaProgress& progress)
     }
 }
 
+void OtaManager::onOfferEvent(const OtaUpdateAvailableData& offer)
+{
+    if (offer.version == APP_VERSION || offer.checksumSha256.empty() || offer.downloadUrl.empty())
+        return;
+
+    std::lock_guard<std::mutex> lock(retryMutex_);
+    if (!hasOffer_ || lastOffer_.version != offer.version || lastOffer_.checksumSha256 != offer.checksumSha256)
+        retry_.reset();
+    lastOffer_ = offer;
+    hasOffer_ = true;
+}
+
 void OtaManager::tick(uint64_t nowMs)
 {
+    // Every way out of a running status is an event; the dispatcher drops
+    // events when its queue is full, and the update screen would then stay.
+    const OtaStatus status = static_cast<OtaStatus>(observedStatus_.load());
+    if ((status == OtaStatus::Downloading || status == OtaStatus::Installing) && !updateInProgress_)
+    {
+        if (!stuckTracking_)
+        {
+            stuckTracking_ = true;
+            stuckSinceMs_ = nowMs;
+        }
+        else if (nowMs - stuckSinceMs_ >= kLostEventMs)
+        {
+            ESP_LOGE(TAG, "OTA status left running without a backend, ending it");
+            stuckTracking_ = false;
+            AppDispatcher::getInstance().dispatch(
+                AppEvent(AppEventType::OtaError, OtaErrorData{"Update interrupted"}));
+        }
+    }
+    else
+    {
+        stuckTracking_ = false;
+    }
+
     OtaUpdateAvailableData offer;
     {
         std::lock_guard<std::mutex> lock(retryMutex_);

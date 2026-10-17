@@ -66,6 +66,9 @@ public:
 
     // Retry state, for diagnostics and tests
     bool retryScheduled() const;
+
+    // Longest a running status may outlive the backend before it is ended
+    static constexpr uint64_t kLostEventMs = 10 * 1000;
     uint64_t nextRetryMs() const;
 
 private:
@@ -76,6 +79,7 @@ private:
     OtaManager& operator=(const OtaManager&) = delete;
 
     void onStateChanged(const AppState& state);
+    void onOfferEvent(const OtaUpdateAvailableData& offer);
     void onOtaProgress(const HalOtaProgress& progress);
     std::map<std::string, std::string> buildAuthHeaders();
 
@@ -89,6 +93,11 @@ private:
     mutable std::mutex retryMutex_;
     OtaUpdateAvailableData lastOffer_;
     bool hasOffer_ = false;
+
+    // Last OTA status seen in the store, for the lost-event watchdog
+    std::atomic<int> observedStatus_{static_cast<int>(OtaStatus::Idle)};
+    bool stuckTracking_ = false;
+    uint64_t stuckSinceMs_ = 0;
     OtaRetryPolicy retry_;
     std::string currentVersion_;
 };

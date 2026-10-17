@@ -335,3 +335,36 @@ TEST(OtaManagerFlow, AnOfferWithoutChecksumIsRefused)
     EXPECT_NE(otaStatus(), OtaStatus::Available);
     backToIdle();
 }
+
+TEST(OtaManagerFlow, APermanentErrorWaitsForTheServerToOfferAgain)
+{
+    FakeOta& ota = backend();
+    FakeHal::nowMs = 8000000;
+    serverConnected(true);
+    dispatch(AppEvent(AppEventType::OtaUpdateAvailable, offerWith("8.0.0-perm", "cc")));
+    settle();
+    const int starts = ota.starts();
+    ota.report(HalOtaState::Error, "Checksum mismatch", true);
+    settle();
+    EXPECT_FALSE(OtaManager::getInstance().retryScheduled());
+
+    OtaManager::getInstance().tick(FakeHal::nowMs + OtaRetryPolicy::kMaxDelayMs * 4);
+    settle();
+    EXPECT_EQ(ota.starts(), starts);
+
+    // The server offers again (reconnection, rescan): that one is downloaded
+    dispatch(AppEvent(AppEventType::OtaUpdateAvailable, offerWith("8.0.0-perm", "cc")));
+    settle();
+    EXPECT_EQ(ota.starts(), starts + 1);
+
+    // A transient error after it keeps the backoff
+    ota.report(HalOtaState::Error, "Connection lost");
+    settle();
+    EXPECT_TRUE(OtaManager::getInstance().retryScheduled());
+    OtaManager::getInstance().tick(FakeHal::nowMs + OtaRetryPolicy::kBaseDelayMs);
+    settle();
+    EXPECT_EQ(ota.starts(), starts + 2);
+
+    ota.report(HalOtaState::Error, "cleanup");
+    backToIdle();
+}

@@ -34,6 +34,8 @@ struct HalOtaProgress
     size_t bytesDownloaded = 0;
     size_t totalBytes = 0;
     std::string errorMessage;
+    // Retrying the same offer would fail the same way (HTTP 4xx, bad checksum, rejected image)
+    bool permanent = false;
 };
 
 /**

@@ -73,6 +73,8 @@ struct OtaDownloadOptions
 struct OtaDownloadResult
 {
     bool ok = false;
+    // The same request would fail the same way: not worth a retry
+    bool permanent = false;
     std::string error;
     size_t received = 0;
 };
