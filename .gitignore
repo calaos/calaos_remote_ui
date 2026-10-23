@@ -15,7 +15,6 @@ cert_priv_key.pem
 cert_pub_key.pem
 cert_pub_key0.pem
 enc_key.bin
-CLAUDE.md
 claude-ask.md
 remote-ui.md
 remote-ui-client.md
