@@ -201,5 +201,5 @@ Versioning, package layout and flash package format are documented in [DOC-CI.md
 
 ## License
 
-This repository has no `LICENSE` file yet. Calaos itself is distributed under GPL-3.0 or later;
-vendored components under `components/` and `smooth_ui_toolkit/` keep their own licenses.
+GPL-3.0 or later, see [LICENSE](LICENSE). Vendored components under `components/` and
+`smooth_ui_toolkit/` keep their own licenses.
