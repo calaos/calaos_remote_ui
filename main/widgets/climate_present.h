@@ -2,6 +2,7 @@
 
 #include "climate_logic.h"
 #include <cstdint>
+#include <ctime>
 #include <optional>
 #include <string>
 
@@ -121,12 +122,15 @@ struct ProgramLine
 {
     bool shown = false;
     std::string text;
+    std::string shortText;      // the grid tile: "Niveau 2", no time, no setpoint
     std::string next;           // "Prochain : 17:30, 20.5°", or "Aucun changement prévu"
     std::string set;            // "heat" or "cool": which palette colours the dot
     int level = 0;              // 0: no level, the default setpoint applies
     bool paused = false;        // program disabled: grey dot
 };
-ProgramLine programLineOf(const Values& view, double step);
+bool programShown(const Values& view);
+// now places the next change: beyond 24 h it is told with its weekday
+ProgramLine programLineOf(const Values& view, double step, time_t now);
 
 // Where the full-screen view puts things on a screen of w x h
 struct DetailMetrics

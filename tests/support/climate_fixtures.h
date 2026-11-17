@@ -64,7 +64,7 @@ inline json withProgram(json device, bool enabled = true)
     device["device"]["state"]["program"] = {
         {"enabled", enabled}, {"mode_set", "heat"},
         {"heat", {{"levels", 3}, {"active_level", 2}, {"setpoint", 20.5}, {"default", 18}}},
-        {"cool", {{"levels", 0}, {"active_level", nullptr}, {"setpoint", nullptr}, {"default", nullptr}}},
+        {"cool", {{"levels", 2}, {"active_level", nullptr}, {"setpoint", nullptr}, {"default", nullptr}}},
         {"next_change", {{"at", "2026-11-17T22:30:00+01:00"}, {"set", "heat"}, {"level", 3}, {"setpoint", 21}}}};
     return device;
 }

@@ -14,6 +14,8 @@ struct Screen
     Cell cell;
 };
 const Screen kScreens[] = {{"800x480", 800, 480, kLandscape}, {"720x720", 720, 720, kSquare}};
+// Narrow cells of 213 px: the widest text the widget has to fit
+const Screen kNarrowScreens[] = {{"640x480", 640, 480, {213, 240}}, {"640x798", 640, 798, {213, 266}}};
 
 class ClimateLarge: public ::testing::Test
 {
@@ -510,14 +512,16 @@ TEST(ClimateShots, Large)
     if (!std::getenv("CLIMATE_SHOTS_DIR"))
         GTEST_SKIP();
 
-    for (const auto& s : kScreens)
+    std::vector<Screen> screens(std::begin(kScreens), std::end(kScreens));
+    screens.insert(screens.end(), std::begin(kNarrowScreens), std::end(kNarrowScreens));
+    for (const auto& s : screens)
     {
         headless::resize(s.w, s.h);
         lv_obj_set_style_bg_color(headless::screen(), lv_color_make(0x17, 0x17, 0x17), 0);
         std::vector<std::unique_ptr<CalaosWidget>> widgets;
         const struct { const char* id; json it; int w, h, x, y; } cells[] = {
-            {"l_chambre", chambre(), 2, 2, 0, 0},
-            {"l_bureau", bureauAtStop(), 2, 2, 2, 0},
+            {"l_chambre", withProgram(chambre()), 2, 2, 0, 0},
+            {"l_bureau", withProgram(bureauAtStop()), 2, 2, 2, 0},
             {"l_cellier", cellier(), 1, 1, 3, 1},
         };
         for (const auto& c : cells)
@@ -534,7 +538,7 @@ TEST(ClimateShots, Large)
 TEST_F(ClimateLarge, ShowsTheProgramOnOneLineWithoutTheSubLine)
 {
     put(withProgram(chambre()));
-    EXPECT_TRUE(text("Niveau 2 jusqu'à 22:30 · 20.5°"));
+    EXPECT_TRUE(text("Niveau 2"));
     EXPECT_FALSE(text("Prochain"));
     EXPECT_TRUE(text("PAC chambre"));
 }

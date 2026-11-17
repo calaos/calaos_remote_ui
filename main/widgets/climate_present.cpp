@@ -257,28 +257,59 @@ std::string formatShort(double value, double step)
     return s + "°";
 }
 
-ProgramLine programLineOf(const Values& view, double step)
+namespace
+{
+
+// The set a program line talks about; null when the mode has none. In auto the contract
+// gives no "current" set: the one of next_change when it exists, else the one that has
+// a level running, else any set that is there.
+const ProgramSet* displayedSet(const Program& p, std::string& which)
+{
+    const auto pick = [&](const std::string& name) -> const ProgramSet* {
+        if (name == "heat" && p.heat)
+            return &*p.heat;
+        if (name == "cool" && p.cool)
+            return &*p.cool;
+        return nullptr;
+    };
+
+    which = p.modeSet;
+    if (which != "auto")
+        return pick(which);
+
+    which = p.next ? p.next->set : std::string();
+    if (const ProgramSet* set = pick(which))
+        return set;
+    which = p.heat && p.heat->activeLevel ? "heat" : p.cool && p.cool->activeLevel ? "cool" : p.heat ? "heat" : "cool";
+    return pick(which);
+}
+
+std::string whenOf(const ProgramChange& next, time_t now)
+{
+    static const char* const days[] = {"dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."};
+    // Beyond a day, the hour alone would read as today's
+    if (next.hasEpoch && next.epoch - static_cast<long long>(now) > 24 * 3600)
+        return std::string(days[next.weekday % 7]) + " " + next.time;
+    return next.time;
+}
+
+} // namespace
+
+bool programShown(const Values& view)
+{
+    std::string which;
+    return view.program && !view.program->modeSet.empty() && displayedSet(*view.program, which);
+}
+
+ProgramLine programLineOf(const Values& view, double step, time_t now)
 {
     ProgramLine line;
-    if (!view.program || view.program->modeSet.empty())
+    if (!programShown(view))
         return line;
     const Program& p = *view.program;
 
-    const ProgramSet* set = nullptr;
-    std::string which = p.modeSet;
-    if (which == "auto")
-    {
-        if (p.next)
-            which = p.next->set;
-        else
-            which = p.heat && p.heat->activeLevel ? "heat" : p.cool && p.cool->activeLevel ? "cool" : "heat";
-    }
-    if (which == "heat" && p.heat)
-        set = &*p.heat;
-    else if (which == "cool" && p.cool)
-        set = &*p.cool;
-    if (!set)
-        return line;
+    std::string which;
+    const ProgramSet* set = displayedSet(p, which);
 
     const auto sp = [&](const std::optional<double>& v) {
         return v ? formatShort(*v, step) : std::string();
@@ -289,6 +320,12 @@ ProgramLine programLineOf(const Values& view, double step)
     line.set = which;
     line.level = set->activeLevel.value_or(0);
     line.paused = !p.enabled;
+
+    // The grid tile has room for the level and nothing else
+    line.shortText = line.paused ? "En pause"
+                     : line.level > 0 ? "Niveau " + std::to_string(line.level)
+                     : stopped        ? "Clim arrêtée"
+                                      : "Par défaut";
 
     std::string head = line.level > 0 ? "Niveau " + std::to_string(line.level)
                        : stopped      ? "Clim arrêtée"
@@ -307,12 +344,12 @@ ProgramLine programLineOf(const Values& view, double step)
 
     line.text = head;
     if (p.next)
-        line.text += " jusqu'à " + p.next->time;
+        line.text += " jusqu'à " + whenOf(*p.next, now);
     if (set->setpoint)
         line.text += " · " + sp(set->setpoint);
 
     if (p.next)
-        line.next = "Prochain : " + p.next->time + ", " +
+        line.next = "Prochain : " + whenOf(*p.next, now) + ", " +
                     (p.next->setpoint ? sp(p.next->setpoint) : std::string("arrêt"));
     else
         line.next = "Aucun changement prévu";
@@ -531,7 +568,7 @@ DetailMetrics widgetMetrics(int w, int h, SetpointKind kind, bool program)
     const bool range = kind == SetpointKind::Range;
     constexpr int gap = 6;
     constexpr int title = 30;
-    constexpr int programRow = 28;
+    constexpr int programRow = 34;
     const int widest = std::min(340, w);
     // Smallest dial worth drawing before the buttons give up some size
     const int worthwhile = range ? 210 : 240;

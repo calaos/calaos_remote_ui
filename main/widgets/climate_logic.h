@@ -64,6 +64,9 @@ struct ProgramSet
 struct ProgramChange
 {
     std::string time;                   // "22:30", the server's local time
+    bool hasEpoch = false;              // false: the offset was unreadable, no way to place it
+    long long epoch = 0;                // UTC seconds
+    int weekday = 0;                    // of the server's local date, 0 = Sunday
     std::string set;                    // "heat" or "cool"
     std::optional<int> level;
     std::optional<double> setpoint;

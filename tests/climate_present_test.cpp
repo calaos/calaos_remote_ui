@@ -521,16 +521,19 @@ namespace
 {
 json programOf(bool enabled, const std::string& modeSet, json heat, json cool, json next)
 {
-    return {{"program", {{"enabled", enabled}, {"mode_set", modeSet}, {"heat", heat}, {"cool", cool}, {"next_change", next}}}};
+    return {{"program",
+             {{"enabled", enabled}, {"mode_set", modeSet}, {"heat", heat}, {"cool", cool}, {"next_change", next}}}};
 }
 const json kHeat = {{"levels", 3}, {"active_level", 2}, {"setpoint", 20.5}, {"default", 18}};
 const json kCoolStopped = {{"levels", 2}, {"active_level", nullptr}, {"setpoint", nullptr}, {"default", nullptr}};
+// 2026-11-17 18:40 +01:00
+constexpr time_t kNow = 1794937200;
 const json kNext = {{"at", "2026-11-17T22:30:00+01:00"}, {"set", "heat"}, {"level", 3}, {"setpoint", 21}};
 } // namespace
 
 TEST(ClimateProgramLine, TellsTheLevelUntilTheNextChange)
 {
-    const ProgramLine l = programLineOf(values(programOf(true, "heat", kHeat, nullptr, kNext)), 0.5);
+    const ProgramLine l = programLineOf(values(programOf(true, "heat", kHeat, nullptr, kNext)), 0.5, kNow);
     EXPECT_TRUE(l.shown);
     EXPECT_EQ(l.text, "Niveau 2 jusqu'à 22:30 · 20.5°");
     EXPECT_EQ(l.next, "Prochain : 22:30, 21°");
@@ -541,14 +544,14 @@ TEST(ClimateProgramLine, TellsTheLevelUntilTheNextChange)
 
 TEST(ClimateProgramLine, NothingPlannedSaysSo)
 {
-    const ProgramLine l = programLineOf(values(programOf(true, "heat", kHeat, nullptr, nullptr)), 0.5);
+    const ProgramLine l = programLineOf(values(programOf(true, "heat", kHeat, nullptr, nullptr)), 0.5, kNow);
     EXPECT_EQ(l.text, "Niveau 2 · 20.5°");
     EXPECT_EQ(l.next, "Aucun changement prévu");
 }
 
 TEST(ClimateProgramLine, ADisabledProgramIsPausedAndGrey)
 {
-    const ProgramLine l = programLineOf(values(programOf(false, "heat", kHeat, nullptr, nullptr)), 0.5);
+    const ProgramLine l = programLineOf(values(programOf(false, "heat", kHeat, nullptr, nullptr)), 0.5, kNow);
     EXPECT_EQ(l.text, "Programme en pause : niveau 2 (20.5°)");
     EXPECT_TRUE(l.paused);
 }
@@ -556,16 +559,16 @@ TEST(ClimateProgramLine, ADisabledProgramIsPausedAndGrey)
 TEST(ClimateProgramLine, CoolWithoutSetpointIsStoppedUntilTheNextSlot)
 {
     json next = {{"at", "2026-11-17T12:00:00+01:00"}, {"set", "cool"}, {"level", 1}, {"setpoint", 24}};
-    ProgramLine l = programLineOf(values(programOf(true, "cool", nullptr, kCoolStopped, next)), 0.5);
+    ProgramLine l = programLineOf(values(programOf(true, "cool", nullptr, kCoolStopped, next)), 0.5, kNow);
     EXPECT_EQ(l.text, "Clim arrêtée jusqu'à 12:00");
     EXPECT_EQ(l.set, "cool");
     EXPECT_EQ(l.level, 0);
 
     next["setpoint"] = nullptr;
-    l = programLineOf(values(programOf(true, "cool", nullptr, kCoolStopped, next)), 0.5);
+    l = programLineOf(values(programOf(true, "cool", nullptr, kCoolStopped, next)), 0.5, kNow);
     EXPECT_EQ(l.next, "Prochain : 12:00, arrêt");
 
-    l = programLineOf(values(programOf(false, "cool", nullptr, kCoolStopped, nullptr)), 0.5);
+    l = programLineOf(values(programOf(false, "cool", nullptr, kCoolStopped, nullptr)), 0.5, kNow);
     EXPECT_EQ(l.text, "Programme en pause : clim arrêtée");
 }
 
@@ -573,24 +576,70 @@ TEST(ClimateProgramLine, AutoFollowsTheSetOfTheNextChange)
 {
     json cool = {{"levels", 2}, {"active_level", 1}, {"setpoint", 26}, {"default", 27}};
     json next = {{"at", "2026-11-17T14:00:00+01:00"}, {"set", "cool"}, {"level", 2}, {"setpoint", 25}};
-    const ProgramLine l = programLineOf(values(programOf(true, "auto", kHeat, cool, next)), 0.5);
+    const ProgramLine l = programLineOf(values(programOf(true, "auto", kHeat, cool, next)), 0.5, kNow);
     EXPECT_EQ(l.set, "cool");
     EXPECT_EQ(l.level, 1);
     EXPECT_EQ(l.text, "Niveau 1 jusqu'à 14:00 · 26°");
 }
 
+TEST(ClimateProgramLine, AutoWithoutNextChangeUsesTheSetThatIsThere)
+{
+    // Program paused in auto, heat absent: the contract keeps mode_set "auto"
+    json cool = {{"levels", 2}, {"active_level", nullptr}, {"setpoint", nullptr}, {"default", nullptr}};
+    ProgramLine l = programLineOf(values(programOf(false, "auto", nullptr, cool, nullptr)), 0.5, kNow);
+    ASSERT_TRUE(l.shown);
+    EXPECT_EQ(l.set, "cool");
+    EXPECT_EQ(l.text, "Programme en pause : clim arrêtée");
+
+    // A next_change on the absent set does not hide the line either
+    json next = {{"at", "2026-11-17T22:30:00+01:00"}, {"set", "heat"}, {"level", 1}, {"setpoint", 20}};
+    l = programLineOf(values(programOf(true, "auto", nullptr, cool, next)), 0.5, kNow);
+    ASSERT_TRUE(l.shown);
+    EXPECT_EQ(l.set, "cool");
+
+    // A level running wins over a set without one
+    json heat = {{"levels", 3}, {"active_level", 1}, {"setpoint", 19}, {"default", 17}};
+    l = programLineOf(values(programOf(true, "auto", heat, cool, nullptr)), 0.5, kNow);
+    EXPECT_EQ(l.set, "heat");
+    EXPECT_EQ(l.level, 1);
+}
+
+TEST(ClimateProgramLine, ANextChangeBeyondADayTellsItsWeekday)
+{
+    json next = {{"at", "2026-11-23T06:30:00+01:00"}, {"set", "heat"}, {"level", 1}, {"setpoint", 21}};
+    ProgramLine l = programLineOf(values(programOf(true, "heat", kHeat, nullptr, next)), 0.5, kNow);
+    EXPECT_EQ(l.text, "Niveau 2 jusqu'à lun. 06:30 · 20.5°");
+    EXPECT_EQ(l.next, "Prochain : lun. 06:30, 21°");
+
+    // Within 24 h, the hour alone is enough
+    next["at"] = "2026-11-18T18:40:00+01:00";
+    l = programLineOf(values(programOf(true, "heat", kHeat, nullptr, next)), 0.5, kNow);
+    EXPECT_EQ(l.next, "Prochain : 18:40, 21°");
+    next["at"] = "2026-11-18T18:41:00+01:00";
+    l = programLineOf(values(programOf(true, "heat", kHeat, nullptr, next)), 0.5, kNow);
+    EXPECT_EQ(l.next, "Prochain : mer. 18:41, 21°");
+}
+
+TEST(ClimateProgramLine, TheGridTileTellsTheLevelOnly)
+{
+    EXPECT_EQ(programLineOf(values(programOf(true, "heat", kHeat, nullptr, kNext)), 0.5, kNow).shortText, "Niveau 2");
+    EXPECT_EQ(programLineOf(values(programOf(false, "heat", kHeat, nullptr, kNext)), 0.5, kNow).shortText, "En pause");
+    json heat = {{"levels", 3}, {"active_level", nullptr}, {"setpoint", 18}, {"default", 18}};
+    EXPECT_EQ(programLineOf(values(programOf(true, "heat", heat, nullptr, kNext)), 0.5, kNow).shortText, "Par défaut");
+}
+
 TEST(ClimateProgramLine, NoLevelFallsBackToTheDefaultSetpoint)
 {
     json heat = {{"levels", 3}, {"active_level", nullptr}, {"setpoint", 18}, {"default", 18}};
-    EXPECT_EQ(programLineOf(values(programOf(true, "heat", heat, nullptr, nullptr)), 0.5).text,
+    EXPECT_EQ(programLineOf(values(programOf(true, "heat", heat, nullptr, nullptr)), 0.5, kNow).text,
               "Consigne par défaut · 18°");
 }
 
 TEST(ClimateProgramLine, HiddenWithoutAProgramOrAModeSet)
 {
-    EXPECT_FALSE(programLineOf(values({{"mode", "heat"}}), 0.5).shown);
-    EXPECT_FALSE(programLineOf(values(programOf(true, "", kHeat, nullptr, nullptr)), 0.5).shown);
-    EXPECT_FALSE(programLineOf(values(programOf(true, "cool", kHeat, nullptr, nullptr)), 0.5).shown);
+    EXPECT_FALSE(programLineOf(values({{"mode", "heat"}}), 0.5, kNow).shown);
+    EXPECT_FALSE(programLineOf(values(programOf(true, "", kHeat, nullptr, nullptr)), 0.5, kNow).shown);
+    EXPECT_FALSE(programLineOf(values(programOf(true, "cool", kHeat, nullptr, nullptr)), 0.5, kNow).shown);
 }
 
 TEST(ClimateProgramLine, TheReserveShrinksTheDialNotTheOthers)

@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdint>
 #include <cstdlib>
 
 using nlohmann::json;
@@ -160,12 +161,25 @@ bool Capabilities::hasMode(const std::string& mode) const
 namespace
 {
 
+constexpr int kMaxLevel = 64;
+
 std::optional<int> wholeNumber(const json& obj, const char* key)
 {
     const auto it = obj.find(key);
-    if (it == obj.end() || !it->is_number())
+    if (it == obj.end())
         return std::nullopt;
-    return static_cast<int>(it->get<double>());
+    // A level is a small integer: anything else is a bad server value, not a number to truncate
+    if (it->is_number_unsigned())
+    {
+        const auto v = it->get<std::uint64_t>();
+        return v <= kMaxLevel ? std::optional<int>(static_cast<int>(v)) : std::nullopt;
+    }
+    if (it->is_number_integer())
+    {
+        const auto v = it->get<std::int64_t>();
+        return v >= 0 && v <= kMaxLevel ? std::optional<int>(static_cast<int>(v)) : std::nullopt;
+    }
+    return std::nullopt;
 }
 
 std::optional<ProgramSet> programSet(const json& program, const char* key)
@@ -181,15 +195,57 @@ std::optional<ProgramSet> programSet(const json& program, const char* key)
     return set;
 }
 
-// "2026-11-17T22:30:00+01:00" gives "22:30": the offset is the server's, and the
-// panel has no reason to convert it
-std::string clockOf(const std::string& iso)
+// Days since 1970-01-01 of a civil date (proleptic Gregorian)
+long long daysFromCivil(long long y, unsigned m, unsigned d)
+{
+    y -= m <= 2;
+    const long long era = (y >= 0 ? y : y - 399) / 400;
+    const unsigned yoe = static_cast<unsigned>(y - era * 400);
+    const unsigned doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
+    const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + static_cast<long long>(doe) - 719468;
+}
+
+// "2026-11-17T22:30:00+01:00": the clock stays the server's, the offset only places
+// the instant. An unreadable offset keeps the clock and loses the instant.
+bool parseInstant(const std::string& iso, ProgramChange& out)
 {
     const auto digit = [&](size_t i) { return i < iso.size() && iso[i] >= '0' && iso[i] <= '9'; };
-    if (iso.size() < 16 || iso[10] != 'T' || iso[13] != ':' ||
-        !digit(11) || !digit(12) || !digit(14) || !digit(15))
-        return {};
-    return iso.substr(11, 5);
+    const auto num = [&](size_t i, size_t n) {
+        int v = 0;
+        for (size_t k = 0; k < n; ++k)
+            v = v * 10 + (iso[i + k] - '0');
+        return v;
+    };
+    if (iso.size() < 16 || iso[10] != 'T' || iso[13] != ':' || iso[4] != '-' || iso[7] != '-')
+        return false;
+    for (size_t i : {0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15})
+        if (!digit(i))
+            return false;
+    out.time = iso.substr(11, 5);
+
+    const int month = num(5, 2);
+    const int day = num(8, 2);
+    if (month < 1 || month > 12 || day < 1 || day > 31)
+        return true;
+
+    long long offset = 0;
+    size_t z = iso.find_first_of("+-Z", 16);
+    if (z == std::string::npos)
+        return true;
+    if (iso[z] != 'Z')
+    {
+        if (!(digit(z + 1) && digit(z + 2) && iso.size() > z + 3 && iso[z + 3] == ':' && digit(z + 4) &&
+              digit(z + 5)))
+            return true;
+        offset = (num(z + 1, 2) * 3600 + num(z + 4, 2) * 60) * (iso[z] == '-' ? -1 : 1);
+    }
+
+    const long long days = daysFromCivil(num(0, 4), static_cast<unsigned>(month), static_cast<unsigned>(day));
+    out.epoch = days * 86400 + num(11, 2) * 3600 + num(14, 2) * 60 - offset;
+    out.hasEpoch = true;
+    out.weekday = static_cast<int>(((days % 7) + 7 + 4) % 7);
+    return true;
 }
 
 std::optional<Program> parseProgram(const json& state)
@@ -211,11 +267,11 @@ std::optional<Program> parseProgram(const json& state)
     if (next != it->end() && next->is_object())
     {
         ProgramChange c;
-        c.time = clockOf(text(*next, "at"));
+        const bool readable = parseInstant(text(*next, "at"), c);
         c.set = text(*next, "set");
         c.level = wholeNumber(*next, "level");
         c.setpoint = number(*next, "setpoint");
-        if (!c.time.empty())
+        if (readable)
             p.next = c;
     }
     return p;

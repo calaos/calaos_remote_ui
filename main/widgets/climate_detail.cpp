@@ -3,6 +3,7 @@
 #include "climate_ui.h"
 #include "logging.h"
 #include <algorithm>
+#include <ctime>
 
 static const char* TAG = "widget.climate.detail";
 
@@ -92,7 +93,7 @@ ClimateDetail::~ClimateDetail()
 
 DetailMetrics ClimateDetail::metrics() const
 {
-    const bool program = programLineOf(controller_.view(), controller_.caps().bounds.step).shown;
+    const bool program = programShown(controller_.view());
     return embedded_ ? widgetMetrics(width_, height_, controller_.kind(), program)
                      : detailMetrics(width_, height_, controller_.kind(), program);
 }
@@ -135,7 +136,7 @@ std::string ClimateDetail::structureKey() const
     const Capabilities& c = controller_.caps();
     const Values v = controller_.view();
     const bool more = !c.fanModes.empty() || !c.swingModes.empty() || v.humidity.has_value();
-    const bool program = programLineOf(v, c.bounds.step).shown;
+    const bool program = programShown(v);
     return std::to_string(static_cast<int>(controller_.kind())) + (more ? "m" : "") +
            (hasDevice_ ? "d" : "") + (program ? "p" : "");
 }
@@ -391,18 +392,19 @@ void ClimateDetail::buildMore(lv_obj_t* parent)
 
 void ClimateDetail::buildProgram(lv_obj_t* parent)
 {
-    if (!programLineOf(controller_.view(), controller_.caps().bounds.step).shown)
+    if (!programShown(controller_.view()))
         return;
 
     lv_obj_t* column = box(parent, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_width(column, LV_PCT(100));
     lv_obj_set_style_pad_row(column, 4, 0);
-    lv_obj_set_style_margin_top(column, embedded_ ? 0 : 10, 0);
+    lv_obj_set_style_margin_top(column, embedded_ ? 6 : 10, 0);
 
     lv_obj_t* row = box(column, LV_FLEX_FLOW_ROW);
     lv_obj_set_width(row, LV_PCT(100));
     lv_obj_set_style_pad_column(row, 10, 0);
-    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(row, embedded_ ? LV_FLEX_ALIGN_CENTER : LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
 
     programDot_ = box(row, LV_FLEX_FLOW_ROW);
     lv_obj_set_size(programDot_, 14, 14);
@@ -410,8 +412,12 @@ void ClimateDetail::buildProgram(lv_obj_t* parent)
     lv_obj_set_style_bg_opa(programDot_, LV_OPA_COVER, 0);
 
     programLabel_ = label(row, embedded_ ? &roboto_regular_22 : &roboto_regular_26, theme_color_white);
-    lv_obj_set_flex_grow(programLabel_, 1);
-    // The widget has one line; the full view wraps to a second rather than cut the time
+    // The tile is centred like the dial and the name; the full view wraps to a second line
+    // rather than cut the time
+    if (embedded_)
+        lv_obj_set_style_max_width(programLabel_, LV_PCT(85), 0);
+    else
+        lv_obj_set_flex_grow(programLabel_, 1);
     lv_label_set_long_mode(programLabel_, embedded_ ? LV_LABEL_LONG_DOT : LV_LABEL_LONG_WRAP);
 
     if (!embedded_)
@@ -488,11 +494,13 @@ void ClimateDetail::refresh()
 
     if (programLabel_)
     {
-        const ProgramLine line = programLineOf(v, caps.bounds.step);
-        setText(programLabel_, line.text);
+        const ProgramLine line = programLineOf(v, caps.bounds.step, std::time(nullptr));
+        setText(programLabel_, embedded_ ? line.shortText : line.text);
         setText(programNext_, line.next);
-        lv_obj_set_style_bg_color(programDot_, levelColor(line), 0);
-        lv_obj_set_style_text_color(programLabel_, line.paused ? theme_color_muted : theme_color_white, 0);
+        // A time that can no longer be trusted once the server is out of reach
+        const bool dim = line.paused || st.phase == Phase::Offline;
+        lv_obj_set_style_bg_color(programDot_, dim ? theme_color_muted : levelColor(line), 0);
+        lv_obj_set_style_text_color(programLabel_, dim ? theme_color_muted : theme_color_white, 0);
     }
 
     canSet_ = st.canSet;
