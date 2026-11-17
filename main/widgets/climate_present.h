@@ -2,6 +2,7 @@
 
 #include "climate_logic.h"
 #include <cstdint>
+#include <ctime>
 #include <optional>
 #include <string>
 
@@ -115,6 +116,22 @@ struct Dial
 };
 Dial dialFor(const Capabilities& caps, SetpointKind kind, const Values& view, const Status& status);
 
+// The program line under the dial: "Niveau 2 jusqu'à 22:30 · 20.5°". Hidden when
+// the device has no program, or none for its mode.
+struct ProgramLine
+{
+    bool shown = false;
+    std::string text;
+    std::string shortText;      // the grid tile: "Niveau 2", no time, no setpoint
+    std::string next;           // "Prochain : 17:30, 20.5°", or "Aucun changement prévu"
+    std::string set;            // "heat" or "cool": which palette colours the dot
+    int level = 0;              // 0: no level, the default setpoint applies
+    bool paused = false;        // program disabled: grey dot
+};
+bool programShown(const Values& view);
+// now places the next change: beyond 24 h it is told with its weekday
+ProgramLine programLineOf(const Values& view, double step, time_t now);
+
 // Where the full-screen view puts things on a screen of w x h
 struct DetailMetrics
 {
@@ -129,11 +146,12 @@ struct DetailMetrics
     int pill = 64;              // mode pill and settings button height
     int numberPx = 80;          // single setpoint: 80 (degree lettered apart) or 60
 };
-DetailMetrics detailMetrics(int w, int h, SetpointKind kind);
+// program: room reserved for the program line (and its sub line in the full view)
+DetailMetrics detailMetrics(int w, int h, SetpointKind kind, bool program = false);
 
 // The climate inside a 2x2 or larger widget, content area w x h: mode pill and
 // settings button on top, dial, "- 22 +" line, title at the bottom
-DetailMetrics widgetMetrics(int w, int h, SetpointKind kind);
+DetailMetrics widgetMetrics(int w, int h, SetpointKind kind, bool program = false);
 
 // Height the dial takes for a diameter: the arc is open at the bottom
 int dialHeight(int diameter, int stroke, int knob);

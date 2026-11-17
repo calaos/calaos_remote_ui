@@ -58,6 +58,17 @@ inline json salon()
                  {"swing_mode", "off"}, {"humidity", 48}});
 }
 
+// The device with a heating program: level 2 until 22:30, then level 3
+inline json withProgram(json device, bool enabled = true)
+{
+    device["device"]["state"]["program"] = {
+        {"enabled", enabled}, {"mode_set", "heat"},
+        {"heat", {{"levels", 3}, {"active_level", 2}, {"setpoint", 20.5}, {"default", 18}}},
+        {"cool", {{"levels", 2}, {"active_level", nullptr}, {"setpoint", nullptr}, {"default", nullptr}}},
+        {"next_change", {{"at", "2026-11-17T22:30:00+01:00"}, {"set", "heat"}, {"level", 3}, {"setpoint", 21}}}};
+    return device;
+}
+
 inline json chambre()
 {
     json caps = {{"modes", {"off", "heat", "cool", "auto"}},
@@ -299,6 +310,7 @@ struct ClimateDetailTestAccess
     static lv_obj_t* titleLabel(ClimateDetail& d) { return d.title_label_; }
     static lv_obj_t* dial(ClimateDetail& d) { return d.dial_->get(); }
     static lv_obj_t* pill(ClimateDetail& d) { return d.pill_; }
+    static lv_obj_t* programNext(ClimateDetail& d) { return d.programNext_; }
 
     static std::vector<lv_obj_t*> controls(ClimateDetail& d, Op op, const std::string& value = "")
     {

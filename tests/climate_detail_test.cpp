@@ -639,3 +639,69 @@ TEST(ClimateShots, Detail)
         }
     }
 }
+
+TEST_F(ClimateDetailView, ShowsTheProgramLevelAndTheNextChange)
+{
+    auto& d = show(withProgram(chambre()));
+    EXPECT_TRUE(text(d, "Niveau 2 jusqu'à 22:30 · 20.5°"));
+    EXPECT_TRUE(text(d, "Prochain : 22:30, 21°"));
+    // Still all there: the dial gave up height to the program
+    EXPECT_TRUE(text(d, "Plus de réglages"));
+    EXPECT_TRUE(present(d, Op::Plus));
+}
+
+TEST_F(ClimateDetailView, APausedProgramIsTold)
+{
+    auto& d = show(withProgram(chambre(), false));
+    EXPECT_TRUE(text(d, "Programme en pause : niveau 2 (20.5°)"));
+    EXPECT_TRUE(text(d, "Aucun changement prévu"));
+}
+
+TEST_F(ClimateDetailView, WithoutAProgramTheViewIsUnchanged)
+{
+    auto& d = show(chambre());
+    EXPECT_FALSE(text(d, "Prochain"));
+    EXPECT_FALSE(text(d, "Aucun changement prévu"));
+    EXPECT_FALSE(text(d, "Niveau"));
+}
+
+TEST_F(ClimateDetailView, TheProgramFitsOnTheScreenInLandscapeToo)
+{
+    open(1280, 800);
+    auto& d = show(withProgram(chambre()));
+    EXPECT_TRUE(text(d, "Niveau 2 jusqu'à 22:30 · 20.5°"));
+    EXPECT_TRUE(text(d, "Prochain : 22:30, 21°"));
+    lv_area_t a;
+    lv_obj_get_coords(ClimateDetailTestAccess::programNext(d), &a);
+    EXPECT_LE(a.y2, 800);
+    EXPECT_LE(a.x2, 1280);
+}
+
+TEST(ClimateShots, Program)
+{
+    if (!std::getenv("CLIMATE_SHOTS_DIR"))
+        GTEST_SKIP();
+
+    for (const auto& s : {std::pair{720, 720}, std::pair{1280, 800}})
+    {
+        headless::resize(s.first, s.second);
+        lv_obj_set_style_bg_color(headless::screen(), lv_color_make(0x14, 0x14, 0x14), 0);
+        const Cell cell = s.first == 720 ? kSquare : Cell{200, 240};
+        const struct { const char* name; json it; } cases[] = {
+            {"level", withProgram(chambre())},
+            {"paused", withProgram(chambre(), false)},
+            {"range", withProgram(bureauAtStop())},
+        };
+        for (const auto& c : cases)
+        {
+            publish("shot_dev", c.it);
+            auto w = place("shot_dev", 1, 1, cell);
+            lv_obj_send_event(w->get(), LV_EVENT_CLICKED, nullptr);
+            shootScreen(std::string("program_detail_") + c.name + "_" + std::to_string(s.first) + "x" +
+                        std::to_string(s.second));
+        }
+        publish("shot_large", withProgram(chambre()));
+        auto large = place("shot_large", 2, 2, cell);
+        shootScreen("program_widget_" + std::to_string(s.first) + "x" + std::to_string(s.second));
+    }
+}

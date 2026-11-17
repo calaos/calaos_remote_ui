@@ -257,6 +257,110 @@ std::string formatShort(double value, double step)
     return s + "°";
 }
 
+namespace
+{
+
+// The set a program line talks about; null when the mode has none. In auto the contract
+// gives no "current" set: the one of next_change when it exists, else the one that has
+// a level running, else any set that is there.
+const ProgramSet* displayedSet(const Program& p, std::string& which)
+{
+    const auto pick = [&](const std::string& name) -> const ProgramSet*
+    {
+        if (name == "heat" && p.heat)
+            return &*p.heat;
+        if (name == "cool" && p.cool)
+            return &*p.cool;
+        return nullptr;
+    };
+
+    which = p.modeSet;
+    if (which != "auto")
+        return pick(which);
+
+    which = p.next ? p.next->set : std::string();
+    if (const ProgramSet* set = pick(which))
+        return set;
+    if (p.heat && p.heat->activeLevel)
+        which = "heat";
+    else if (p.cool && p.cool->activeLevel)
+        which = "cool";
+    else
+        which = p.heat ? "heat" : "cool";
+    return pick(which);
+}
+
+std::string whenOf(const ProgramChange& next, time_t now)
+{
+    static const char* const days[] = {"dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."};
+    // Beyond a day, the hour alone would read as today's
+    if (next.hasEpoch && next.epoch - static_cast<long long>(now) > 24 * 3600)
+        return std::string(days[next.weekday % 7]) + " " + next.time;
+    return next.time;
+}
+
+} // namespace
+
+bool programShown(const Values& view)
+{
+    std::string which;
+    return view.program && !view.program->modeSet.empty() && displayedSet(*view.program, which);
+}
+
+ProgramLine programLineOf(const Values& view, double step, time_t now)
+{
+    ProgramLine line;
+    if (!programShown(view))
+        return line;
+    const Program& p = *view.program;
+
+    std::string which;
+    const ProgramSet* set = displayedSet(p, which);
+
+    const auto sp = [&](const std::optional<double>& v)
+    { return v ? formatShort(*v, step) : std::string(); };
+    const bool stopped = !set->setpoint && which == "cool";
+
+    line.shown = true;
+    line.set = which;
+    line.level = set->activeLevel.value_or(0);
+    line.paused = !p.enabled;
+
+    // The grid tile has room for the level and nothing else
+    line.shortText = line.paused ? "En pause"
+                     : line.level > 0 ? "Niveau " + std::to_string(line.level)
+                     : stopped        ? "Clim arrêtée"
+                                      : "Par défaut";
+
+    std::string head = line.level > 0 ? "Niveau " + std::to_string(line.level)
+                       : stopped      ? "Clim arrêtée"
+                                      : "Consigne par défaut";
+    if (line.paused)
+    {
+        std::string tail = line.level > 0 ? "niveau " + std::to_string(line.level)
+                           : stopped      ? "clim arrêtée"
+                                          : "consigne par défaut";
+        line.text = "Programme en pause : " + tail;
+        if (set->setpoint)
+            line.text += " (" + sp(set->setpoint) + ")";
+        line.next = "Aucun changement prévu";
+        return line;
+    }
+
+    line.text = head;
+    if (p.next)
+        line.text += " jusqu'à " + whenOf(*p.next, now);
+    if (set->setpoint)
+        line.text += " · " + sp(set->setpoint);
+
+    if (p.next)
+        line.next = "Prochain : " + whenOf(*p.next, now) + ", " +
+                    (p.next->setpoint ? sp(p.next->setpoint) : std::string("arrêt"));
+    else
+        line.next = "Aucun changement prévu";
+    return line;
+}
+
 std::string setpointText(SetpointKind kind, const Values& view, const Bounds& bounds)
 {
     switch (kind)
@@ -407,7 +511,7 @@ int dialHeight(int diameter, int stroke, int knob)
     return static_cast<int>(std::ceil(diameter / 2.0 + r * std::cos(M_PI / 6) + pad));
 }
 
-DetailMetrics detailMetrics(int w, int h, SetpointKind kind)
+DetailMetrics detailMetrics(int w, int h, SetpointKind kind, bool program)
 {
     DetailMetrics m;
     m.landscape = w > h;
@@ -441,7 +545,10 @@ DetailMetrics detailMetrics(int w, int h, SetpointKind kind)
 
     // The largest dial that leaves room for the rest of its column
     // Portrait: header, dial, line, note, pill, spacer, "more" with a gap between each
-    const int rest = m.landscape ? line + gap : header + line + pill + more + 6 * gap;
+    // Landscape puts the program in the right column, which has room to spare
+    constexpr int programRows = 28 + 4 + 24 + gap;
+    const int extra = program && !m.landscape ? programRows : 0;
+    const int rest = (m.landscape ? line + gap : header + line + pill + more + 6 * gap) + extra;
     m.dial = 160;
     for (int d = widest; d >= 160; d--)
     {
@@ -457,7 +564,7 @@ DetailMetrics detailMetrics(int w, int h, SetpointKind kind)
     return m;
 }
 
-DetailMetrics widgetMetrics(int w, int h, SetpointKind kind)
+DetailMetrics widgetMetrics(int w, int h, SetpointKind kind, bool program)
 {
     DetailMetrics m;
     m.margin = 0;
@@ -466,6 +573,7 @@ DetailMetrics widgetMetrics(int w, int h, SetpointKind kind)
     const bool range = kind == SetpointKind::Range;
     constexpr int gap = 6;
     constexpr int title = 30;
+    constexpr int programRow = 34;
     const int widest = std::min(340, w);
     // Smallest dial worth drawing before the buttons give up some size
     const int worthwhile = range ? 210 : 240;
@@ -476,7 +584,7 @@ DetailMetrics widgetMetrics(int w, int h, SetpointKind kind)
         const int line = kind == SetpointKind::None ? 0 : (stacked ? 2 * button + 4 : button);
         // The 80 px number needs 190 px between the buttons
         const bool roomy = w - 2 * button - 16 >= 190;
-        const int avail = h - (m.pill + title + line + 3 * gap);
+        const int avail = h - (m.pill + title + line + 3 * gap + (program ? programRow + gap : 0));
 
         int dial = 0;
         for (int d = widest; d >= 100; d--)

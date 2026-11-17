@@ -51,6 +51,36 @@ struct Lockout
     double remaining = 0;
 };
 
+// Read-only summary of the time program (device.state.program). The panel
+// never writes it.
+struct ProgramSet
+{
+    int levels = 0;
+    std::optional<int> activeLevel;     // nullopt: the default setpoint applies
+    std::optional<double> setpoint;     // nullopt on cool: stopped outside the slots
+    std::optional<double> defaultSetpoint;
+};
+
+struct ProgramChange
+{
+    std::string time;                   // "22:30", the server's local time
+    bool hasEpoch = false;              // false: the offset was unreadable, no way to place it
+    long long epoch = 0;                // UTC seconds
+    int weekday = 0;                    // of the server's local date, 0 = Sunday
+    std::string set;                    // "heat" or "cool"
+    std::optional<int> level;
+    std::optional<double> setpoint;
+};
+
+struct Program
+{
+    bool enabled = false;
+    std::string modeSet;                // "heat", "cool", "auto"; "" when the mode has none
+    std::optional<ProgramSet> heat;
+    std::optional<ProgramSet> cool;
+    std::optional<ProgramChange> next;
+};
+
 struct Values
 {
     std::string mode;           // "" while unknown
@@ -67,6 +97,8 @@ struct Values
     std::optional<bool> connected;      // nullopt: nothing said, taken as connected
     std::string fault;                  // sensor_stale, humidity_high...
     std::optional<Lockout> lockout;
+
+    std::optional<Program> program;
 
     // scalarMode is the IO state, which is the mode: used when the device state has none
     static Values parse(const std::string& stateJson, const std::string& scalarMode);
