@@ -265,7 +265,8 @@ namespace
 // a level running, else any set that is there.
 const ProgramSet* displayedSet(const Program& p, std::string& which)
 {
-    const auto pick = [&](const std::string& name) -> const ProgramSet* {
+    const auto pick = [&](const std::string& name) -> const ProgramSet*
+    {
         if (name == "heat" && p.heat)
             return &*p.heat;
         if (name == "cool" && p.cool)
@@ -280,7 +281,12 @@ const ProgramSet* displayedSet(const Program& p, std::string& which)
     which = p.next ? p.next->set : std::string();
     if (const ProgramSet* set = pick(which))
         return set;
-    which = p.heat && p.heat->activeLevel ? "heat" : p.cool && p.cool->activeLevel ? "cool" : p.heat ? "heat" : "cool";
+    if (p.heat && p.heat->activeLevel)
+        which = "heat";
+    else if (p.cool && p.cool->activeLevel)
+        which = "cool";
+    else
+        which = p.heat ? "heat" : "cool";
     return pick(which);
 }
 
@@ -311,9 +317,8 @@ ProgramLine programLineOf(const Values& view, double step, time_t now)
     std::string which;
     const ProgramSet* set = displayedSet(p, which);
 
-    const auto sp = [&](const std::optional<double>& v) {
-        return v ? formatShort(*v, step) : std::string();
-    };
+    const auto sp = [&](const std::optional<double>& v)
+    { return v ? formatShort(*v, step) : std::string(); };
     const bool stopped = !set->setpoint && which == "cool";
 
     line.shown = true;

@@ -622,10 +622,11 @@ TEST(ClimateProgramLine, ANextChangeBeyondADayTellsItsWeekday)
 
 TEST(ClimateProgramLine, TheGridTileTellsTheLevelOnly)
 {
-    EXPECT_EQ(programLineOf(values(programOf(true, "heat", kHeat, nullptr, kNext)), 0.5, kNow).shortText, "Niveau 2");
-    EXPECT_EQ(programLineOf(values(programOf(false, "heat", kHeat, nullptr, kNext)), 0.5, kNow).shortText, "En pause");
-    json heat = {{"levels", 3}, {"active_level", nullptr}, {"setpoint", 18}, {"default", 18}};
-    EXPECT_EQ(programLineOf(values(programOf(true, "heat", heat, nullptr, kNext)), 0.5, kNow).shortText, "Par défaut");
+    const auto tile = [](bool enabled, const json& heat)
+    { return programLineOf(values(programOf(enabled, "heat", heat, nullptr, kNext)), 0.5, kNow).shortText; };
+    EXPECT_EQ(tile(true, kHeat), "Niveau 2");
+    EXPECT_EQ(tile(false, kHeat), "En pause");
+    EXPECT_EQ(tile(true, {{"levels", 3}, {"active_level", nullptr}, {"setpoint", 18}, {"default", 18}}), "Par défaut");
 }
 
 TEST(ClimateProgramLine, NoLevelFallsBackToTheDefaultSetpoint)

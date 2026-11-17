@@ -310,6 +310,7 @@ struct ClimateDetailTestAccess
     static lv_obj_t* titleLabel(ClimateDetail& d) { return d.title_label_; }
     static lv_obj_t* dial(ClimateDetail& d) { return d.dial_->get(); }
     static lv_obj_t* pill(ClimateDetail& d) { return d.pill_; }
+    static lv_obj_t* programNext(ClimateDetail& d) { return d.programNext_; }
 
     static std::vector<lv_obj_t*> controls(ClimateDetail& d, Op op, const std::string& value = "")
     {

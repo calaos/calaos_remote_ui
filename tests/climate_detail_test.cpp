@@ -671,6 +671,10 @@ TEST_F(ClimateDetailView, TheProgramFitsOnTheScreenInLandscapeToo)
     auto& d = show(withProgram(chambre()));
     EXPECT_TRUE(text(d, "Niveau 2 jusqu'à 22:30 · 20.5°"));
     EXPECT_TRUE(text(d, "Prochain : 22:30, 21°"));
+    lv_area_t a;
+    lv_obj_get_coords(ClimateDetailTestAccess::programNext(d), &a);
+    EXPECT_LE(a.y2, 800);
+    EXPECT_LE(a.x2, 1280);
 }
 
 TEST(ClimateShots, Program)
