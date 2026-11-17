@@ -157,6 +157,72 @@ bool Capabilities::hasMode(const std::string& mode) const
     return contains(modes, mode);
 }
 
+namespace
+{
+
+std::optional<int> wholeNumber(const json& obj, const char* key)
+{
+    const auto it = obj.find(key);
+    if (it == obj.end() || !it->is_number())
+        return std::nullopt;
+    return static_cast<int>(it->get<double>());
+}
+
+std::optional<ProgramSet> programSet(const json& program, const char* key)
+{
+    const auto it = program.find(key);
+    if (it == program.end() || !it->is_object())
+        return std::nullopt;
+    ProgramSet set;
+    set.levels = wholeNumber(*it, "levels").value_or(0);
+    set.activeLevel = wholeNumber(*it, "active_level");
+    set.setpoint = number(*it, "setpoint");
+    set.defaultSetpoint = number(*it, "default");
+    return set;
+}
+
+// "2026-11-17T22:30:00+01:00" gives "22:30": the offset is the server's, and the
+// panel has no reason to convert it
+std::string clockOf(const std::string& iso)
+{
+    const auto digit = [&](size_t i) { return i < iso.size() && iso[i] >= '0' && iso[i] <= '9'; };
+    if (iso.size() < 16 || iso[10] != 'T' || iso[13] != ':' ||
+        !digit(11) || !digit(12) || !digit(14) || !digit(15))
+        return {};
+    return iso.substr(11, 5);
+}
+
+std::optional<Program> parseProgram(const json& state)
+{
+    const auto it = state.find("program");
+    if (it == state.end() || !it->is_object())
+        return std::nullopt;
+    const auto enabled = it->find("enabled");
+    if (enabled == it->end() || !enabled->is_boolean())
+        return std::nullopt;
+
+    Program p;
+    p.enabled = enabled->get<bool>();
+    p.modeSet = text(*it, "mode_set");
+    p.heat = programSet(*it, "heat");
+    p.cool = programSet(*it, "cool");
+
+    const auto next = it->find("next_change");
+    if (next != it->end() && next->is_object())
+    {
+        ProgramChange c;
+        c.time = clockOf(text(*next, "at"));
+        c.set = text(*next, "set");
+        c.level = wholeNumber(*next, "level");
+        c.setpoint = number(*next, "setpoint");
+        if (!c.time.empty())
+            p.next = c;
+    }
+    return p;
+}
+
+} // namespace
+
 Values Values::parse(const std::string& stateJson, const std::string& scalarMode)
 {
     Values v;
@@ -189,6 +255,7 @@ Values Values::parse(const std::string& stateJson, const std::string& scalarMode
         if (remaining && *remaining > 0)
             v.lockout = Lockout{text(*lock, "output"), *remaining};
     }
+    v.program = parseProgram(state);
     return v;
 }
 

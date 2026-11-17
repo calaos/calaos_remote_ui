@@ -82,6 +82,7 @@ private:
     void buildLine(lv_obj_t* parent);
     void buildPill(lv_obj_t* parent);
     void buildMore(lv_obj_t* parent);
+    void buildProgram(lv_obj_t* parent);
     lv_obj_t* numberGroup(lv_obj_t* parent, Op minus, Op plus, lv_obj_t** value, lv_color_t color,
                           bool big);
     lv_obj_t* addControl(lv_obj_t* obj, Op op, const std::string& value = "", bool inPopup = false);
@@ -140,6 +141,9 @@ private:
     lv_obj_t* pillIcon_ = nullptr;
     lv_obj_t* pillLabel_ = nullptr;
     lv_obj_t* more_ = nullptr;
+    lv_obj_t* programDot_ = nullptr;
+    lv_obj_t* programLabel_ = nullptr;
+    lv_obj_t* programNext_ = nullptr;
     std::string builtKey_;
 
     Popup popup_ = Popup::None;

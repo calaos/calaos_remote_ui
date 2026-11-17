@@ -25,6 +25,17 @@ Surface surfaceFor(climate::Backdrop backdrop)
     return {theme_color_widget_bg_off, theme_color_widget_border_off};
 }
 
+lv_color_t levelColor(const climate::ProgramLine& line)
+{
+    // The scales of the web editor (kit.css); no level takes the middle of its scale
+    static const uint32_t heat[] = {0xffe08a, 0xffc247, 0xff9a3c, 0xf2693a, 0xd94a4a, 0xb3345f};
+    static const uint32_t cool[] = {0xa6e3f2, 0x6cc9e6, 0x38b0d3, 0x3b8fd0, 0x4a6fd0, 0x6a55c4};
+    if (line.paused)
+        return theme_color_muted;
+    const int index = std::clamp(line.level > 0 ? line.level : 3, 1, 6) - 1;
+    return lv_color_hex((line.set == "cool" ? cool : heat)[index]);
+}
+
 lv_color_t toneColor(Tone tone)
 {
     switch (tone)

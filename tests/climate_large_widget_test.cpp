@@ -530,3 +530,11 @@ TEST(ClimateShots, Large)
         shootScreen(std::string("large_") + s.name);
     }
 }
+
+TEST_F(ClimateLarge, ShowsTheProgramOnOneLineWithoutTheSubLine)
+{
+    put(withProgram(chambre()));
+    EXPECT_TRUE(text("Niveau 2 jusqu'à 22:30 · 20.5°"));
+    EXPECT_FALSE(text("Prochain"));
+    EXPECT_TRUE(text("PAC chambre"));
+}

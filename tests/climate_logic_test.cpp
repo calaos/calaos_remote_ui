@@ -472,3 +472,71 @@ TEST(ClimateSetpoint, NearTheBoundsAHandleNeverBreaksMinRange)
     EXPECT_DOUBLE_EQ(moveHigh(b, {28.5, 29.5}, 29).high, 29.5);
 }
 
+
+namespace
+{
+json programState()
+{
+    return {{"program",
+             {{"enabled", true},
+              {"mode_set", "heat"},
+              {"heat", {{"levels", 3}, {"active_level", 2}, {"setpoint", 20.5}, {"default", 18}}},
+              {"cool", {{"levels", 0}, {"active_level", nullptr}, {"setpoint", nullptr}, {"default", nullptr}}},
+              {"next_change", {{"at", "2026-11-17T22:30:00+01:00"}, {"set", "heat"}, {"level", 3}, {"setpoint", 21}}}}}};
+}
+} // namespace
+
+TEST(ClimateProgramParse, ReadsTheActiveLevelAndTheNextChange)
+{
+    const Values v = Values::parse(programState().dump(), "");
+    ASSERT_TRUE(v.program);
+    EXPECT_TRUE(v.program->enabled);
+    EXPECT_EQ(v.program->modeSet, "heat");
+    ASSERT_TRUE(v.program->heat);
+    EXPECT_EQ(v.program->heat->levels, 3);
+    EXPECT_EQ(v.program->heat->activeLevel, 2);
+    EXPECT_EQ(v.program->heat->setpoint, 20.5);
+    EXPECT_EQ(v.program->heat->defaultSetpoint, 18);
+    ASSERT_TRUE(v.program->cool);
+    EXPECT_FALSE(v.program->cool->activeLevel);
+    EXPECT_FALSE(v.program->cool->setpoint);
+    ASSERT_TRUE(v.program->next);
+    EXPECT_EQ(v.program->next->time, "22:30");
+    EXPECT_EQ(v.program->next->set, "heat");
+    EXPECT_EQ(v.program->next->level, 3);
+    EXPECT_EQ(v.program->next->setpoint, 21);
+}
+
+TEST(ClimateProgramParse, KeepsTheServerClockWhateverTheOffset)
+{
+    json s = programState();
+    s["program"]["next_change"]["at"] = "2026-11-17T07:05:00-05:00";
+    EXPECT_EQ(Values::parse(s.dump(), "").program->next->time, "07:05");
+}
+
+TEST(ClimateProgramParse, AbsentOrMalformedProgramIsNone)
+{
+    EXPECT_FALSE(Values::parse("{}", "").program);
+    EXPECT_FALSE(Values::parse(R"({"program": 3})", "").program);
+    EXPECT_FALSE(Values::parse(R"({"program": {"mode_set": "heat"}})", "").program);
+}
+
+TEST(ClimateProgramParse, NoNextChangeWhenNullOrUnreadable)
+{
+    json s = programState();
+    s["program"]["next_change"] = nullptr;
+    EXPECT_FALSE(Values::parse(s.dump(), "").program->next);
+    s["program"]["next_change"] = {{"at", "tomorrow"}, {"set", "heat"}};
+    EXPECT_FALSE(Values::parse(s.dump(), "").program->next);
+}
+
+TEST(ClimateProgramParse, ModeWithoutASetHasNoModeSet)
+{
+    json s = programState();
+    s["program"]["mode_set"] = nullptr;
+    s["program"]["enabled"] = false;
+    const Values v = Values::parse(s.dump(), "");
+    ASSERT_TRUE(v.program);
+    EXPECT_EQ(v.program->modeSet, "");
+    EXPECT_FALSE(v.program->enabled);
+}

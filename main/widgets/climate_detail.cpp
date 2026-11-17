@@ -92,8 +92,9 @@ ClimateDetail::~ClimateDetail()
 
 DetailMetrics ClimateDetail::metrics() const
 {
-    return embedded_ ? widgetMetrics(width_, height_, controller_.kind())
-                     : detailMetrics(width_, height_, controller_.kind());
+    const bool program = programLineOf(controller_.view(), controller_.caps().bounds.step).shown;
+    return embedded_ ? widgetMetrics(width_, height_, controller_.kind(), program)
+                     : detailMetrics(width_, height_, controller_.kind(), program);
 }
 
 lv_obj_t* ClimateDetail::popupParent() const
@@ -134,8 +135,9 @@ std::string ClimateDetail::structureKey() const
     const Capabilities& c = controller_.caps();
     const Values v = controller_.view();
     const bool more = !c.fanModes.empty() || !c.swingModes.empty() || v.humidity.has_value();
+    const bool program = programLineOf(v, c.bounds.step).shown;
     return std::to_string(static_cast<int>(controller_.kind())) + (more ? "m" : "") +
-           (hasDevice_ ? "d" : "");
+           (hasDevice_ ? "d" : "") + (program ? "p" : "");
 }
 
 std::string ClimateDetail::popupKey() const
@@ -167,6 +169,7 @@ void ClimateDetail::buildBody()
     title_label_ = roomLabel_ = wordLabel_ = gauge_ = stopLabel_ = nullptr;
     numberLabel_ = degreeLabel_ = lowLabel_ = highLabel_ = nullptr;
     pill_ = pillIcon_ = pillLabel_ = more_ = nullptr;
+    programDot_ = programLabel_ = programNext_ = nullptr;
 
     const DetailMetrics m = metrics();
 
@@ -195,6 +198,7 @@ void ClimateDetail::buildBody()
             buildMore(top);
         buildDial(body_);
         buildLine(body_);
+        buildProgram(body_);
 
         title_label_ = label(body_, &roboto_regular_24, theme_color_blue, title_.c_str());
         lv_obj_set_width(title_label_, LV_PCT(100));
@@ -226,6 +230,7 @@ void ClimateDetail::buildBody()
         buildPill(right);
         if (hasMore)
             buildMore(right);
+        buildProgram(right);
     }
     else
     {
@@ -243,6 +248,7 @@ void ClimateDetail::buildBody()
         lv_obj_set_flex_grow(spacer, 1);
         if (hasMore)
             buildMore(body_);
+        buildProgram(body_);
     }
 }
 
@@ -383,6 +389,39 @@ void ClimateDetail::buildMore(lv_obj_t* parent)
     addControl(more_, Op::OpenMore);
 }
 
+void ClimateDetail::buildProgram(lv_obj_t* parent)
+{
+    if (!programLineOf(controller_.view(), controller_.caps().bounds.step).shown)
+        return;
+
+    lv_obj_t* column = box(parent, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_width(column, LV_PCT(100));
+    lv_obj_set_style_pad_row(column, 4, 0);
+    lv_obj_set_style_margin_top(column, embedded_ ? 0 : 10, 0);
+
+    lv_obj_t* row = box(column, LV_FLEX_FLOW_ROW);
+    lv_obj_set_width(row, LV_PCT(100));
+    lv_obj_set_style_pad_column(row, 10, 0);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    programDot_ = box(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_size(programDot_, 14, 14);
+    lv_obj_set_style_radius(programDot_, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(programDot_, LV_OPA_COVER, 0);
+
+    programLabel_ = label(row, embedded_ ? &roboto_regular_22 : &roboto_regular_26, theme_color_white);
+    lv_obj_set_flex_grow(programLabel_, 1);
+    // The widget has one line; the full view wraps to a second rather than cut the time
+    lv_label_set_long_mode(programLabel_, embedded_ ? LV_LABEL_LONG_DOT : LV_LABEL_LONG_WRAP);
+
+    if (!embedded_)
+    {
+        programNext_ = label(column, &roboto_regular_22, theme_color_muted);
+        lv_obj_set_width(programNext_, LV_PCT(100));
+        lv_obj_set_style_pad_left(programNext_, 24, 0);
+    }
+}
+
 void ClimateDetail::refresh()
 {
     if (structureKey() != builtKey_ || !body_)
@@ -445,6 +484,15 @@ void ClimateDetail::refresh()
         const bool stop = atMinRange(caps, kind, v);
         setText(stopLabel_, stop ? minRangeText(caps.bounds, embedded_) : std::string());
         setVisible(stopLabel_, stop);
+    }
+
+    if (programLabel_)
+    {
+        const ProgramLine line = programLineOf(v, caps.bounds.step);
+        setText(programLabel_, line.text);
+        setText(programNext_, line.next);
+        lv_obj_set_style_bg_color(programDot_, levelColor(line), 0);
+        lv_obj_set_style_text_color(programLabel_, line.paused ? theme_color_muted : theme_color_white, 0);
     }
 
     canSet_ = st.canSet;

@@ -10,6 +10,8 @@ namespace climate_ui
 {
 
 lv_color_t toneColor(climate::Tone tone);
+// Dot of the program line: the level's colour on its heat or cool scale, grey when paused
+lv_color_t levelColor(const climate::ProgramLine& line);
 const lv_image_dsc_t* iconImage(climate::Icon icon);
 
 lv_obj_t* box(lv_obj_t* parent, lv_flex_flow_t flow);
