@@ -33,9 +33,10 @@ void* currentThreadToken()
 
 ExternalRamScope::ExternalRamScope()
 {
-    if (activeOnThisThread())
-        return;
     void* token = currentThreadToken();
+    // Null before the scheduler starts: it would match a free slot.
+    if (!token || activeOnThisThread())
+        return;
     for (int i = 0; i < kMaxScopes; i++)
     {
         void* expected = nullptr;
@@ -56,6 +57,8 @@ ExternalRamScope::~ExternalRamScope()
 bool ExternalRamScope::activeOnThisThread()
 {
     void* token = currentThreadToken();
+    if (!token)
+        return false;
     for (int i = 0; i < kMaxScopes; i++)
         if (scopeOwners[i].load(std::memory_order_relaxed) == token)
             return true;
