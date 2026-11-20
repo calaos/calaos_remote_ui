@@ -69,6 +69,7 @@ set(NETWORK_SOURCES
 # HAL sources - ESP32 specific
 set(ESP32_HAL_SOURCES
     hal/hal.cpp
+    hal/external_ram.cpp
     hal/esp32/esp32_hal.cpp
     hal/esp32/esp32_hal_display.cpp
     hal/esp32/esp32_hal_input.cpp
@@ -82,6 +83,7 @@ set(ESP32_HAL_SOURCES
 # HAL sources - Linux specific
 set(LINUX_HAL_SOURCES
     hal/hal.cpp
+    hal/external_ram.cpp
     hal/linux/linux_hal.cpp
     hal/linux/linux_hal_display.cpp
     hal/linux/linux_hal_input.cpp

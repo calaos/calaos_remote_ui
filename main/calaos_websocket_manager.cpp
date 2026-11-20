@@ -8,6 +8,7 @@
 #include "version.h"
 #include "../hal/hal.h"
 #include "../hal/calaos_config/device_config.h"
+#include "../hal/external_ram.h"
 #include <nlohmann/json.hpp>
 #include <sstream>
 
@@ -15,6 +16,10 @@ using json = nlohmann::json;
 namespace wire = CalaosProtocol::wire;
 
 static const char* TAG = "ws.mgr";
+
+// At file scope: a function-local static takes a FreeRTOS-backed guard on the
+// first message, when internal RAM may be short.
+static const json emptyData = json::object();
 
 // Global WebSocket manager instance
 CalaosWebSocketManager* g_wsManager = nullptr;
@@ -491,7 +496,14 @@ std::map<std::string, std::string> CalaosWebSocketManager::buildAuthHeaders()
 
 void CalaosWebSocketManager::onMessage(const WebSocketMessage& message)
 {
-    ESP_LOGD(TAG, "Received message: %s", message.data.c_str());
+    // Nested in the socket's own scope on the target; the host tests enter
+    // here directly.
+    ExternalRamScope externalRam;
+
+    // The payload stays at verbose level: a 12 KB config_update holds the
+    // console for a second, while the other tasks keep allocating.
+    ESP_LOGD(TAG, "Received message: %zu bytes", message.data.size());
+    ESP_LOGV(TAG, "Message payload: %s", message.data.c_str());
 
     try
     {
@@ -505,24 +517,32 @@ void CalaosWebSocketManager::onMessage(const WebSocketMessage& message)
 
         std::string msgType = j["msg"];
 
+        // Handlers read the DOM in place: a copy would double its footprint.
+        const json* dataField = wire::find(j, "data");
+        const json& data = dataField ? *dataField : emptyData;
+
         if (msgType == CalaosProtocol::MSG_IO_STATES)
-            handleIoStates(j.value("data", json::object()));
+            handleIoStates(data);
         else if (msgType == CalaosProtocol::MSG_IO_STATE)
-            handleIoState(j.value("data", json::object()));
+            handleIoState(data);
         else if (msgType == CalaosProtocol::MSG_CONFIG_UPDATE)
-            handleConfigUpdate(j.value("data", json::object()));
+        {
+            // Closed by the store once the pages are rebuilt.
+            InternalHeapWatch::begin();
+            handleConfigUpdate(data);
+        }
         else if (msgType == CalaosProtocol::MSG_EVENT)
-            handleEvent(j.value("data", json::object()));
+            handleEvent(data);
         else if (msgType == CalaosProtocol::MSG_FW_UPDATE_AVAILABLE)
-            handleFirmwareUpdateAvailable(j.value("data", json::object()));
+            handleFirmwareUpdateAvailable(data);
         else if (msgType == CalaosProtocol::MSG_SET_BRIGHTNESS)
-            handleSetBrightness(j.value("data", json::object()));
+            handleSetBrightness(data);
         else if (msgType == CalaosProtocol::MSG_SET_PAGE)
-            handleSetPage(j.value("data", json::object()));
+            handleSetPage(data);
         else if (msgType == CalaosProtocol::MSG_NOTIFICATION)
-            handleNotification(j.value("data", json::object()));
+            handleNotification(data);
         else if (msgType == CalaosProtocol::MSG_SET_RELAY)
-            handleSetRelay(j.value("data", json::object()));
+            handleSetRelay(data);
         else if (msgType == CalaosProtocol::MSG_SET_STATE)
             handleSetStateReply(j);
         else
@@ -907,23 +927,17 @@ void CalaosWebSocketManager::handleConfigUpdate(const json& data)
         config.screensaver_clock_date_format = wire::stringOr(data, "screensaver_clock_date_format", "DD/MM/YYYY");
         config.screensaver_clock_seconds = wire::stringOr(data, "screensaver_clock_seconds", "false");
 
-        // Build pages_json with grid info from root level
-        json pagesConfig;
-        pagesConfig["grid_width"] = wire::intField(data, "grid_width").value_or(3);
-        pagesConfig["grid_height"] = wire::intField(data, "grid_height").value_or(3);
-
-        if (data.contains("pages"))
-            pagesConfig["pages"] = data["pages"];
-        else
-            pagesConfig["pages"] = json::array();
-
-        config.pages_json = pagesConfig.dump();
+        // pages_json carries the grid from the root level. The pages are
+        // serialized in place, without building a second DOM around them.
+        const int gridWidth = wire::intField(data, "grid_width").value_or(3);
+        const int gridHeight = wire::intField(data, "grid_height").value_or(3);
+        const json* pages = wire::find(data, "pages");
+        config.pages_json = "{\"grid_height\":" + std::to_string(gridHeight) +
+                            ",\"grid_width\":" + std::to_string(gridWidth) +
+                            ",\"pages\":" + (pages ? pages->dump() : std::string("[]")) + "}";
 
         ESP_LOGI(TAG, "Config update: name=%s, grid=%dx%d, pages=%zu",
-                config.name.c_str(),
-                pagesConfig["grid_width"].get<int>(),
-                pagesConfig["grid_height"].get<int>(),
-                pagesConfig["pages"].size());
+                config.name.c_str(), gridWidth, gridHeight, pages ? pages->size() : 0);
 
         // Batch all IO states into a single event to avoid flooding the event queue
         const json* ioItems = wire::find(data, "io_items");
@@ -963,7 +977,7 @@ void CalaosWebSocketManager::handleConfigUpdate(const json& data)
         // Dispatch config event
         AppDispatcher::getInstance().dispatch(
             AppEvent(AppEventType::ConfigUpdateReceived,
-                    ConfigUpdateReceivedData{config})
+                    ConfigUpdateReceivedData{std::move(config)})
         );
 
         // Send initial relay states to server

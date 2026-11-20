@@ -1,6 +1,7 @@
 #include "websocket_client.h"
 #include "logging.h"
 #include "mongoose.h"
+#include "external_ram.h"
 #include <chrono>
 #include <cstring>
 
@@ -520,7 +521,9 @@ void WebSocketClient::websocketEventHandler(struct mg_connection* c, int ev, voi
                 break;
             }
 
-            // Create message and determine if it's binary or text
+            // The copy and the DOM the callback builds from it go to PSRAM:
+            // a config_update would otherwise drain internal RAM.
+            ExternalRamScope externalRam;
             WebSocketMessage msg;
             msg.data.assign(wm->data.ptr, wm->data.ptr + wm->data.len);
 

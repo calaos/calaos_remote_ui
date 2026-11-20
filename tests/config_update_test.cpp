@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "support/ws_harness.h"
+#include "support/prod_config.h"
 #include "app_store.h"
 
 using nlohmann::json;
@@ -266,4 +267,61 @@ TEST(ConfigUpdateReset, AnIoChangedWithoutADeviceKeepsIt)
     auto io = AppStore::getInstance().getStateCopy().ioStates.at("reset_partial");
     EXPECT_EQ(io.state, "off");
     EXPECT_TRUE(io.device.has_value());
+}
+
+// pages_json is built without copying the pages: it must stay byte-identical to
+// the dump of an object holding the grid and the pages.
+TEST(ConfigUpdate, BigConfigKeepsPagesJsonByteIdenticalAndEveryIo)
+{
+    const json data = prodSizedConfig();
+    auto events = receive(MSG_CONFIG_UPDATE, data);
+
+    auto* c = configOf(events);
+    ASSERT_NE(c, nullptr);
+    const json expected = {{"grid_width", 3}, {"grid_height", 3}, {"pages", data["pages"]}};
+    EXPECT_EQ(c->config.pages_json, expected.dump());
+
+    auto pages = c->config.getParsedPages();
+    ASSERT_EQ(pages.pages.size(), 4u);
+    EXPECT_EQ(pages.pages[0].widgets.size(), 8u);
+    EXPECT_EQ(pages.pages[0].widgets[2].type, "Climate");
+    EXPECT_EQ(pages.pages[3].widgets.size(), 1u);
+
+    auto* b = batchOf(events);
+    ASSERT_NE(b, nullptr);
+    EXPECT_EQ(b->ioStates.size(), 63u);
+    EXPECT_FALSE(b->ioStates.at("prod_role_47").visible);
+}
+
+TEST(ConfigUpdate, PagesJsonWithoutPagesHasAnEmptyList)
+{
+    auto events = receive(MSG_CONFIG_UPDATE, json{{"grid_width", "4"}});
+    auto* c = configOf(events);
+    ASSERT_NE(c, nullptr);
+    EXPECT_EQ(c->config.pages_json, R"({"grid_height":3,"grid_width":4,"pages":[]})");
+}
+
+TEST(ConfigUpdate, MessageWithoutDataIsHandledWithDefaults)
+{
+    auto events = receive(json{{"msg", MSG_CONFIG_UPDATE}}.dump());
+    auto* c = configOf(events);
+    ASSERT_NE(c, nullptr);
+    EXPECT_EQ(c->config.brightness, 80);
+    EXPECT_EQ(c->config.pages_json, R"({"grid_height":3,"grid_width":3,"pages":[]})");
+}
+
+// The wire helpers read a non-object as an empty one: the config keeps its defaults.
+TEST(ConfigUpdate, DataThatIsNotAnObjectGivesTheDefaults)
+{
+    for (const char* raw : {R"({"msg":"remote_ui_config_update","data":[]})", R"({"msg":"remote_ui_config_update","data":null})",
+                            R"({"msg":"remote_ui_config_update","data":"x"})"})
+    {
+        SCOPED_TRACE(raw);
+        auto events = receive(raw);
+        auto* c = configOf(events);
+        ASSERT_NE(c, nullptr);
+        EXPECT_EQ(c->config.brightness, 80);
+        EXPECT_EQ(c->config.pages_json, R"({"grid_height":3,"grid_width":3,"pages":[]})");
+        EXPECT_EQ(batchOf(events), nullptr);
+    }
 }
