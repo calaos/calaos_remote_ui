@@ -1,6 +1,9 @@
 #include "app_main.h"
 #include "../flux/app_dispatcher.h"
-#ifndef ESP_PLATFORM
+#ifdef ESP_PLATFORM
+#include "esp_heap_caps.h"
+#include "esp_rom_sys.h"
+#else
 #include "linux/display_backend_selector.h"
 #include <iostream>
 #include <cstring>
@@ -11,8 +14,21 @@
 
 static AppMain* app = nullptr;
 
+#ifdef ESP_PLATFORM
+// Some callers ignore a failed allocation (libstdc++ ignores a failed
+// pthread_mutex_init), so the failure must be visible where it happens.
+static void onAllocFailed(size_t size, uint32_t caps, const char* function)
+{
+    esp_rom_printf("heap: %s failed to allocate %u bytes, caps 0x%x\n",
+                   function ? function : "?", (unsigned)size, (unsigned)caps);
+}
+#endif
+
 extern "C" void app_main(void)
 {
+#ifdef ESP_PLATFORM
+    heap_caps_register_failed_alloc_callback(onAllocFailed);
+#endif
     app = new AppMain();
 #ifdef PERF_BENCH
     if (app->initBenchmark())  // PERF-01: boot straight into the benchmark harness

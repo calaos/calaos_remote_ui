@@ -267,3 +267,78 @@ TEST(ConfigUpdateReset, AnIoChangedWithoutADeviceKeepsIt)
     EXPECT_EQ(io.state, "off");
     EXPECT_TRUE(io.device.has_value());
 }
+
+namespace
+{
+// Same shape and size as a real panel config with a Climate widget: 63 IOs, 48
+// of them the role IOs of climate devices, and 4 pages.
+json prodSizedConfig()
+{
+    json ioItems = json::array();
+    for (int i = 0; i < 15; i++)
+        ioItems.push_back({{"id", "prod_io_" + std::to_string(i)}, {"type", "WODigital"}, {"gui_type", "light"},
+                           {"io_type", "output"}, {"name", "Lumière " + std::to_string(i)}, {"visible", "true"},
+                           {"rw", "true"}});
+    for (int i = 0; i < 48; i++)
+        ioItems.push_back({{"id", "prod_role_" + std::to_string(i)}, {"type", "InternalInt"}, {"gui_type", "var_int"},
+                           {"io_type", "inout"}, {"name", "Chauffage role " + std::to_string(i)},
+                           {"visible", "false"}, {"rw", "true"}});
+
+    json pages = json::array();
+    const int widgetsPerPage[] = {8, 5, 4, 1};
+    int n = 0;
+    for (int count : widgetsPerPage)
+    {
+        json widgets = json::array();
+        for (int w = 0; w < count; w++, n++)
+            widgets.push_back({{"type", n == 2 ? "Climate" : "LightSwitch"}, {"io_id", "prod_io_" + std::to_string(n % 15)},
+                               {"name", "Widget é " + std::to_string(n)}, {"x", w % 3}, {"y", w / 3},
+                               {"w", "1"}, {"h", "1"}});
+        pages.push_back({{"name", "Page"}, {"type", "default"}, {"widgets", widgets}});
+    }
+
+    return {{"name", "UI Porte"}, {"room", "Entrée"}, {"grid_width", 3}, {"grid_height", 3},
+            {"screensaver_mode", "clock"}, {"screensaver_timeout", "60"}, {"io_items", ioItems}, {"pages", pages}};
+}
+}
+
+// pages_json is built without copying the pages: it must stay byte-identical to
+// the dump of an object holding the grid and the pages.
+TEST(ConfigUpdate, ProdSizedConfigKeepsPagesJsonAndEveryIo)
+{
+    const json data = prodSizedConfig();
+    auto events = receive(MSG_CONFIG_UPDATE, data);
+
+    auto* c = configOf(events);
+    ASSERT_NE(c, nullptr);
+    const json expected = {{"grid_width", 3}, {"grid_height", 3}, {"pages", data["pages"]}};
+    EXPECT_EQ(c->config.pages_json, expected.dump());
+
+    auto pages = c->config.getParsedPages();
+    ASSERT_EQ(pages.pages.size(), 4u);
+    EXPECT_EQ(pages.pages[0].widgets.size(), 8u);
+    EXPECT_EQ(pages.pages[0].widgets[2].type, "Climate");
+    EXPECT_EQ(pages.pages[3].widgets.size(), 1u);
+
+    auto* b = batchOf(events);
+    ASSERT_NE(b, nullptr);
+    EXPECT_EQ(b->ioStates.size(), 63u);
+    EXPECT_FALSE(b->ioStates.at("prod_role_47").visible);
+}
+
+TEST(ConfigUpdate, PagesJsonWithoutPagesHasAnEmptyList)
+{
+    auto events = receive(MSG_CONFIG_UPDATE, json{{"grid_width", "4"}});
+    auto* c = configOf(events);
+    ASSERT_NE(c, nullptr);
+    EXPECT_EQ(c->config.pages_json, R"({"grid_height":3,"grid_width":4,"pages":[]})");
+}
+
+TEST(ConfigUpdate, MessageWithoutDataIsHandledWithDefaults)
+{
+    auto events = receive(json{{"msg", MSG_CONFIG_UPDATE}}.dump());
+    auto* c = configOf(events);
+    ASSERT_NE(c, nullptr);
+    EXPECT_EQ(c->config.brightness, 80);
+    EXPECT_EQ(c->config.pages_json, R"({"grid_height":3,"grid_width":3,"pages":[]})");
+}
