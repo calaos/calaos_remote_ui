@@ -1,6 +1,7 @@
 #include "websocket_client.h"
 #include "logging.h"
 #include "mongoose.h"
+#include "external_ram.h"
 #include <chrono>
 #include <cstring>
 
@@ -8,8 +9,6 @@
 #include <unistd.h>
 #elif defined(ESP_PLATFORM)
 #include "esp_timer.h"
-#include "esp_pthread.h"
-#include "esp_heap_caps.h"
 #endif
 
 static const char *TAG = "net.ws";
@@ -62,20 +61,7 @@ NetworkResult WebSocketClient::init()
     mgr_->userdata = this;
 
     running_.store(true);
-#ifdef ESP_PLATFORM
-    // Every message is parsed on this thread: its stack is fixed here rather
-    // than left to the global pthread default, and kept in internal RAM.
-    esp_pthread_cfg_t cfg = esp_pthread_get_default_config();
-    cfg.stack_size = 8192;
-    cfg.thread_name = "ws_service";
-    cfg.stack_alloc_caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
-    esp_pthread_set_cfg(&cfg);
     service_thread_ = std::thread(&WebSocketClient::serviceThread, this);
-    cfg = esp_pthread_get_default_config();
-    esp_pthread_set_cfg(&cfg);
-#else
-    service_thread_ = std::thread(&WebSocketClient::serviceThread, this);
-#endif
     reconnect_thread_ = std::thread(&WebSocketClient::reconnectThread, this);
 
     ESP_LOGI(TAG, "WebSocket client initialized");
@@ -535,7 +521,9 @@ void WebSocketClient::websocketEventHandler(struct mg_connection* c, int ev, voi
                 break;
             }
 
-            // Create message and determine if it's binary or text
+            // The copy and the DOM the callback builds from it go to PSRAM:
+            // a config_update would otherwise drain internal RAM.
+            ExternalRamScope externalRam;
             WebSocketMessage msg;
             msg.data.assign(wm->data.ptr, wm->data.ptr + wm->data.len);
 

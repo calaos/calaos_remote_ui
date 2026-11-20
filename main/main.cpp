@@ -1,8 +1,10 @@
 #include "app_main.h"
 #include "../flux/app_dispatcher.h"
 #ifdef ESP_PLATFORM
+#include "esp_attr.h"
 #include "esp_heap_caps.h"
 #include "esp_rom_sys.h"
+#include <atomic>
 #else
 #include "linux/display_backend_selector.h"
 #include <iostream>
@@ -16,11 +18,16 @@ static AppMain* app = nullptr;
 
 #ifdef ESP_PLATFORM
 // Some callers ignore a failed allocation (libstdc++ ignores a failed
-// pthread_mutex_init), so the failure must be visible where it happens.
-static void onAllocFailed(size_t size, uint32_t caps, const char* function)
+// pthread_mutex_init), so the failure must show where it happens. Only the
+// first ones are printed: each line holds the console for milliseconds.
+static std::atomic<unsigned> allocFailures{0};
+
+static IRAM_ATTR void onAllocFailed(size_t size, uint32_t caps, const char* function)
 {
-    esp_rom_printf("heap: %s failed to allocate %u bytes, caps 0x%x\n",
-                   function ? function : "?", (unsigned)size, (unsigned)caps);
+    if (allocFailures.fetch_add(1, std::memory_order_relaxed) >= 16)
+        return;
+    esp_rom_printf(DRAM_STR("heap: %s failed to allocate %u bytes, caps 0x%x\n"),
+                   function ? function : DRAM_STR("?"), (unsigned)size, (unsigned)caps);
 }
 #endif
 

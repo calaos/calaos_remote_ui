@@ -8,32 +8,18 @@
 #include "version.h"
 #include "../hal/hal.h"
 #include "../hal/calaos_config/device_config.h"
+#include "../hal/external_ram.h"
 #include <nlohmann/json.hpp>
 #include <sstream>
-
-#ifdef ESP_PLATFORM
-#include "esp_heap_caps.h"
-#endif
 
 using json = nlohmann::json;
 namespace wire = CalaosProtocol::wire;
 
 static const char* TAG = "ws.mgr";
 
-// Small allocations prefer internal RAM, which FreeRTOS objects need: when a
-// big message exhausts it, creating a mutex fails and libstdc++ ignores that
-// failure (std::shared_ptr). This log tells how close a config came to it.
-static void logInternalHeap(const char* when)
-{
-#ifdef ESP_PLATFORM
-    ESP_LOGI(TAG, "Internal heap after %s: free=%u min=%u largest=%u", when,
-             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
-             (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
-             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
-#else
-    (void)when;
-#endif
-}
+// At file scope: a function-local static takes a FreeRTOS-backed guard on the
+// first message, when internal RAM may be short.
+static const json emptyData = json::object();
 
 // Global WebSocket manager instance
 CalaosWebSocketManager* g_wsManager = nullptr;
@@ -510,6 +496,11 @@ std::map<std::string, std::string> CalaosWebSocketManager::buildAuthHeaders()
 
 void CalaosWebSocketManager::onMessage(const WebSocketMessage& message)
 {
+    // Nested in the socket's own scope on the target; the host tests enter
+    // here directly.
+    ExternalRamScope externalRam;
+    InternalHeapWatch heapWatch;
+
     // The payload stays at verbose level: a 12 KB config_update holds the
     // console for a second, while the other tasks keep allocating.
     ESP_LOGD(TAG, "Received message: %zu bytes", message.data.size());
@@ -527,9 +518,7 @@ void CalaosWebSocketManager::onMessage(const WebSocketMessage& message)
 
         std::string msgType = j["msg"];
 
-        // Handlers read the DOM in place: a copy would double the footprint of
-        // a big config_update in internal RAM.
-        static const json emptyData = json::object();
+        // Handlers read the DOM in place: a copy would double its footprint.
         const json* dataField = wire::find(j, "data");
         const json& data = dataField ? *dataField : emptyData;
 
@@ -538,7 +527,10 @@ void CalaosWebSocketManager::onMessage(const WebSocketMessage& message)
         else if (msgType == CalaosProtocol::MSG_IO_STATE)
             handleIoState(data);
         else if (msgType == CalaosProtocol::MSG_CONFIG_UPDATE)
+        {
             handleConfigUpdate(data);
+            heapWatch.report("config_update");
+        }
         else if (msgType == CalaosProtocol::MSG_EVENT)
             handleEvent(data);
         else if (msgType == CalaosProtocol::MSG_FW_UPDATE_AVAILABLE)
@@ -946,7 +938,6 @@ void CalaosWebSocketManager::handleConfigUpdate(const json& data)
 
         ESP_LOGI(TAG, "Config update: name=%s, grid=%dx%d, pages=%zu",
                 config.name.c_str(), gridWidth, gridHeight, pages ? pages->size() : 0);
-        logInternalHeap("config update");
 
         // Batch all IO states into a single event to avoid flooding the event queue
         const json* ioItems = wire::find(data, "io_items");
@@ -986,7 +977,7 @@ void CalaosWebSocketManager::handleConfigUpdate(const json& data)
         // Dispatch config event
         AppDispatcher::getInstance().dispatch(
             AppEvent(AppEventType::ConfigUpdateReceived,
-                    ConfigUpdateReceivedData{config})
+                    ConfigUpdateReceivedData{std::move(config)})
         );
 
         // Send initial relay states to server
