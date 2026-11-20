@@ -87,6 +87,50 @@ void operator delete(void* p, std::size_t) noexcept
     operator delete(p);
 }
 
+// Under ASan the default array and nothrow forms bypass the replaced operator
+// new, so every form must be replaced or a delete reads a header that is not there.
+void* operator new[](std::size_t size)
+{
+    return operator new(size);
+}
+
+void* operator new(std::size_t size, const std::nothrow_t&) noexcept
+{
+    try
+    {
+        return operator new(size);
+    }
+    catch (...)
+    {
+        return nullptr;
+    }
+}
+
+void* operator new[](std::size_t size, const std::nothrow_t& tag) noexcept
+{
+    return operator new(size, tag);
+}
+
+void operator delete[](void* p) noexcept
+{
+    operator delete(p);
+}
+
+void operator delete[](void* p, std::size_t) noexcept
+{
+    operator delete(p);
+}
+
+void operator delete(void* p, const std::nothrow_t&) noexcept
+{
+    operator delete(p);
+}
+
+void operator delete[](void* p, const std::nothrow_t&) noexcept
+{
+    operator delete(p);
+}
+
 TEST(ExternalRamScope, ActiveOnlyOnItsThreadAndUntilItEnds)
 {
     EXPECT_FALSE(ExternalRamScope::activeOnThisThread());
