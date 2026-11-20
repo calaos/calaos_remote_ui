@@ -499,7 +499,6 @@ void CalaosWebSocketManager::onMessage(const WebSocketMessage& message)
     // Nested in the socket's own scope on the target; the host tests enter
     // here directly.
     ExternalRamScope externalRam;
-    InternalHeapWatch heapWatch;
 
     // The payload stays at verbose level: a 12 KB config_update holds the
     // console for a second, while the other tasks keep allocating.
@@ -528,8 +527,9 @@ void CalaosWebSocketManager::onMessage(const WebSocketMessage& message)
             handleIoState(data);
         else if (msgType == CalaosProtocol::MSG_CONFIG_UPDATE)
         {
+            // Closed by the store once the pages are rebuilt.
+            InternalHeapWatch::begin();
             handleConfigUpdate(data);
-            heapWatch.report("config_update");
         }
         else if (msgType == CalaosProtocol::MSG_EVENT)
             handleEvent(data);

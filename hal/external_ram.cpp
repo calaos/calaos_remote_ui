@@ -13,7 +13,10 @@
 
 namespace
 {
-std::atomic<void*> scopeOwner{nullptr};
+// One slot per task that may hold a scope (ws_service, app_dispatcher, spare).
+// A fixed table: operator new reads it, so it cannot allocate.
+constexpr int kMaxScopes = 4;
+std::atomic<void*> scopeOwners[kMaxScopes];
 
 // No C++ thread_local on the target: operator new runs in global constructors,
 // before the scheduler gives tasks their thread pointer.
@@ -30,26 +33,40 @@ void* currentThreadToken()
 
 ExternalRamScope::ExternalRamScope()
 {
-    void* expected = nullptr;
-    owner_ = scopeOwner.compare_exchange_strong(expected, currentThreadToken());
+    if (activeOnThisThread())
+        return;
+    void* token = currentThreadToken();
+    for (int i = 0; i < kMaxScopes; i++)
+    {
+        void* expected = nullptr;
+        if (scopeOwners[i].compare_exchange_strong(expected, token))
+        {
+            slot_ = i;
+            return;
+        }
+    }
 }
 
 ExternalRamScope::~ExternalRamScope()
 {
-    if (owner_)
-        scopeOwner.store(nullptr);
+    if (slot_ >= 0)
+        scopeOwners[slot_].store(nullptr);
 }
 
 bool ExternalRamScope::activeOnThisThread()
 {
-    void* owner = scopeOwner.load(std::memory_order_relaxed);
-    return owner && owner == currentThreadToken();
+    void* token = currentThreadToken();
+    for (int i = 0; i < kMaxScopes; i++)
+        if (scopeOwners[i].load(std::memory_order_relaxed) == token)
+            return true;
+    return false;
 }
 
 #ifdef ESP_PLATFORM
 
-// Replaces the libstdc++ operator new, which only calls malloc. Its new[] and
-// nothrow forms call this one; delete stays free(), which takes both RAMs.
+// Replaces the libstdc++ operator new, which only calls malloc. Its new[] form
+// calls this one; the nothrow form is replaced below so that it cannot silently
+// go back to malloc. delete stays free(), which takes both RAMs.
 // Throwing is what the standard requires of this function.
 void* operator new(std::size_t size)
 {
@@ -69,22 +86,39 @@ void* operator new(std::size_t size)
     }
 }
 
+void* operator new(std::size_t size, const std::nothrow_t&) noexcept
+{
+    try
+    {
+        return operator new(size);
+    }
+    catch (...)
+    {
+        return nullptr;
+    }
+}
+
 static const char* TAG = "heap";
 
-InternalHeapWatch::InternalHeapWatch()
+namespace
 {
-    started_ = heap_caps_monitor_local_minimum_free_size_start() == ESP_OK;
+std::atomic<bool> watchRunning{false};
+std::atomic<unsigned> beginStackLeft{0};
 }
 
-InternalHeapWatch::~InternalHeapWatch()
+void InternalHeapWatch::begin()
 {
-    if (started_)
+    if (watchRunning.exchange(false))
         heap_caps_monitor_local_minimum_free_size_stop();
+    if (heap_caps_monitor_local_minimum_free_size_start() != ESP_OK)
+        return;
+    beginStackLeft = uxTaskGetStackHighWaterMark(nullptr);
+    watchRunning = true;
 }
 
-void InternalHeapWatch::report(const char* operation)
+void InternalHeapWatch::end(const char* operation)
 {
-    if (!started_)
+    if (!watchRunning.exchange(false))
         return;
 
     // Every internal heap carries MALLOC_CAP_DEFAULT here, the reserve pool
@@ -96,26 +130,27 @@ void InternalHeapWatch::report(const char* operation)
     const size_t reserve = 0;
 #endif
 
-    ESP_LOGI(TAG, "%s: internal low=%u free=%u largest=%u reserve=%u, psram free=%u, stack left=%u",
+    ESP_LOGI(TAG, "%s: internal low=%u free=%u largest=%u reserve=%u, psram free=%u, stack left=%u/%u",
              operation, (unsigned)low,
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
              (unsigned)reserve,
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+             (unsigned)beginStackLeft.load(),
              (unsigned)uxTaskGetStackHighWaterMark(nullptr));
 
     // Per heap, "minimum" is the low of this operation while monitoring runs:
     // the reserve pool is the internal heap of its size.
     if (low < 2 * reserve)
         heap_caps_print_heap_info(MALLOC_CAP_INTERNAL);
+
+    heap_caps_monitor_local_minimum_free_size_stop();
 }
 
 #else
 
-InternalHeapWatch::InternalHeapWatch() {}
+void InternalHeapWatch::begin() {}
 
-InternalHeapWatch::~InternalHeapWatch() {}
-
-void InternalHeapWatch::report(const char*) {}
+void InternalHeapWatch::end(const char*) {}
 
 #endif

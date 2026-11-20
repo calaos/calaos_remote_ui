@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "external_ram.h"
+#include "app_store.h"
 #include "support/prod_config.h"
 #include "support/ws_harness.h"
 
@@ -131,7 +132,7 @@ void operator delete[](void* p, const std::nothrow_t&) noexcept
     operator delete(p);
 }
 
-TEST(ExternalRamScope, ActiveOnlyOnItsThreadAndUntilItEnds)
+TEST(ExternalRamScope, EachThreadHoldsItsOwnUntilItEnds)
 {
     EXPECT_FALSE(ExternalRamScope::activeOnThisThread());
     {
@@ -143,16 +144,17 @@ TEST(ExternalRamScope, ActiveOnlyOnItsThreadAndUntilItEnds)
         }
         EXPECT_TRUE(ExternalRamScope::activeOnThisThread());
 
+        // Another thread does not inherit it, and holds its own at the same time.
         bool otherSees = true;
         bool otherOwnSees = false;
         std::thread([&]
         {
             otherSees = ExternalRamScope::activeOnThisThread();
-            ExternalRamScope contended;
+            ExternalRamScope concurrent;
             otherOwnSees = ExternalRamScope::activeOnThisThread();
         }).join();
         EXPECT_FALSE(otherSees);
-        EXPECT_FALSE(otherOwnSees);
+        EXPECT_TRUE(otherOwnSees);
     }
     EXPECT_FALSE(ExternalRamScope::activeOnThisThread());
 
@@ -165,9 +167,10 @@ TEST(ExternalRamScope, ActiveOnlyOnItsThreadAndUntilItEnds)
 }
 
 // The DOM of a big config_update is the allocation peak that drained internal
-// RAM on the panel: all of it, and what the handler builds from it, must be
-// allocated under the scope.
-TEST(InternalRam, BigConfigUpdateAllocatesNothingOutsideTheExternalRamScope)
+// RAM on the panel. operator new on the calling thread, outside the scope,
+// would be served from internal RAM first; this does not see malloc called
+// directly, nor other threads.
+TEST(InternalRam, ParsingBigConfigUpdateAllocatesNothingOutsideTheExternalRamScope)
 {
     EventProbe& probe = EventProbe::instance();
     CalaosWebSocketManager mgr;
@@ -189,5 +192,48 @@ TEST(InternalRam, BigConfigUpdateAllocatesNothingOutsideTheExternalRamScope)
     RecordProperty("internal_peak_bytes", static_cast<int>(internal));
     RecordProperty("external_bytes", static_cast<int>(external));
     EXPECT_GT(external, static_cast<long>(msg.data.size()));
+    EXPECT_EQ(internal, 0);
+}
+
+// What the dispatcher task does with the event: the store copies the config
+// (and the whole state, around it), then the page subscriber parses pages_json
+// again and keeps a copy of it. Same function as in production, on the
+// measured thread.
+TEST(InternalRam, StoringAndRebuildingPagesFromBigConfigAllocatesNothingOutsideTheExternalRamScope)
+{
+    EventProbe& probe = EventProbe::instance();
+    CalaosWebSocketManager mgr;
+    const WebSocketMessage msg(
+        nlohmann::json{{"msg", CalaosProtocol::MSG_CONFIG_UPDATE}, {"data", prodSizedConfig()}}.dump());
+    CalaosWebSocketManagerTestAccess::onMessage(mgr, msg);
+    auto events = probe.settle();
+    auto* data = firstData<ConfigUpdateReceivedData>(events, AppEventType::ConfigUpdateReceived);
+    ASSERT_NE(data, nullptr);
+    const AppEvent event(AppEventType::ConfigUpdateReceived, *data);
+
+    AppStore& store = AppStore::getInstance();
+    size_t pageCount = 0;
+    std::string lastConfigJson;
+    const SubscriptionId id = store.subscribe([&](const AppState& state)
+    {
+        lastConfigJson = state.config.pages_json;
+        pageCount = state.config.getParsedPages().pages.size();
+    });
+
+    long internal = 0;
+    long external = 0;
+    {
+        InternalRamMeter meter;
+        store.handleEvent(event);
+        internal = internalPeak;
+        external = externalTotal;
+    }
+    store.unsubscribe(id);
+
+    ASSERT_GT(pageCount, 0u);
+    RecordProperty("pages_json_bytes", static_cast<int>(lastConfigJson.size()));
+    RecordProperty("internal_peak_bytes", static_cast<int>(internal));
+    RecordProperty("external_bytes", static_cast<int>(external));
+    EXPECT_GT(external, static_cast<long>(lastConfigJson.size()));
     EXPECT_EQ(internal, 0);
 }

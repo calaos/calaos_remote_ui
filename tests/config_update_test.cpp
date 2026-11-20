@@ -310,8 +310,7 @@ TEST(ConfigUpdate, MessageWithoutDataIsHandledWithDefaults)
     EXPECT_EQ(c->config.pages_json, R"({"grid_height":3,"grid_width":3,"pages":[]})");
 }
 
-// The wire helpers read a non-object as an empty one: the config keeps its
-// defaults, as it did when data was copied out of the message.
+// The wire helpers read a non-object as an empty one: the config keeps its defaults.
 TEST(ConfigUpdate, DataThatIsNotAnObjectGivesTheDefaults)
 {
     for (const char* raw : {R"({"msg":"remote_ui_config_update","data":[]})", R"({"msg":"remote_ui_config_update","data":null})",

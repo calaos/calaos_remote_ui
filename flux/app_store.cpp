@@ -3,6 +3,9 @@
 #include "hal.h"
 #include "logging.h"
 #include "ota_policy.h"
+#include "external_ram.h"
+
+#include <optional>
 
 static const char* TAG = "AppStore";
 
@@ -89,6 +92,12 @@ bool AppStore::mergeIoState(const std::string& id, const CalaosProtocol::IoState
 void AppStore::handleEvent(const AppEvent& event)
 {
     ESP_LOGD(TAG, "Handling event type: %d", static_cast<int>(event.getType()));
+
+    // The config copies and the page rebuild its subscribers run are the second
+    // DOM of a config_update: they belong in PSRAM like the first one.
+    std::optional<ExternalRamScope> externalRam;
+    if (event.getType() == AppEventType::ConfigUpdateReceived)
+        externalRam.emplace();
 
     bool stateChanged = false;
     AppState previousState;
@@ -593,6 +602,9 @@ void AppStore::handleEvent(const AppEvent& event)
 
         notifyStateChange();
     }
+
+    if (event.getType() == AppEventType::ConfigUpdateReceived)
+        InternalHeapWatch::end("config_update");
 }
 
 void AppStore::notifyStateChange()
